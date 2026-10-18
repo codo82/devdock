@@ -15,13 +15,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 // CONFIG JSON
 // ============================================================================
 
-const EMPTY_CONFIG = { groups: [], servers: [] };
+const EMPTY_CONFIG = { groups: [], servers: [], projects: [] };
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(EMPTY_CONFIG, null, 2));
   }
-  return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  // Config create con versioni precedenti possono non avere tutte le chiavi
+  for (const k of Object.keys(EMPTY_CONFIG)) if (!Array.isArray(cfg[k])) cfg[k] = [];
+  return cfg;
 }
 
 function saveConfig(cfg) {
