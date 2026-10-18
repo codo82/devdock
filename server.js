@@ -15,9 +15,21 @@ const CONFIG_PATH = path.join(__dirname, 'config.json');
 const ALLOWED_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]);
 const UNSAFE_METHODS  = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+const ALLOWED_HOSTS   = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
+
 function originOf(url) {
   try { return new URL(url).origin; } catch { return null; }
 }
+
+// Anti DNS rebinding: un dominio esterno può risolvere a 127.0.0.1 e diventare
+// "same-origin" con l'API. Il suo nome resta però nell'header Host, quindi si
+// accettano solo gli host locali.
+app.use((req, res, next) => {
+  if (!ALLOWED_HOSTS.has((req.get('Host') || '').toLowerCase())) {
+    return res.status(421).json({ error: 'Host non consentito' });
+  }
+  next();
+});
 
 // Anti-CSRF: una pagina web qualsiasi aperta nel browser può inviare richieste a
 // localhost. I browser aggiungono sempre Origin alle richieste cross-site non-GET,

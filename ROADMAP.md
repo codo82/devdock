@@ -36,7 +36,7 @@ Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco
 
 **Protezione dell'API**
 - [x] **M1.1** Middleware anti-CSRF: rifiutare richieste con `Origin`/`Referer` diverso da `http://127.0.0.1:3500` / `http://localhost:3500`
-- [ ] **M1.2** Controllo header `Host` (difesa da DNS rebinding): accettare solo `127.0.0.1:PORT` e `localhost:PORT`
+- [x] **M1.2** Controllo header `Host` (difesa da DNS rebinding): accettare solo `127.0.0.1:PORT` e `localhost:PORT`
 - [ ] **M1.3** Richiedere `Content-Type: application/json` sulle richieste che modificano stato (blocca i form cross-site "semplici")
 - [ ] **M1.4** Rimuovere `/api/git/repos/:id/debug-push` (espone env e `git config`, possibili token) oppure abilitarlo solo con `DEVDOCK_DEBUG=1`
 - [ ] **M1.5** Header di sicurezza base: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`
