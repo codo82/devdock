@@ -2356,7 +2356,7 @@ const App = (() => {
     const p = npmProjects.find(x => x.id === projectId);
     if (!p) return;
     try {
-      await api.post('/api/pm2/action', { action: 'start', target: script, cwd: p.path, script: 'npm' });
+      await api.post('/api/pm2/action', { action: 'start', projectId, script });
       toast(`PM2: ${script} avviato`, 'success');
     } catch(e) { toast('PM2 errore: ' + e.message, 'error'); }
   }
