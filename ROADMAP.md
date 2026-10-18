@@ -22,7 +22,7 @@ Legenda stato: `[ ]` da fare · `[~]` in corso · `[x]` fatto
 
 Obiettivo: il progetto parte pulito su macOS (e resta compatibile con Linux/WSL).
 
-- [ ] **M0.1** Rimuovere `public/index.html:Zone.Identifier` (artefatto Windows) dal repo
+- [x] **M0.1** Rimuovere `public/index.html:Zone.Identifier` (artefatto Windows) dal repo
 - [ ] **M0.2** Rimuovere `index.html` in root (duplicato identico di `public/index.html`, non servito)
 - [ ] **M0.3** Rilevamento porte cross-platform: `getPortsForPgid` usa `ss` (assente su macOS) → usare `lsof -nP -iTCP -sTCP:LISTEN -a -p <pids>` con fallback a `ss` su Linux
 - [ ] **M0.4** `EMPTY_CONFIG` deve includere `projects: []`
