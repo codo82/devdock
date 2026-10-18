@@ -685,7 +685,7 @@ const App = (() => {
             title="${esc(t.label)} :${t.port}${t.reconnecting?' (riconnessione)':''}">
         <span class="pill-dot"></span>
         ${esc(t.label)}<span style="opacity:.7">:${t.port}</span>
-        <span style="cursor:pointer;opacity:.5;margin-left:2px" onclick="event.stopPropagation();App.stopTunnel('${t.id}')">✕</span>
+        <span style="cursor:pointer;opacity:.5;margin-left:2px" onclick="event.stopPropagation();App.stopTunnel(${js(t.id)})">✕</span>
       </span>`).join('');
 
     const npmPills = activeProcesses.filter(p => p.running).map(p => {
@@ -697,7 +697,7 @@ const App = (() => {
         <span class="pill-dot"></span>
         ${esc(p.projectLabel)}<span style="opacity:.7;font-size:10px"> npm ${esc(p.script)}</span>
         ${portStr ? `<span style="opacity:.6;font-size:10px">${portStr}</span>` : ''}
-        <span style="cursor:pointer;opacity:.5;margin-left:2px" onclick="event.stopPropagation();App.stopProcess('${p.id}')">✕</span>
+        <span style="cursor:pointer;opacity:.5;margin-left:2px" onclick="event.stopPropagation();App.stopProcess(${js(p.id)})">✕</span>
       </span>`;
     }).join('');
 
@@ -720,11 +720,11 @@ const App = (() => {
           ? '<p style="color:var(--muted);font-size:12px;padding:12px 14px">Nessun gruppo</p>'
           : groups.map(g => {
               const cnt = tunnels.filter(t => g.servers.some(s => s.key === t.serverKey)).length;
-              return `<button class="sb-item ${activeGroup===g.key?'active':''}" onclick="App.selectGroup('${g.key}')">
-                <span class="sb-dot" style="background:${g.color}"></span>
+              return `<button class="sb-item ${activeGroup===g.key?'active':''}" onclick="App.selectGroup(${js(g.key)})">
+                <span class="sb-dot" style="background:${cssColor(g.color)}"></span>
                 <span style="flex:1;text-align:left">${esc(g.label)}</span>
                 ${cnt>0
-                  ? `<span class="sb-count" style="color:${g.color};border-color:${g.color}">${cnt}</span>`
+                  ? `<span class="sb-count" style="color:${cssColor(g.color)};border-color:${cssColor(g.color)}">${cnt}</span>`
                   : `<span class="sb-count">${g.servers.length}</span>`}
               </button>`;
             }).join('')}
@@ -744,12 +744,12 @@ const App = (() => {
     if (!g) return;
     const activeCnt = tunnels.filter(t => g.servers.some(s => s.key === t.serverKey)).length;
     main.innerHTML = `
-      <div class="section-banner" style="border-left:3px solid ${g.color}">
-        <span class="section-banner-dot" style="background:${g.color}"></span>
+      <div class="section-banner" style="border-left:3px solid ${cssColor(g.color)}">
+        <span class="section-banner-dot" style="background:${cssColor(g.color)}"></span>
         <h2>${esc(g.label)}</h2>
         ${activeCnt > 0 ? `<span class="section-banner-sub">${activeCnt} connessi</span>` : ''}
         <div style="margin-left:auto;display:flex;gap:8px">
-          ${activeCnt>0?`<button class="btn btn-danger btn-sm" onclick="App.stopGroupTunnels('${g.key}')">⏹ Disconnetti tutti</button>`:''}
+          ${activeCnt>0?`<button class="btn btn-danger btn-sm" onclick="App.stopGroupTunnels(${js(g.key)})">⏹ Disconnetti tutti</button>`:''}
         </div>
       </div>
       ${missingToolNotice('autossh', 'autossh non installato: i tunnel usano ssh e la riconnessione è gestita da DevDock.', system.platform === 'darwin' ? 'brew install autossh' : 'sudo apt install autossh')}
@@ -761,7 +761,7 @@ const App = (() => {
 
   function renderServerCard(s) {
     const t = tunnels.find(t => t.serverKey === s.key);
-    return `<div class="server-card ${t?'connected':''}" id="card_${s.key}">
+    return `<div class="server-card ${t?'connected':''}" id="card_${esc(s.key)}">
       <div class="card-top">
         <span class="card-label">${esc(s.label)}</span>
         <span class="type-badge">${esc(s.type||'TCP')}</span>
@@ -777,10 +777,10 @@ const App = (() => {
       <div class="card-bottom">
         ${t
           ? `<span class="connected-status ${t.reconnecting?'reconnecting':''}">:${t.port}${t.reconnecting?' ↻':''}</span>
-             <button class="btn btn-disconnect" onclick="App.stopTunnel('${t.id}')">Disconnetti</button>
-             <button class="btn btn-ghost btn-sm" onclick="App.showLogs('${t.id}','${esc(s.label)}')">Log</button>`
+             <button class="btn btn-disconnect" onclick="App.stopTunnel(${js(t.id)})">Disconnetti</button>
+             <button class="btn btn-ghost btn-sm" onclick="App.showLogs(${js(t.id)},${js(s.label)})">Log</button>`
           : `<input class="port-input" id="port_${s.key}" type="number" value="${s.port}" min="1" max="65535">
-             <button class="btn btn-connect" onclick="App.startTunnel('${s.key}')">Connetti</button>`}
+             <button class="btn btn-connect" onclick="App.startTunnel(${js(s.key)})">Connetti</button>`}
       </div>
     </div>`;
   }
@@ -833,13 +833,13 @@ const App = (() => {
     el.innerHTML = npmProjects.map(p => {
       const running = activeProcesses.filter(pr => pr.projectId === p.id && pr.running).length;
       return `
-      <div class="sb-proj ${activeProject===p.id?'active':''}" onclick="App.selectNpmProject('${p.id}')">
+      <div class="sb-proj ${activeProject===p.id?'active':''}" onclick="App.selectNpmProject(${js(p.id)})">
         <span style="font-size:14px;flex-shrink:0">${running > 0 ? '🟠' : '📁'}</span>
         <div class="sb-proj-info">
           <div class="sb-proj-label">${esc(p.label)}${running>0?` <span style="color:var(--c-npm);font-size:10px">▶${running}</span>`:''}</div>
           <div class="sb-proj-path">${esc(p.path)}</div>
         </div>
-        <button class="sb-proj-del" onclick="event.stopPropagation();App.deleteProject('${p.id}')" title="Rimuovi">✕</button>
+        <button class="sb-proj-del" onclick="event.stopPropagation();App.deleteProject(${js(p.id)})" title="Rimuovi">✕</button>
       </div>`;
     }).join('');
   }
@@ -919,16 +919,16 @@ const App = (() => {
         ${ports.map(port => `<span class="proc-port" title="Porta in uso">:${port}</span>`).join('')}
         <div class="script-actions">
           ${proc ? `
-            <button class="btn btn-ghost btn-sm" onclick="App.streamProcess('${proc.id}','${esc(name)}')" title="Vedi log">📋</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.streamProcess(${js(proc.id)},${js(name)})" title="Vedi log">📋</button>
             ${isRunning ? `
-              <button class="btn btn-ghost btn-sm" onclick="App.restartProcess('${proc.id}')" title="Riavvia">↺</button>
-              <button class="btn btn-disconnect btn-sm" onclick="App.stopProcess('${proc.id}')" title="Ferma">⏹</button>
+              <button class="btn btn-ghost btn-sm" onclick="App.restartProcess(${js(proc.id)})" title="Riavvia">↺</button>
+              <button class="btn btn-disconnect btn-sm" onclick="App.stopProcess(${js(proc.id)})" title="Ferma">⏹</button>
             ` : `
-              <button class="btn btn-npm btn-sm" onclick="App.runNpmScript('${p.id}','${esc(name)}')">▶ Riavvia</button>
-              <button class="btn btn-ghost btn-sm" onclick="App.dismissProcess('${proc.id}')" title="Rimuovi">✕</button>
+              <button class="btn btn-npm btn-sm" onclick="App.runNpmScript(${js(p.id)},${js(name)})">▶ Riavvia</button>
+              <button class="btn btn-ghost btn-sm" onclick="App.dismissProcess(${js(proc.id)})" title="Rimuovi">✕</button>
             `}
-          ` : `<button class="btn btn-npm btn-sm" onclick="App.runNpmScript('${p.id}','${esc(name)}')">▶ Esegui</button>`}
-          ${system.tools.pm2 ? `<button class="btn btn-ghost btn-sm" onclick="App.pm2StartScript('${p.id}','${esc(name)}')" title="Avvia con PM2">PM2</button>` : ''}
+          ` : `<button class="btn btn-npm btn-sm" onclick="App.runNpmScript(${js(p.id)},${js(name)})">▶ Esegui</button>`}
+          ${system.tools.pm2 ? `<button class="btn btn-ghost btn-sm" onclick="App.pm2StartScript(${js(p.id)},${js(name)})" title="Avvia con PM2">PM2</button>` : ''}
         </div>
       </div>`;
     }
@@ -965,7 +965,7 @@ const App = (() => {
                 <span style="color:var(--muted)">—</span>
               </td>
               <td>
-                <button class="btn btn-ghost btn-sm" onclick="App.npmUpdate('${p.id}','${esc(name)}')" title="Aggiorna">↑ update</button>
+                <button class="btn btn-ghost btn-sm" onclick="App.npmUpdate(${js(p.id)},${js(name)})" title="Aggiorna">↑ update</button>
               </td>
             </tr>`).join('')}</tbody>
           </table>
@@ -974,8 +974,8 @@ const App = (() => {
 
     content.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-        <button class="btn btn-npm btn-sm" onclick="App.runNpmScript('${p.id}','install')">↓ npm install</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.npmOutdated('${p.id}')">🔍 Verifica aggiornamenti</button>
+        <button class="btn btn-npm btn-sm" onclick="App.runNpmScript(${js(p.id)},'install')">↓ npm install</button>
+        <button class="btn btn-ghost btn-sm" onclick="App.npmOutdated(${js(p.id)})">🔍 Verifica aggiornamenti</button>
         <span id="outdatedStatus" style="font-size:11px;color:var(--muted)"></span>
       </div>
       ${depsTable(deps, false)}
@@ -1069,19 +1069,19 @@ const App = (() => {
           <thead><tr><th>ID</th><th>Nome</th><th>Stato</th><th>PID</th><th>CPU</th><th>Mem</th><th>↺</th><th></th></tr></thead>
           <tbody>${pm2List.map(proc => `<tr>
             <td style="color:var(--muted)">${proc.id}</td>
-            <td><span class="pm2-name-link" onclick="App.showPm2Logs('${esc(proc.name)}')">${esc(proc.name)}</span></td>
-            <td><span class="pm2-status ${statusClass(proc.status)}">${proc.status||'?'}</span></td>
+            <td><span class="pm2-name-link" onclick="App.showPm2Logs(${js(proc.name)})">${esc(proc.name)}</span></td>
+            <td><span class="pm2-status ${statusClass(proc.status)}>${esc(proc.status||'?')}</span></td>
             <td style="font-family:var(--font);color:var(--muted)">${proc.pid||'—'}</td>
             <td>${proc.cpu!=null?proc.cpu+'%':'—'}</td>
             <td>${proc.memory!=null?Math.round(proc.memory/1024/1024)+'MB':'—'}</td>
             <td>${proc.restarts||0}</td>
             <td><div class="pm2-actions">
               ${proc.status==='online'
-                ? `<button class="btn btn-ghost btn-sm" onclick="App.pm2Action('restart','${esc(proc.name)}')" title="Riavvia">↺</button>
-                   <button class="btn btn-ghost btn-sm" onclick="App.pm2Action('stop','${esc(proc.name)}')" title="Ferma">⏹</button>
-                   <button class="btn btn-ghost btn-sm" onclick="App.showPm2Logs('${esc(proc.name)}')" title="Log">📋</button>`
-                : `<button class="btn btn-ghost btn-sm" style="color:var(--c-pm2)" onclick="App.pm2Action('start','${esc(proc.name)}')" title="Avvia">▶</button>`}
-              <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="App.pm2Action('delete','${esc(proc.name)}')" title="Elimina">✕</button>
+                ? `<button class="btn btn-ghost btn-sm" onclick="App.pm2Action('restart',${js(proc.name)})" title="Riavvia">↺</button>
+                   <button class="btn btn-ghost btn-sm" onclick="App.pm2Action('stop',${js(proc.name)})" title="Ferma">⏹</button>
+                   <button class="btn btn-ghost btn-sm" onclick="App.showPm2Logs(${js(proc.name)})" title="Log">📋</button>`
+                : `<button class="btn btn-ghost btn-sm" style="color:var(--c-pm2)" onclick="App.pm2Action('start',${js(proc.name)})" title="Avvia">▶</button>`}
+              <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="App.pm2Action('delete',${js(proc.name)})" title="Elimina">✕</button>
             </div></td>
           </tr>`).join('')}</tbody>
         </table>`;
@@ -1150,7 +1150,7 @@ const App = (() => {
       return;
     }
     el.innerHTML = gitRepos.map(r => `
-      <button class="sb-item ${activeGitRepo===r.id?'active':''}" onclick="App.selectGitRepo('${r.id}')">
+      <button class="sb-item ${activeGitRepo===r.id?'active':''}" onclick="App.selectGitRepo(${js(r.id)})">
         <span class="sb-icon">🌿</span>
         <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.label)}</span>
       </button>`).join('');
@@ -1311,7 +1311,7 @@ const App = (() => {
       const parts = f.name.split('/');
       const basename = parts[parts.length - 1];
       return `
-        <div class="git-file ${sel?'selected':''}" onclick="App.gitToggleFile('${esc(f.name)}')" title="${esc(f.name)}">
+        <div class="git-file ${sel?'selected':''}" onclick="App.gitToggleFile(${js(f.name)})" title="${esc(f.name)}">
           <span style="font-size:12px;flex-shrink:0">${sel ? '☑' : '☐'}</span>
           <span class="git-file-xy ${cls}">${esc(label)}</span>
           <span class="git-file-name">${esc(basename)}</span>
@@ -1607,7 +1607,7 @@ const App = (() => {
       else if (ref.startsWith('tag:')) cls = 'git-ref-tag';
       return `<span class="git-ref ${cls}">${esc(ref.replace('tag: ',''))}</span>`;
     }).join('');
-    const parents = (e.parents || []).map(p => `<span class="git-hash" style="cursor:default">${p.slice(0,7)}</span>`).join(' ');
+    const parents = (e.parents || []).map(p => `<span class="git-hash" style="cursor:default">${esc(p.slice(0,7))}</span>`).join(' ');
     const drawer = document.createElement('div');
     drawer.id = 'gitCommitDrawer';
     drawer.style.cssText = `position:absolute;bottom:0;left:0;right:0;background:var(--surface2);border-top:2px solid var(--c-git);padding:14px 16px;z-index:20;font-size:12px;animation:slideUp .15s ease`;
@@ -1619,7 +1619,7 @@ const App = (() => {
           <div style="display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:11px">
             <span>👤 ${esc(e.author)}</span>
             <span>🕐 ${esc(e.relDate)}</span>
-            <span style="font-family:var(--font)">SHA: <span class="git-hash" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(e.hash)}')" title="Click per copiare" style="cursor:pointer">${esc(e.hash)}</span></span>
+            <span style="font-family:var(--font)">SHA: <span class="git-hash" onclick="navigator.clipboard&&navigator.clipboard.writeText(${js(e.hash)})" title="Click per copiare" style="cursor:pointer">${esc(e.hash)}</span></span>
             ${parents ? `<span style="font-family:var(--font)">Parent: ${parents}</span>` : ''}
           </div>
         </div>
@@ -1843,7 +1843,7 @@ const App = (() => {
 
       swaggerLoaded = true;
     } catch(e) {
-      main.innerHTML = `<div style="padding:24px;color:var(--danger)">Errore nel caricamento: ${e.message}</div>`;
+      main.innerHTML = `<div style="padding:24px;color:var(--danger)">Errore nel caricamento: ${esc(e.message)}</div>`;
     }
   }
 
@@ -1888,12 +1888,12 @@ const App = (() => {
       return;
     }
     el.innerHTML = config.groups.map(g => `
-      <div class="gli ${settingsGroup===g.key?'active':''}" onclick="App.selectSettingsGroup('${g.key}')">
-        <span class="gli-dot" style="background:${g.color}"></span>
+      <div class="gli ${settingsGroup===g.key?'active':''}" onclick="App.selectSettingsGroup(${js(g.key)})">
+        <span class="gli-dot" style="background:${cssColor(g.color)}"></span>
         <span class="gli-label">${esc(g.label)}</span>
         <span class="gli-cnt">${g.servers.length}</span>
-        <button class="gli-edit" onclick="event.stopPropagation();App.modalEditGroup('${g.key}')" title="Modifica">✏️</button>
-        <button class="gli-del"  onclick="event.stopPropagation();App.deleteGroup('${g.key}')"  title="Elimina">🗑</button>
+        <button class="gli-edit" onclick="event.stopPropagation();App.modalEditGroup(${js(g.key)})" title="Modifica">✏️</button>
+        <button class="gli-del"  onclick="event.stopPropagation();App.deleteGroup(${js(g.key)})"  title="Elimina">🗑</button>
       </div>`).join('');
   }
 
@@ -1910,10 +1910,10 @@ const App = (() => {
 
     el.innerHTML = `
       <div class="settings-detail-header">
-        <span class="settings-detail-dot" style="background:${g.color}"></span>
+        <span class="settings-detail-dot" style="background:${cssColor(g.color)}"></span>
         <h3>${esc(g.label)}</h3>
-        <button class="btn btn-primary btn-sm" onclick="App.modalAddServer('${g.key}')">+ Nuovo server</button>
-        ${available.length ? `<button class="btn btn-ghost btn-sm" onclick="App.modalAssignServer('${g.key}')">+ Aggiungi esistente</button>` : ''}
+        <button class="btn btn-primary btn-sm" onclick="App.modalAddServer(${js(g.key)})">+ Nuovo server</button>
+        ${available.length ? `<button class="btn btn-ghost btn-sm" onclick="App.modalAssignServer(${js(g.key)})">+ Aggiungi esistente</button>` : ''}
       </div>
       <div class="settings-detail-body">
         ${groupServers.length === 0
@@ -1926,9 +1926,9 @@ const App = (() => {
               </div>
               <span class="sli-type">${esc(s.type||'TCP')}</span>
               <div class="sli-actions">
-                <button class="sli-btn" onclick="App.modalEditServer('${s.key}')" title="Modifica">✏️</button>
-                <button class="sli-btn danger" onclick="App.removeServerFromGroup('${g.key}','${s.key}')" title="Rimuovi dal gruppo">✕</button>
-                <button class="sli-btn danger" onclick="App.deleteServer('${s.key}')" title="Elimina definitivamente">🗑</button>
+                <button class="sli-btn" onclick="App.modalEditServer(${js(s.key)})" title="Modifica">✏️</button>
+                <button class="sli-btn danger" onclick="App.removeServerFromGroup(${js(g.key)},${js(s.key)})" title="Rimuovi dal gruppo">✕</button>
+                <button class="sli-btn danger" onclick="App.deleteServer(${js(s.key)})" title="Elimina definitivamente">🗑</button>
               </div>
             </div>`).join('')}
       </div>`;
@@ -1962,7 +1962,7 @@ const App = (() => {
         <select class="form-input" id="f_assign_server" size="8" style="height:auto">${available.map(s => `<option value="${s.key}">${esc(s.label)} (${esc(s.type||'TCP')} :${s.port})</option>`).join('')}</select>
       </div>`, `
       <button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button>
-      <button class="btn btn-primary" onclick="App.assignServer('${groupKey}')">Aggiungi</button>`);
+      <button class="btn btn-primary" onclick="App.assignServer(${js(groupKey)})">Aggiungi</button>`);
   }
 
   async function assignServer(groupKey) {
@@ -2006,9 +2006,9 @@ const App = (() => {
       <div class="form-row">
         <label>Colore</label>
         <div class="color-row">
-          <div class="color-preview" id="colorPreview" style="background:${g.color||'#6b7280'}" onclick="document.getElementById('f_color').click()"></div>
-          <span id="colorHex" style="font-family:var(--font);font-size:12px;color:var(--muted)">${g.color||'#6b7280'}</span>
-          <input type="color" id="f_color" value="${g.color||'#6b7280'}" oninput="document.getElementById('colorPreview').style.background=this.value;document.getElementById('colorHex').textContent=this.value">
+          <div class="color-preview" id="colorPreview" style="background:${cssColor(g.color)}" onclick="document.getElementById('f_color').click()"></div>
+          <span id="colorHex" style="font-family:var(--font);font-size:12px;color:var(--muted)">${cssColor(g.color)}</span>
+          <input type="color" id="f_color" value="${cssColor(g.color)}" oninput="document.getElementById('colorPreview').style.background=this.value;document.getElementById('colorHex').textContent=this.value">
         </div>
       </div>`;
   }
@@ -2052,9 +2052,9 @@ const App = (() => {
   }
 
   function modalAddGroup()      { openModal('Nuovo gruppo', groupForm(), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveGroup()">Crea</button>`); }
-  function modalEditGroup(key)  { const g=config.groups.find(x=>x.key===key); if(!g) return; openModal('Modifica gruppo', groupForm(g), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveGroup('${key}')">Salva</button>`); }
-  function modalAddServer(gk)   { openModal('Nuovo server', serverForm({}, gk), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveServer(null,'${gk||''}')">Crea</button>`); }
-  function modalEditServer(key) { const s=config.servers.find(x=>x.key===key); if(!s) return; openModal('Modifica server', serverForm(s), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveServer('${key}')">Salva</button>`); }
+  function modalEditGroup(key)  { const g=config.groups.find(x=>x.key===key); if(!g) return; openModal('Modifica gruppo', groupForm(g), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveGroup(${js(key)})">Salva</button>`); }
+  function modalAddServer(gk)   { openModal('Nuovo server', serverForm({}, gk), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveServer(null,${js(gk||'')})">Crea</button>`); }
+  function modalEditServer(key) { const s=config.servers.find(x=>x.key===key); if(!s) return; openModal('Modifica server', serverForm(s), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveServer(${js(key)})">Salva</button>`); }
 
   async function saveGroup(existingKey) {
     const key   = (document.getElementById('f_key')?.value||'').trim();
@@ -2531,7 +2531,18 @@ const App = (() => {
 
   // ---- UTILS ----
   function esc(t) {
-    return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    return String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // Argomento stringa per un handler inline (onclick="App.fn(${js(x)})"): esc() da solo
+  // non basta, il browser decodifica &#39; in ' prima di eseguire il JS
+  function js(v) {
+    return esc(JSON.stringify(String(v ?? '')));
+  }
+
+  // Colore sicuro da usare in style="" (i valori arrivano da config importabili)
+  function cssColor(c) {
+    return /^#[0-9a-f]{3,8}$/i.test(c || '') ? c : '#6b7280';
   }
 
   // click fuori modal chiude
