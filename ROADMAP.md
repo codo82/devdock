@@ -30,7 +30,7 @@ Obiettivo: il progetto parte pulito su macOS (e resta compatibile con Linux/WSL)
 - [x] **M0.6** Sezioni NPM/PM2 degradano con messaggio chiaro se `pm2`/`autossh` non sono installati (oggi lista vuota silenziosa)
 - [ ] **M0.7** Aggiornare i path dei progetti in `config.json` locale (oggi `/home/...`) — *azione manuale dell'utente da UI*
 
-## M1 — Sicurezza
+## M1 — Sicurezza ✅ (1.2.0)
 
 Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco: qualunque pagina web aperta può inviare richieste a `localhost:3500` e l'API esegue `ssh`, `npm`, `git`, `pm2`.
 
@@ -59,7 +59,8 @@ Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco
 - [ ] **M2.3** Commenti incoerenti col codice (polling SSE "300ms" vs 100ms reali) e altre piccole incongruenze
 - [ ] **M2.4** *(Backlog #1)* **Git push con due pushurl e più commit** — `cannot lock ref: is at X but expected Y`
   - [ ] Riprodurre: repo di test con `origin` a due pushurl (due bare repo locali), push di 2+ commit
-  - [ ] Verificare le ipotesi: (a) dopo il push sul primo URL git aggiorna `refs/remotes/origin/<branch>`, al secondo URL il valore "atteso" è vecchio; (b) il `git fetch` preventivo aggiunto in DevDock; (c) refspec esplicito `origin <branch>` vs `git push` da terminale
+  - [ ] **Ipotesi principale (trovata in M1):** `gitAction()` nel frontend esegue l'azione due volte — una `fetch` POST di cui ignora l'output, poi `gitRunSse()` che la rilancia — quindi due `git push` concorrenti si contendono l'aggiornamento di `refs/remotes/origin/<branch>`. Con più commit il push dura di più e la finestra di gara si allarga. Riprodurre e verificare prima delle altre ipotesi
+  - [ ] Altre ipotesi: (a) dopo il push sul primo URL git aggiorna `refs/remotes/origin/<branch>`, al secondo URL il valore "atteso" è vecchio; (b) il `git fetch` preventivo aggiunto in DevDock; (c) refspec esplicito `origin <branch>` vs `git push` da terminale
   - [ ] Fix candidato: leggere i pushurl con `git remote get-url --push --all origin`, pushare su ciascun URL esplicitamente (non tocca i tracking ref), poi aggiornare una sola volta il tracking ref; output SSE separato per URL
 - [ ] **M2.5** *(Backlog #2)* **Lane del grafo con nome generico `branch-N`**
   - [ ] Ereditarietà del nome: la lane prende il nome dal primo commit con ref che la genera e lo porta con sé scendendo sui parent, invece di cercare in `allRefs` l'hash pendente in `finalLanes`

@@ -26,6 +26,8 @@ npm start          # oppure: npm run dev  (riavvio automatico alle modifiche)
 
 Poi apri <http://127.0.0.1:3500>.
 
+Variabili d'ambiente opzionali: `DEVDOCK_PORT` (porta, default 3500) e `DEVDOCK_CONFIG` (percorso della configurazione, default `config.json` nella cartella del progetto).
+
 Alla chiusura del server (Ctrl+C, `kill` o chiusura del terminale) i tunnel e i processi npm avviati da DevDock vengono terminati.
 
 ## Sezioni
@@ -64,7 +66,15 @@ L'export può comprendere tutto, solo i tunnel o solo i progetti; l'import può 
 
 ## Sicurezza
 
-DevDock è pensato **solo per uso locale**: ascolta su `127.0.0.1` e non ha autenticazione. Può eseguire `ssh`, `npm`, `git` e `pm2` sul tuo computer, quindi non va esposto in rete. Le protezioni contro richieste da altre pagine web aperte nel browser sono pianificate nella milestone M1 della [roadmap](ROADMAP.md).
+DevDock è pensato **solo per uso locale**: ascolta su `127.0.0.1` e non ha autenticazione. Può eseguire `ssh`, `npm`, `git` e `pm2` sul tuo computer, quindi non va esposto in rete.
+
+Protezioni attive:
+- l'API accetta richieste solo dalla propria UI (controllo di `Origin`/`Referer` e `Host`), quindi le altre pagine aperte nel browser non possono usarla;
+- tutti i parametri che finiscono nei comandi (branch, remote, file, script, pacchetti, alias SSH) sono validati;
+- `config.json` viene validato a ogni salvataggio e import;
+- le librerie esterne (Swagger UI) sono caricate con Subresource Integrity.
+
+Usa script e strumenti da riga di comando (curl, ecc.) senza header `Origin`: sono ammessi, come qualunque programma locale.
 
 ## Sviluppo
 

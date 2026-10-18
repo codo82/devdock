@@ -6,6 +6,38 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e il p
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-19 — M1 Sicurezza
+
+### Security
+- Le richieste con `Origin` (o `Referer`) diverso dalla UI ricevono 403: una pagina web aperta nel browser non può più far eseguire comandi a DevDock (CSRF).
+- Sono accettati solo gli header `Host` `127.0.0.1:<porta>` e `localhost:<porta>` (difesa da DNS rebinding).
+- POST/PUT/PATCH su `/api` richiedono `Content-Type: application/json`.
+- Header di sicurezza: Content-Security-Policy, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`.
+- Git: azioni in whitelist; branch validati con `git check-ref-format`, remote tra quelli configurati, hash esadecimali; i valori che iniziano con `-` non possono più diventare opzioni di git.
+- Git commit: si possono passare solo file presenti in `git status`, dopo `--`.
+- npm: si eseguono solo `install` e gli script definiti in `package.json`; i nomi dei pacchetti sono validati (niente path traversal).
+- PM2: azioni in whitelist e nomi dei processi validati; l'avvio da progetto non accetta più una cartella arbitraria.
+- `config.json`: ogni scrittura (UI, import, API) è validata (chiavi, porte, `remote` host:porta, alias SSH, colori, percorsi assoluti, riferimenti tra gruppi e server) e le PUT accettano solo i campi noti.
+- Frontend: escape corretto dei valori negli handler `onclick` (nomi file, script, processi con apici potevano iniettare JavaScript) e dei colori negli stili.
+- Swagger UI e js-yaml vengono caricati con Subresource Integrity.
+
+### Added
+- Endpoint `POST /api/projects/:id/npm/update` per aggiornare una dipendenza.
+- Variabili d'ambiente `DEVDOCK_PORT` e `DEVDOCK_CONFIG`.
+
+### Changed
+- Lo status git usa `--porcelain -z`: nomi file esatti anche con spazi o caratteri speciali.
+- Gli errori di validazione delle azioni git compaiono nel pannello di output.
+
+### Fixed
+- "Aggiorna" su una dipendenza eseguiva `npm run "update <pkg>"` e falliva sempre.
+- Senza `pm2` installato un'azione PM2 mandava in crash il server.
+- "Avvia con PM2" lanciava `npm` senza argomenti invece di `npm run <script>`.
+- Dopo un riavvio, la chiusura del processo npm precedente segnava come terminato quello nuovo.
+
+### Removed
+- Endpoint `/api/git/repos/:id/debug-push`: esponeva l'ambiente e `git config`, che può contenere token.
+
 ## [1.1.0] - 2026-10-18 — M0 Pulizia e portabilità macOS
 
 ### Added
