@@ -481,6 +481,14 @@ app.delete('/api/projects/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// package.json del progetto (null se assente o non valido)
+function readProjectPackage(p) {
+  try { return JSON.parse(fs.readFileSync(path.join(p.path, 'package.json'), 'utf8')); } catch { return null; }
+}
+
+// Nome pacchetto npm (anche scoped): impedisce path traversal e opzioni travestite
+const NPM_NAME_RE = /^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/i;
+
 // Legge package.json di un progetto
 app.get('/api/projects/:id/package', (req, res) => {
   const p = getProjects().find(x => x.id === req.params.id);
@@ -505,9 +513,10 @@ app.get('/api/projects/:id/package', (req, res) => {
 app.post('/api/projects/:id/installed-versions', (req, res) => {
   const p = getProjects().find(x => x.id === req.params.id);
   if (!p) return res.status(404).json({ error: 'Progetto non trovato' });
-  const packages = req.body.packages || [];
+  const packages = Array.isArray(req.body.packages) ? req.body.packages : [];
   const result = {};
   for (const name of packages) {
+    if (typeof name !== 'string' || !NPM_NAME_RE.test(name)) continue;
     try {
       const pkgFile = path.join(p.path, 'node_modules', name, 'package.json');
       if (fs.existsSync(pkgFile)) {
@@ -613,35 +622,69 @@ app.get('/api/processes', (req, res) => {
   res.json(list);
 });
 
-// Avvia processo npm tracciato
+// Avvia (o riavvia) npm con pd.args nel process group di pd. Gli eventi di un
+// processo sostituito da un riavvio vengono ignorati: altrimenti la sua chiusura
+// segnerebbe come terminato il processo nuovo.
+function spawnTrackedNpm(pd, cwd, header = '') {
+  const proc = spawn('npm', pd.args, { cwd, env: { ...process.env }, detached: true });
+  pd.process = proc; pd.pid = proc.pid;
+  pd.startedAt = new Date().toISOString();
+  pd.running = true; pd.exitCode = null;
+  procLog(pd, `${header}$ npm ${pd.args.join(' ')} (pid ${proc.pid})\n`);
+  const current = () => pd.process === proc;
+  proc.stdout.on('data', d => procLog(pd, d.toString()));
+  proc.stderr.on('data', d => procLog(pd, d.toString()));
+  proc.on('close', code => {
+    if (!current()) return;
+    pd.running = false; pd.exitCode = code;
+    procLog(pd, `\n[exit ${code}]`);
+  });
+  proc.on('error', err => { if (current()) { pd.running = false; procLog(pd, `\nErrore: ${err.message}`); } });
+}
+
+function startTrackedNpm(p, script, args) {
+  const pd = {
+    id: crypto.randomUUID(), projectId: p.id, projectLabel: p.label,
+    script, args, pid: null, process: null,
+    startedAt: null, logs: [], running: false, exitCode: null,
+  };
+  activeProcesses.set(pd.id, pd);
+  spawnTrackedNpm(pd, p.path);
+  return pd;
+}
+
+// Avvia processo npm tracciato: solo "install" o script definiti in package.json
 app.post('/api/projects/:id/npm/start', (req, res) => {
   const p = getProjects().find(x => x.id === req.params.id);
   if (!p) return res.status(404).json({ error: 'Progetto non trovato' });
   const { script } = req.body;
-  if (!script) return res.status(400).json({ error: 'script obbligatorio' });
+  if (typeof script !== 'string' || !script) return res.status(400).json({ error: 'script obbligatorio' });
 
-  const procId = crypto.randomUUID();
-  const args = script === 'install' ? ['install'] : ['run', script];
-  const proc = spawn('npm', args, { cwd: p.path, env: { ...process.env }, detached: true });
+  let args;
+  if (script === 'install') {
+    args = ['install'];
+  } else {
+    const scripts = readProjectPackage(p)?.scripts || {};
+    if (!Object.hasOwn(scripts, script)) return res.status(400).json({ error: `Script non definito in package.json: ${script}` });
+    args = ['run', script];
+  }
 
-  const pd = {
-    id: procId, projectId: p.id, projectLabel: p.label,
-    script, pid: proc.pid, process: proc,
-    startedAt: new Date().toISOString(),
-    logs: [], running: true, exitCode: null,
-  };
-  activeProcesses.set(procId, pd);
+  const pd = startTrackedNpm(p, script, args);
+  res.json({ id: pd.id, pid: pd.pid });
+});
 
-  procLog(pd, `$ npm ${args.join(' ')} (pid ${proc.pid})\n`);
-  proc.stdout.on('data', d => procLog(pd, d.toString()));
-  proc.stderr.on('data', d => procLog(pd, d.toString()));
-  proc.on('close', code => {
-    pd.running = false; pd.exitCode = code;
-    procLog(pd, `\n[exit ${code}]`);
-  });
-  proc.on('error', err => { pd.running = false; procLog(pd, `\nErrore: ${err.message}`); });
-
-  res.json({ id: procId, pid: proc.pid });
+// Aggiorna una dipendenza (npm update <pkg>): solo pacchetti dichiarati in package.json
+app.post('/api/projects/:id/npm/update', (req, res) => {
+  const p = getProjects().find(x => x.id === req.params.id);
+  if (!p) return res.status(404).json({ error: 'Progetto non trovato' });
+  const name = req.body.package;
+  const pkg = readProjectPackage(p) || {};
+  const declared = { ...pkg.dependencies, ...pkg.devDependencies };
+  if (typeof name !== 'string' || !NPM_NAME_RE.test(name) || !Object.hasOwn(declared, name)) {
+    return res.status(400).json({ error: `Pacchetto non dichiarato in package.json: ${name}` });
+  }
+  const pd = startTrackedNpm(p, `update ${name}`, ['update', name]);
+  res.json({ id: pd.id, pid: pd.pid });
 });
 
 // Ferma processo (killa l'intero process group per liberare la porta)
@@ -682,21 +725,8 @@ app.post('/api/processes/:id/restart', (req, res) => {
   if (!p) return res.status(400).json({ error: 'Progetto non più disponibile' });
 
   killProcessGroup(pd);
-
-  const args = pd.script === 'install' ? ['install'] : ['run', pd.script];
-  const proc = spawn('npm', args, { cwd: p.path, env: { ...process.env }, detached: true });
-
-  pd.process = proc; pd.pid = proc.pid;
-  pd.startedAt = new Date().toISOString();
-  pd.running = true; pd.exitCode = null;
-  procLog(pd, `\n--- Riavvio ---\n$ npm ${args.join(' ')} (pid ${proc.pid})\n`);
-
-  proc.stdout.on('data', d => procLog(pd, d.toString()));
-  proc.stderr.on('data', d => procLog(pd, d.toString()));
-  proc.on('close', code => { pd.running = false; pd.exitCode = code; procLog(pd, `\n[exit ${code}]`); });
-  proc.on('error', err => { pd.running = false; procLog(pd, `\nErrore: ${err.message}`); });
-
-  res.json({ ok: true, pid: proc.pid });
+  spawnTrackedNpm(pd, p.path, '\n--- Riavvio ---\n');
+  res.json({ ok: true, pid: pd.pid });
 });
 
 // Log SSE di un processo tracciato (streaming live)
