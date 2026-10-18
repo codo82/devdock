@@ -2346,7 +2346,7 @@ const App = (() => {
   async function npmUpdate(projectId, packageName) {
     try {
       toast(`Aggiornamento ${packageName}...`);
-      const r = await api.post(`/api/projects/${projectId}/npm/start`, { script: `update ${packageName}` });
+      const r = await api.post(`/api/projects/${projectId}/npm/update`, { package: packageName });
       streamProcess(r.id, `npm update ${packageName}`);
     } catch(e) { toast(e.message, 'error'); }
   }
