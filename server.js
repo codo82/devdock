@@ -49,6 +49,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// I form HTML cross-site possono inviare solo tipi "semplici" (form, text/plain):
+// esigere JSON chiude anche il caso di browser che non inviano Origin
+app.use('/api', (req, res, next) => {
+  if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') && !req.is('application/json')) {
+    return res.status(415).json({ error: 'Content-Type deve essere application/json' });
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
