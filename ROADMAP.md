@@ -24,7 +24,7 @@ Obiettivo: il progetto parte pulito su macOS (e resta compatibile con Linux/WSL)
 
 - [x] **M0.1** Rimuovere `public/index.html:Zone.Identifier` (artefatto Windows) dal repo
 - [x] **M0.2** Rimuovere `index.html` in root (duplicato identico di `public/index.html`, non servito)
-- [ ] **M0.3** Rilevamento porte cross-platform: `getPortsForPgid` usa `ss` (assente su macOS) → usare `lsof -nP -iTCP -sTCP:LISTEN -a -p <pids>` con fallback a `ss` su Linux
+- [x] **M0.3** Rilevamento porte cross-platform: `getPortsForPgid` usa `ss` (assente su macOS) → usare `lsof -nP -iTCP -sTCP:LISTEN -a -p <pids>` con fallback a `ss` su Linux
 - [ ] **M0.4** `EMPTY_CONFIG` deve includere `projects: []`
 - [ ] **M0.5** Gestire anche `SIGTERM` (oltre a `SIGINT`) per chiudere tunnel e processi figli
 - [ ] **M0.6** Sezioni NPM/PM2 degradano con messaggio chiaro se `pm2`/`autossh` non sono installati (oggi lista vuota silenziosa)

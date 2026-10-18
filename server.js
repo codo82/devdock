@@ -1,5 +1,5 @@
 const express = require('express');
-const { spawn, execSync } = require('child_process');
+const { spawn, spawnSync, execSync, execFileSync } = require('child_process');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -446,36 +446,57 @@ function procLog(pd, text) {
   if (pd.logs.length > 500) pd.logs.splice(0, pd.logs.length - 500);
 }
 
-// Trova le porte usate da un process group (tramite ss + pgrep sul pgid)
-function getPortsForPgid(rootPid) {
+// Esegue un comando senza shell; restituisce stdout ('' se fallisce o esce con codice ≠ 0)
+function runQuiet(cmd, args) {
   try {
-    // Recupera il PGID del processo root (di solito coincide col PID dato che usiamo detached)
-    const pgidOut = execSync(`ps -o pgid= -p ${rootPid} 2>/dev/null || true`, { encoding: 'utf8' }).trim();
-    const pgid = parseInt(pgidOut);
-    if (!pgid) return [];
+    return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 });
+  } catch (e) {
+    return e.stdout || '';
+  }
+}
 
-    // Tutti i PID nel process group
-    const pidsOut = execSync(`pgrep -g ${pgid} 2>/dev/null || true`, { encoding: 'utf8' });
-    const allPids = pidsOut.trim().split(/\s+/).filter(Boolean).map(Number);
-    if (!allPids.length) return [];
+function hasCommand(cmd) {
+  return spawnSync('which', [cmd], { stdio: 'ignore' }).status === 0;
+}
 
-    // ss: cerca socket LISTEN associati a quei PID
-    const pattern = allPids.map(p => `pid=${p},`).join('|');
-    const ssOut = execSync(
-      `ss -tlnp 2>/dev/null | grep -E '${pattern}' || true`,
-      { encoding: 'utf8' }
-    );
+const HAS_LSOF = hasCommand('lsof');
+const HAS_SS   = process.platform === 'linux' && hasCommand('ss');
 
-    const ports = new Set();
-    for (const line of ssOut.trim().split('\n')) {
-      // formato: "0.0.0.0:3000" o "*:3000"
+// Porte TCP in LISTEN dei PID dati — lsof (macOS/Linux) con fallback a ss (Linux)
+function getListeningPorts(pids) {
+  const ports = new Set();
+  if (HAS_LSOF) {
+    // -F n: una riga per socket nel formato "n<indirizzo>:<porta>", es. "n*:3000", "n[::1]:5173"
+    const out = runQuiet('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-a', '-p', pids.join(','), '-Fn']);
+    for (const line of out.split('\n')) {
+      const m = line.match(/^n.*:(\d+)$/);
+      if (m && Number(m[1]) > 0) ports.add(Number(m[1]));
+    }
+  } else if (HAS_SS) {
+    // formato: "LISTEN 0 511 0.0.0.0:3000 ... users:(("node",pid=1234,fd=20))"
+    const pidSet = new Set(pids.map(String));
+    for (const line of runQuiet('ss', ['-tlnpH']).split('\n')) {
+      const owners = [...line.matchAll(/pid=(\d+),/g)].map(m => m[1]);
+      if (!owners.some(p => pidSet.has(p))) continue;
       const m = line.match(/:(\d+)\s/);
       if (m && Number(m[1]) > 0) ports.add(Number(m[1]));
     }
-    return [...ports].sort((a, b) => a - b);
-  } catch {
-    return [];
   }
+  return [...ports].sort((a, b) => a - b);
+}
+
+// Trova le porte usate da un process group (pgid → tutti i PID → socket in LISTEN)
+function getPortsForPgid(rootPid) {
+  if (process.platform === 'win32') return []; // process group POSIX non disponibili
+  // PGID del processo root (di solito coincide col PID dato che usiamo detached)
+  const pgid = parseInt(runQuiet('ps', ['-o', 'pgid=', '-p', String(rootPid)]).trim());
+  if (!pgid) return [];
+
+  // Tutti i PID nel process group
+  const allPids = runQuiet('pgrep', ['-g', String(pgid)]).trim().split(/\s+/).filter(Boolean).map(Number);
+  if (!allPids.length) return [];
+
+  return getListeningPorts(allPids);
 }
 
 // Lista processi attivi
