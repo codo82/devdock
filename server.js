@@ -914,22 +914,6 @@ app.get('/api/git/repos/:id/log', async (req, res) => {
   }
 });
 
-// Debug: ambiente e output git push
-app.get('/api/git/repos/:id/debug-push', async (req, res) => {
-  const repos = getGitRepos();
-  const repo  = repos.find(r => r.id === req.params.id);
-  if (!repo) return res.status(404).json({ error: 'Repo non trovato' });
-  const branch = req.query.branch || 'dev';
-  const remote = req.query.remote || 'origin';
-  const { execSync } = require('child_process');
-  let out = {};
-  try { out.gitConfig = execSync('git config --list', { cwd: repo.path }).toString(); } catch(e) { out.gitConfig = e.message; }
-  try { out.gitRemoteV = execSync('git remote -v', { cwd: repo.path }).toString(); } catch(e) { out.gitRemoteV = e.message; }
-  try { out.gitLog = execSync('git log --oneline -3', { cwd: repo.path }).toString(); } catch(e) { out.gitLog = e.message; }
-  out.env = { HOME: process.env.HOME, USER: process.env.USER, SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK, GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND, PATH: process.env.PATH };
-  res.json(out);
-});
-
 // Messaggio completo di un commit (subject + body)
 app.get('/api/git/repos/:id/commit/:hash', async (req, res) => {
   const repos = getGitRepos();
