@@ -995,11 +995,11 @@ app.post('/api/git/repos/:id/action', (req, res) => {
 });
 
 // ============================================================================
-// SIGINT + LISTEN
+// SHUTDOWN + LISTEN
 // ============================================================================
 
-process.on('SIGINT', () => {
-  console.log('\nChiusura — termino tunnel e processi npm...');
+function shutdown(signal) {
+  console.log(`\n${signal} — termino tunnel e processi npm...`);
   for (const [, t] of activeTunnels) {
     t.stopping = true;
     if (t.reconnectTimer) clearTimeout(t.reconnectTimer);
@@ -1009,7 +1009,11 @@ process.on('SIGINT', () => {
     killProcessGroup(pd);
   }
   process.exit(0);
-});
+}
+
+process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGHUP',  () => shutdown('SIGHUP')); // chiusura del terminale
 
 app.listen(PORT, '127.0.0.1', () => {
   console.log(`Port Forward Manager → http://127.0.0.1:${PORT}`);
