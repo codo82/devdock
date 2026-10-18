@@ -49,6 +49,33 @@ app.use((req, res, next) => {
   next();
 });
 
+app.disable('x-powered-by');
+
+// Header di sicurezza. La CSP ammette script inline (la UI usa onclick inline)
+// e cdnjs per Swagger UI; connect-src resta aperto per il "Try it out" di Swagger.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+  "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+  "img-src 'self' data:",
+  "font-src 'self' data:",
+  "connect-src 'self' http: https:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', CSP);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  next();
+});
+
 // I form HTML cross-site possono inviare solo tipi "semplici" (form, text/plain):
 // esigere JSON chiude anche il caso di browser che non inviano Origin
 app.use('/api', (req, res, next) => {
