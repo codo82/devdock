@@ -8,6 +8,35 @@ const app = express();
 const PORT = 3500;
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 
+// ============================================================================
+// SICUREZZA — l'API esegue ssh/npm/git/pm2: accetta solo richieste dalla UI locale
+// ============================================================================
+
+const ALLOWED_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]);
+const UNSAFE_METHODS  = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function originOf(url) {
+  try { return new URL(url).origin; } catch { return null; }
+}
+
+// Anti-CSRF: una pagina web qualsiasi aperta nel browser può inviare richieste a
+// localhost. I browser aggiungono sempre Origin alle richieste cross-site non-GET,
+// quindi si rifiuta ogni Origin (o in mancanza Referer) che non sia la UI stessa.
+// Richieste senza nessuno dei due (curl, script locali) sono ammesse.
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    return res.status(403).json({ error: 'Origine non consentita' });
+  }
+  if (!origin && UNSAFE_METHODS.has(req.method)) {
+    const referer = req.get('Referer');
+    if (referer && !ALLOWED_ORIGINS.has(originOf(referer))) {
+      return res.status(403).json({ error: 'Origine non consentita' });
+    }
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
