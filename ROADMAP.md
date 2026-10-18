@@ -11,7 +11,7 @@ Legenda stato: `[ ]` da fare · `[~]` in corso · `[x]` fatto
 ## Documentazione (trasversale)
 
 - [x] **D.1** `README.md` iniziale (in M0): cos'è DevDock, requisiti (Node ≥ 18, `ssh`; opzionali `autossh`, `pm2`), installazione e avvio (`npm install`, `npm start`, `npm run dev`), panoramica delle sezioni, formato di `config.json`, nota sulla sicurezza (solo uso locale)
-- [ ] **D.2** `CHANGELOG.md` iniziale in formato [Keep a Changelog](https://keepachangelog.com/it/1.1.0/): voce `1.0.0` per lo stato attuale + sezione `[Unreleased]`
+- [x] **D.2** `CHANGELOG.md` iniziale in formato [Keep a Changelog](https://keepachangelog.com/it/1.1.0/): voce `1.0.0` per lo stato attuale + sezione `[Unreleased]`
 - [x] **D.3** Allineare `package.json` (nome `devdock` al posto di `port-forward-manager`, versione, descrizione) e il log di avvio del server
 - [ ] **D.4** A fine di ogni milestone: aggiornare CHANGELOG (Added/Changed/Fixed/Security/Removed) e README dove serve
 - [ ] **D.5** In M3: sezione README "Struttura del progetto"; in M5: sezione "Scrivere un'estensione"; in M6: sezione "DB client"
