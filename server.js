@@ -5,8 +5,9 @@ const crypto = require('crypto');
 const fs = require('fs');
 
 const app = express();
-const PORT = 3500;
-const CONFIG_PATH = path.join(__dirname, 'config.json');
+// Sovrascrivibili da ambiente (istanze di test, più installazioni)
+const PORT = parseInt(process.env.DEVDOCK_PORT) || 3500;
+const CONFIG_PATH = process.env.DEVDOCK_CONFIG || path.join(__dirname, 'config.json');
 
 // ============================================================================
 // SICUREZZA — l'API esegue ssh/npm/git/pm2: accetta solo richieste dalla UI locale
