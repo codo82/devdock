@@ -105,7 +105,85 @@ function loadConfig() {
   return cfg;
 }
 
+// ---- Validazione: i valori finiscono in argomenti di ssh/npm/git e nell'HTML della UI ----
+
+class ConfigError extends Error {}
+
+const KEY_RE    = /^[A-Za-z0-9_-]{1,64}$/;
+const COLOR_RE  = /^#[0-9a-f]{3,8}$/i;
+const REMOTE_RE = /^(\[[0-9a-f:.]+\]|[A-Za-z0-9._-]+):(\d{1,5})$/i; // host:porta o [ipv6]:porta
+const ALIAS_RE  = /^[A-Za-z0-9_.@][A-Za-z0-9_.@-]*$/;               // host/alias ssh, mai "-" iniziale
+
+const isPort = n => Number.isInteger(n) && n >= 1 && n <= 65535;
+const isText = (v, max = 200) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+
+function validateServer(srv) {
+  const where = `server "${srv?.key}"`;
+  if (!srv || typeof srv !== 'object') throw new ConfigError('Server non valido');
+  if (!KEY_RE.test(srv.key || '')) throw new ConfigError(`${where}: chiave non valida (lettere, numeri, _ e -)`);
+  if (!isText(srv.label)) throw new ConfigError(`${where}: nome obbligatorio`);
+  if (!isPort(srv.port)) throw new ConfigError(`${where}: porta locale non valida (1-65535)`);
+  const m = REMOTE_RE.exec(srv.remote || '');
+  if (!m || !isPort(Number(m[2]))) throw new ConfigError(`${where}: remote non valido (formato host:porta)`);
+  if (!ALIAS_RE.test(srv.alias || '')) throw new ConfigError(`${where}: alias SSH non valido`);
+  if (srv.type != null && !isText(srv.type, 40)) throw new ConfigError(`${where}: tipo non valido`);
+}
+
+function validateGroup(g, serverKeys) {
+  const where = `gruppo "${g?.key}"`;
+  if (!g || typeof g !== 'object') throw new ConfigError('Gruppo non valido');
+  if (!KEY_RE.test(g.key || '')) throw new ConfigError(`${where}: chiave non valida (lettere, numeri, _ e -)`);
+  if (!isText(g.label)) throw new ConfigError(`${where}: nome obbligatorio`);
+  if (!COLOR_RE.test(g.color || '')) throw new ConfigError(`${where}: colore non valido (#rrggbb)`);
+  if (!Array.isArray(g.servers)) throw new ConfigError(`${where}: lista server non valida`);
+  const missing = g.servers.filter(k => !serverKeys.has(k));
+  if (missing.length) throw new ConfigError(`${where}: server inesistenti ${missing.join(', ')}`);
+}
+
+function validateProject(p) {
+  const where = `progetto "${p?.id}"`;
+  if (!p || typeof p !== 'object') throw new ConfigError('Progetto non valido');
+  if (!KEY_RE.test(p.id || '')) throw new ConfigError(`${where}: id non valido (lettere, numeri, _ e -)`);
+  if (!isText(p.label)) throw new ConfigError(`${where}: nome obbligatorio`);
+  if (!isText(p.path, 1024) || !path.isAbsolute(p.path)) throw new ConfigError(`${where}: il percorso deve essere assoluto`);
+}
+
+function assertUnique(list, field, what) {
+  const seen = new Set();
+  for (const x of list) {
+    if (seen.has(x[field])) throw new ConfigError(`${what} duplicato: ${x[field]}`);
+    seen.add(x[field]);
+  }
+}
+
+function validateConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new ConfigError('Config non valida');
+  for (const k of Object.keys(EMPTY_CONFIG)) {
+    if (!Array.isArray(cfg[k])) throw new ConfigError(`Config non valida: "${k}" deve essere una lista`);
+  }
+  cfg.servers.forEach(validateServer);
+  assertUnique(cfg.servers, 'key', 'Server');
+  const serverKeys = new Set(cfg.servers.map(s => s.key));
+  cfg.groups.forEach(g => validateGroup(g, serverKeys));
+  assertUnique(cfg.groups, 'key', 'Gruppo');
+  cfg.projects.forEach(validateProject);
+  assertUnique(cfg.projects, 'id', 'Progetto');
+}
+
+// Solo i campi noti: nessuna proprietà arbitraria finisce in config.json
+const pick = (obj, fields) => Object.fromEntries(fields.filter(f => obj[f] !== undefined).map(f => [f, obj[f]]));
+const SERVER_FIELDS  = ['key', 'label', 'port', 'remote', 'alias', 'type'];
+const GROUP_FIELDS   = ['key', 'label', 'color', 'servers'];
+const PROJECT_FIELDS = ['id', 'label', 'path'];
+
+function normalizeServer(srv) {
+  const out = pick(srv || {}, SERVER_FIELDS);
+  if (out.port !== undefined) out.port = Number(out.port);
+  return out;
+}
+
 function saveConfig(cfg) {
+  validateConfig(cfg);
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
 }
 
@@ -181,7 +259,13 @@ app.get('/api/config/export', (req, res) => {
 app.post('/api/config/import', (req, res) => {
   try {
     const { config: incoming, mode } = req.body; // mode: 'replace' | 'merge'
-    if (!incoming.groups || !incoming.servers) return res.status(400).json({ error: 'Config non valida' });
+    if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.groups) || !Array.isArray(incoming.servers)) {
+      return res.status(400).json({ error: 'Config non valida' });
+    }
+    incoming.servers  = incoming.servers.map(normalizeServer);
+    incoming.groups   = incoming.groups.map(g => pick(g || {}, GROUP_FIELDS));
+    incoming.projects = Array.isArray(incoming.projects) ? incoming.projects.map(p => pick(p || {}, PROJECT_FIELDS)) : [];
+    validateConfig(incoming); // il file importato deve essere valido già da solo
     if (mode === 'merge') {
       const current = loadConfig();
       const existingServerKeys = new Set(current.servers.map(s => s.key));
@@ -200,19 +284,19 @@ app.post('/api/config/import', (req, res) => {
     }
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e instanceof ConfigError ? 400 : 500).json({ error: e.message });
   }
 });
 
 // Salva intera config
 app.put('/api/config', (req, res) => {
   try {
-    const cfg = req.body;
-    if (!cfg.groups || !cfg.servers) return res.status(400).json({ error: 'Config non valida' });
+    // Le chiavi non gestite qui (es. dati di estensioni) restano quelle attuali
+    const cfg = { ...loadConfig(), ...pick(req.body || {}, Object.keys(EMPTY_CONFIG)) };
     saveConfig(cfg);
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e instanceof ConfigError ? 400 : 500).json({ error: e.message });
   }
 });
 
@@ -222,7 +306,7 @@ app.post('/api/config/groups', (req, res) => {
   const { key, label, color } = req.body;
   if (!key || !label) return res.status(400).json({ error: 'key e label obbligatori' });
   if (cfg.groups.find(g => g.key === key)) return res.status(409).json({ error: 'Chiave già esistente' });
-  cfg.groups.push({ key, label, color: color || '#6b7280', servers: [] });
+  cfg.groups.push({ key, label, color: color || '#6b7280', servers: [] }); // validato da saveConfig
   saveConfig(cfg);
   res.json({ ok: true });
 });
@@ -232,7 +316,7 @@ app.put('/api/config/groups/:key', (req, res) => {
   const cfg = loadConfig();
   const idx = cfg.groups.findIndex(g => g.key === req.params.key);
   if (idx === -1) return res.status(404).json({ error: 'Gruppo non trovato' });
-  cfg.groups[idx] = { ...cfg.groups[idx], ...req.body, key: cfg.groups[idx].key };
+  cfg.groups[idx] = { ...cfg.groups[idx], ...pick(req.body, ['label', 'color', 'servers']) };
   saveConfig(cfg);
   res.json({ ok: true });
 });
@@ -251,7 +335,7 @@ app.post('/api/config/servers', (req, res) => {
   const { key, label, port, remote, alias, type, groupKey } = req.body;
   if (!key || !label || !port || !remote || !alias) return res.status(400).json({ error: 'Campi obbligatori mancanti' });
   if (cfg.servers.find(s => s.key === key)) return res.status(409).json({ error: 'Chiave già esistente' });
-  cfg.servers.push({ key, label, port: parseInt(port), remote, alias, type: type || 'TCP' });
+  cfg.servers.push(normalizeServer({ key, label, port, remote, alias, type: type || 'TCP' }));
   if (groupKey) {
     const g = cfg.groups.find(g => g.key === groupKey);
     if (g) g.servers.push(key);
@@ -265,7 +349,7 @@ app.put('/api/config/servers/:key', (req, res) => {
   const cfg = loadConfig();
   const idx = cfg.servers.findIndex(s => s.key === req.params.key);
   if (idx === -1) return res.status(404).json({ error: 'Server non trovato' });
-  cfg.servers[idx] = { ...cfg.servers[idx], ...req.body, key: cfg.servers[idx].key, port: parseInt(req.body.port || cfg.servers[idx].port) };
+  cfg.servers[idx] = { ...cfg.servers[idx], ...normalizeServer(pick(req.body, ['label', 'port', 'remote', 'alias', 'type'])) };
   saveConfig(cfg);
   res.json({ ok: true });
 });
@@ -470,7 +554,7 @@ app.put('/api/projects/:id', (req, res) => {
   if (idx === -1) return res.status(404).json({ error: 'Progetto non trovato' });
   const { label, path: projectPath } = req.body;
   if (projectPath && !fs.existsSync(projectPath)) return res.status(400).json({ error: `Cartella non trovata: ${projectPath}` });
-  projects[idx] = { ...projects[idx], ...req.body, id: projects[idx].id };
+  projects[idx] = { ...projects[idx], ...pick(req.body, ['label', 'path']) };
   saveProjects(projects);
   res.json({ ok: true });
 });
@@ -1175,6 +1259,15 @@ app.post('/api/git/repos/:id/action', async (req, res) => {
 // ============================================================================
 // SHUTDOWN + LISTEN
 // ============================================================================
+
+// Errori non gestiti nelle route: le validazioni della config diventano 400 JSON
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err instanceof ConfigError) return res.status(400).json({ error: err.message });
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON non valido' });
+  console.error(err);
+  res.status(500).json({ error: err.message || 'Errore interno' });
+});
 
 function shutdown(signal) {
   console.log(`\n${signal} — termino tunnel e processi npm...`);
