@@ -820,6 +820,37 @@ function gitExec(cwd, args, opts = {}) {
   });
 }
 
+// ---- Validazione input git (argument injection: un valore che inizia con "-"
+// verrebbe letto da git come opzione, es. "--upload-pack=<comando>") ----
+
+const GIT_ACTIONS = new Set(['commit', 'pull', 'push', 'push_force', 'pull_push', 'merge', 'fetch', 'checkout', 'stash', 'stash_pop']);
+const BRANCH_ACTIONS = new Set(['push', 'push_force', 'pull_push', 'merge', 'checkout']); // branch obbligatorio
+const REMOTE_ACTIONS = new Set(['pull', 'push', 'push_force', 'pull_push']);              // remote usato
+
+function isValidBranchName(name) {
+  if (typeof name !== 'string' || !name || name.startsWith('-')) return false;
+  return spawnSync('git', ['check-ref-format', '--branch', name], { stdio: 'ignore' }).status === 0;
+}
+
+function isValidCommitHash(hash) {
+  return typeof hash === 'string' && /^[0-9a-f]{4,64}$/i.test(hash);
+}
+
+async function getGitRemotes(cwd) {
+  const r = await gitExec(cwd, ['remote'], { allowFail: true });
+  return r.out.split('\n').map(x => x.trim()).filter(Boolean);
+}
+
+// Restituisce un messaggio d'errore o null se i parametri sono validi
+async function validateGitAction(repoPath, { action, branch, remote, message }) {
+  if (!GIT_ACTIONS.has(action)) return 'Azione non supportata';
+  if (BRANCH_ACTIONS.has(action) && !branch) return 'Branch obbligatorio';
+  if (branch != null && branch !== '' && !isValidBranchName(branch)) return `Nome branch non valido: ${branch}`;
+  if (REMOTE_ACTIONS.has(action) && !(await getGitRemotes(repoPath)).includes(remote)) return `Remote sconosciuto: ${remote}`;
+  if (message != null && typeof message !== 'string') return 'Messaggio non valido';
+  return null;
+}
+
 function findGitRoot(startPath) {
   let dir = startPath;
   while (true) {
@@ -947,9 +978,10 @@ app.get('/api/git/repos/:id/commit/:hash', async (req, res) => {
   const repos = getGitRepos();
   const repo  = repos.find(r => r.id === req.params.id);
   if (!repo) return res.status(404).json({ error: 'Repo non trovato' });
+  if (!isValidCommitHash(req.params.hash)) return res.status(400).json({ error: 'Hash non valido' });
   try {
     const r = await gitExec(repo.path, [
-      'show', '--no-patch', '--format=%B', req.params.hash,
+      'show', '--no-patch', '--format=%B', req.params.hash, '--',
     ], { allowFail: true });
     res.json({ body: r.out.trim() });
   } catch (e) {
@@ -958,12 +990,16 @@ app.get('/api/git/repos/:id/commit/:hash', async (req, res) => {
 });
 
 // Azione git (commit, pull, push, merge) — SSE streaming
-app.post('/api/git/repos/:id/action', (req, res) => {
+app.post('/api/git/repos/:id/action', async (req, res) => {
   const repos = getGitRepos();
   const repo  = repos.find(r => r.id === req.params.id);
   if (!repo) { res.status(404).json({ error: 'Repo non trovato' }); return; }
 
   const { action, message, branch, remote = 'origin', files = [] } = req.body;
+
+  // Validazione prima di aprire lo stream SSE, così l'errore arriva come JSON 400
+  const invalid = await validateGitAction(repo.path, { action, branch, remote, message });
+  if (invalid) { res.status(400).json({ error: invalid }); return; }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -1057,7 +1093,7 @@ app.post('/api/git/repos/:id/action', (req, res) => {
   } else if (action === 'fetch') {
     args = ['fetch', '--all', '--prune'];
   } else if (action === 'checkout') {
-    args = ['checkout', branch].filter(Boolean);
+    args = ['checkout', branch, '--'];
   } else if (action === 'stash') {
     args = ['stash'];
   } else if (action === 'stash_pop') {

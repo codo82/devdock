@@ -42,7 +42,7 @@ Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco
 - [x] **M1.5** Header di sicurezza base: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`
 
 **Validazione input (argument injection)**
-- [ ] **M1.6** Git: validare `branch`/`remote` (no `-` iniziale, `git check-ref-format`), aggiungere `--` prima dei path; validare `:hash` con regex esadecimale
+- [x] **M1.6** Git: validare `branch`/`remote` (no `-` iniziale, `git check-ref-format`), aggiungere `--` prima dei path; validare `:hash` con regex esadecimale
 - [ ] **M1.7** Git commit: i file passati devono essere tra quelli restituiti da `git status`
 - [ ] **M1.8** NPM: `script` ammesso solo se presente in `package.json` (o `install`); nuova azione esplicita `update <pkg>` con nome pacchetto validato
 - [ ] **M1.9** PM2: whitelist di `action` (`start|stop|restart|delete`), `target` validato
