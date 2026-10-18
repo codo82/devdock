@@ -50,7 +50,7 @@ Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco
 
 **Frontend (XSS)**
 - [x] **M1.11** Escapare tutti i valori interpolati in HTML/attributi (`color` negli `style`, key negli `onclick`, `e.message` in Swagger e nei toast HTML) — preferire `data-*` + event delegation agli `onclick` inline con stringhe
-- [ ] **M1.12** Swagger UI e js-yaml da CDN con attributo `integrity` (SRI) + `crossorigin`
+- [x] **M1.12** Swagger UI e js-yaml da CDN con attributo `integrity` (SRI) + `crossorigin`
 
 ## M2 — Bug noti
 

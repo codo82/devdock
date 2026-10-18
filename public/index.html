@@ -1765,6 +1765,16 @@ const App = (() => {
   // ================================================================
   let swaggerLoaded = false;
 
+  // Librerie da CDN con hash SRI (verificati contro api.cdnjs.com). Se si cambia
+  // versione vanno aggiornati anche gli hash.
+  const CDNJS = 'https://cdnjs.cloudflare.com/ajax/libs';
+  const CDN = {
+    swaggerCss:    { url: `${CDNJS}/swagger-ui/5.17.14/swagger-ui.min.css`,                   sri: 'sha512-+9UD8YSD9GF7FzOH38L9S6y56aYNx3R4dYbOCgvTJ2ZHpJScsahNdaMQJU/8osUiz9FPu0YZ8wdKf4evUbsGSg==' },
+    swaggerBundle: { url: `${CDNJS}/swagger-ui/5.17.14/swagger-ui-bundle.min.js`,             sri: 'sha512-7ihPQv5ibiTr0DW6onbl2MIKegdT6vjpPySyIb4Ftp68kER6Z7Yiub0tFoMmCHzZfQE9+M+KSjQndv6NhYxDgg==' },
+    swaggerPreset: { url: `${CDNJS}/swagger-ui/5.17.14/swagger-ui-standalone-preset.min.js`,  sri: 'sha512-UrYi+60Ci3WWWcoDXbMmzpoi1xpERbwjPGij6wTh8fXl81qNdioNNHExr9ttnBebKF0ZbVnPlTPlw+zECUK1Xw==' },
+    jsYaml:        { url: `${CDNJS}/js-yaml/4.1.0/js-yaml.min.js`,                            sri: 'sha512-CSBhVREyzHAjAFfBlIBakjoRUKp5h7VSweP0InR/pAJyptH7peuhCsqAI/snV+TwZmXZqoUklpXp6R6wMnYf5Q==' },
+  };
+
   function renderSwaggerSection() {
     const sidebar = document.getElementById('sidebarContent');
     sidebar.innerHTML = `
@@ -1796,35 +1806,39 @@ const App = (() => {
     const text = await file.text();
     const main = document.getElementById('mainArea-swagger');
 
-    // Carica Swagger UI via CDN se non già presente
+    // Carica Swagger UI via CDN se non già presente (SRI: il browser rifiuta file alterati)
     if (!document.getElementById('swagger-ui-css')) {
       const link = document.createElement('link');
       link.id = 'swagger-ui-css';
       link.rel = 'stylesheet';
-      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.min.css';
+      link.href = CDN.swaggerCss.url;
+      link.integrity = CDN.swaggerCss.sri;
+      link.crossOrigin = 'anonymous';
       document.head.appendChild(link);
     }
 
     main.innerHTML = `<div id="swagger-ui" style="flex:1;overflow:auto;background:#fff"></div>`;
 
-    const loadScript = (src) => new Promise((resolve, reject) => {
+    const loadScript = ({ url: src, sri }) => new Promise((resolve, reject) => {
       if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
       const s = document.createElement('script');
       s.src = src;
+      s.integrity = sri;
+      s.crossOrigin = 'anonymous';
       s.onload = resolve;
       s.onerror = reject;
       document.head.appendChild(s);
     });
 
     try {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.min.js');
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-standalone-preset.min.js');
+      await loadScript(CDN.swaggerBundle);
+      await loadScript(CDN.swaggerPreset);
 
       // Parse YAML — usiamo js-yaml se disponibile, altrimenti proviamo JSON
       let spec;
       try {
         if (!window.jsyaml) {
-          await loadScript('https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js');
+          await loadScript(CDN.jsYaml);
         }
         spec = window.jsyaml.load(text);
       } catch {
@@ -1839,6 +1853,7 @@ const App = (() => {
         deepLinking: true,
         defaultModelsExpandDepth: 1,
         defaultModelExpandDepth: 1,
+        validatorUrl: null, // niente badge da validator.swagger.io (bloccato dalla CSP)
       });
 
       swaggerLoaded = true;
