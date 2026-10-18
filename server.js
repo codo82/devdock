@@ -1035,6 +1035,6 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGHUP',  () => shutdown('SIGHUP')); // chiusura del terminale
 
 app.listen(PORT, '127.0.0.1', () => {
-  console.log(`Port Forward Manager → http://127.0.0.1:${PORT}`);
+  console.log(`DevDock → http://127.0.0.1:${PORT}`);
   console.log(`Config: ${CONFIG_PATH}`);
 });
