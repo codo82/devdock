@@ -36,14 +36,39 @@ function getServerMap(cfg) {
 }
 
 // ============================================================================
+// SISTEMA — strumenti esterni disponibili
+// ============================================================================
+
+function hasCommand(cmd) {
+  const finder = process.platform === 'win32' ? 'where' : 'which';
+  return spawnSync(finder, [cmd], { stdio: 'ignore' }).status === 0;
+}
+
+function detectTools() {
+  return {
+    ssh:     hasCommand('ssh'),
+    autossh: hasCommand('autossh'),
+    git:     hasCommand('git'),
+    npm:     hasCommand('npm'),
+    pm2:     hasCommand('pm2'),
+    lsof:    hasCommand('lsof'),
+    ss:      process.platform === 'linux' && hasCommand('ss'),
+  };
+}
+
+let TOOLS = detectTools();
+
+// Stato degli strumenti per la UI (?refresh=1 li ricontrolla, es. dopo un'installazione)
+app.get('/api/system', (req, res) => {
+  if (req.query.refresh) TOOLS = detectTools();
+  res.json({ platform: process.platform, tools: TOOLS });
+});
+
+// ============================================================================
 // TUNNEL
 // ============================================================================
 
 const activeTunnels = new Map();
-
-function useAutossh() {
-  try { execSync('which autossh', { stdio: 'ignore' }); return true; } catch { return false; }
-}
 
 // ============================================================================
 // API — CONFIG
@@ -286,7 +311,7 @@ app.post('/api/tunnels/start', (req, res) => {
     '-N', srv.alias,
   ];
 
-  const useAuto = useAutossh();
+  const useAuto = hasCommand('autossh'); // ricontrollato a ogni avvio: può essere installato a server acceso
   const td = {
     serverKey, label: srv.label, port: localPort,
     remote: srv.remote, alias: srv.alias, type: srv.type,
@@ -458,24 +483,18 @@ function runQuiet(cmd, args) {
   }
 }
 
-function hasCommand(cmd) {
-  return spawnSync('which', [cmd], { stdio: 'ignore' }).status === 0;
-}
-
-const HAS_LSOF = hasCommand('lsof');
-const HAS_SS   = process.platform === 'linux' && hasCommand('ss');
 
 // Porte TCP in LISTEN dei PID dati — lsof (macOS/Linux) con fallback a ss (Linux)
 function getListeningPorts(pids) {
   const ports = new Set();
-  if (HAS_LSOF) {
+  if (TOOLS.lsof) {
     // -F n: una riga per socket nel formato "n<indirizzo>:<porta>", es. "n*:3000", "n[::1]:5173"
     const out = runQuiet('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-a', '-p', pids.join(','), '-Fn']);
     for (const line of out.split('\n')) {
       const m = line.match(/^n.*:(\d+)$/);
       if (m && Number(m[1]) > 0) ports.add(Number(m[1]));
     }
-  } else if (HAS_SS) {
+  } else if (TOOLS.ss) {
     // formato: "LISTEN 0 511 0.0.0.0:3000 ... users:(("node",pid=1234,fd=20))"
     const pidSet = new Set(pids.map(String));
     for (const line of runQuiet('ss', ['-tlnpH']).split('\n')) {
