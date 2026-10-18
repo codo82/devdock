@@ -18,7 +18,7 @@ Legenda stato: `[ ]` da fare · `[~]` in corso · `[x]` fatto
 
 ---
 
-## M0 — Pulizia e portabilità macOS
+## M0 — Pulizia e portabilità macOS ✅ (1.1.0)
 
 Obiettivo: il progetto parte pulito su macOS (e resta compatibile con Linux/WSL).
 

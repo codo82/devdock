@@ -6,6 +6,8 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e il p
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-18 — M0 Pulizia e portabilità macOS
+
 ### Added
 - `README.md`, `CHANGELOG.md` e `ROADMAP.md`.
 - Endpoint `GET /api/system` che indica quali strumenti esterni sono installati (`ssh`, `autossh`, `git`, `npm`, `pm2`, `lsof`, `ss`).
