@@ -851,6 +851,22 @@ async function validateGitAction(repoPath, { action, branch, remote, message }) 
   return null;
 }
 
+// git status --porcelain -z: nomi file esatti (niente quoting), rinomine con path originale
+async function getGitStatus(cwd) {
+  const r = await gitExec(cwd, ['status', '--porcelain', '-b', '-z'], { allowFail: true });
+  const fields = r.out.split('\0');
+  const header = fields[0].startsWith('## ') ? fields.shift() : '';
+  const files = [];
+  for (let i = 0; i < fields.length; i++) {
+    const f = fields[i];
+    if (!f) continue;
+    const entry = { xy: f.slice(0, 2), name: f.slice(3) };
+    if (/[RC]/.test(entry.xy)) entry.orig = fields[++i]; // rinomina/copia: segue il path originale
+    files.push(entry);
+  }
+  return { header, files };
+}
+
 function findGitRoot(startPath) {
   let dir = startPath;
   while (true) {
@@ -887,28 +903,19 @@ app.get('/api/git/repos/:id/status', async (req, res) => {
   const repo = repos.find(r => r.id === req.params.id);
   if (!repo) return res.status(404).json({ error: 'Repo non trovato' });
   try {
-    const [branchR, statusR, stashR] = await Promise.all([
+    const [branchR, { header, files }, stashR] = await Promise.all([
       gitExec(repo.path, ['rev-parse', '--abbrev-ref', 'HEAD'], { allowFail: true }),
-      gitExec(repo.path, ['status', '--porcelain', '-b'], { allowFail: true }),
+      getGitStatus(repo.path),
       gitExec(repo.path, ['stash', 'list'], { allowFail: true }),
     ]);
 
     const branch = branchR.out.trim();
-    const lines  = statusR.out.split('\n').filter(Boolean);
 
     // Parse ahead/behind dal ## branch
-    const header   = lines[0] || '';
     const aheadM   = header.match(/\[ahead (\d+)/);
     const behindM  = header.match(/behind (\d+)/);
     const ahead    = aheadM  ? parseInt(aheadM[1])  : 0;
     const behind   = behindM ? parseInt(behindM[1]) : 0;
-
-    // Parse file status
-    const files = lines.slice(1).map(line => {
-      const xy = line.slice(0, 2);
-      const name = line.slice(3).trim();
-      return { xy, name };
-    });
 
     const stashCount = stashR.out.trim().split('\n').filter(Boolean).length;
 
@@ -1010,8 +1017,15 @@ app.post('/api/git/repos/:id/action', async (req, res) => {
 
   let args;
   if (action === 'commit') {
+    // Solo file presenti in git status: un nome arbitrario potrebbe essere
+    // un'opzione di git add o un path fuori dalle modifiche mostrate
+    if (!Array.isArray(files)) { send('error', 'Lista file non valida'); res.end(); return; }
+    const { files: changed } = await getGitStatus(repo.path);
+    const known = new Set(changed.map(f => f.name));
+    const unknown = files.filter(f => !known.has(f));
+    if (unknown.length) { send('error', `File non presenti tra le modifiche: ${unknown.join(', ')}`); res.end(); return; }
     // Prima stage i file, poi commit
-    const stageArgs = files.length ? ['add', ...files] : ['add', '-A'];
+    const stageArgs = files.length ? ['add', '-A', '--', ...files] : ['add', '-A'];
     const proc1 = spawn('git', stageArgs, { cwd: repo.path, env: { ...process.env } });
     let stageErr = '';
     proc1.stderr.on('data', d => stageErr += d.toString());
