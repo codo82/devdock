@@ -60,12 +60,13 @@ Only `setting.json` is mandatory: an extension can be frontend-only (Swagger) or
 | `color` | yes | Accent colour (`#rrggbb`) for tab, badges and pills |
 | `icon` | no | Emoji or short text for the tab / header button |
 | `position` | yes | `"tab"`: entry in the section bar with its own panel · `"header"`: button in the header bar that opens its panel |
-| `order` | no | Sort order among extensions with the same position (default 100) |
+| `order` | no | Sort order of tabs (shared with the core sections) and header buttons (default 100). The first tab opens at startup |
 | `dependencies` | no | `required: true` → the extension is not loaded if the dependency is missing or failed · `required: false` → it loads, but shows a warning icon and must cope with the dependency being absent |
 | `config` | no | Top-level keys of `config.json` owned by the extension (see *Configuration*) |
 | `backend.module` | no | Backend file, relative to the extension folder |
 | `backend.routes` | no | Routes mounted under `/api/ext/<code>`; each one names a handler exported by the module |
 | `frontend.html` / `sidebar` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served. Without `sidebar` the panel takes the full width |
+| `frontend.preload` | no | `true`: the module is mounted at startup (hidden) instead of on first open — for extensions that keep header pills, badges or notifications up to date in the background |
 
 ### Routes
 
@@ -158,8 +159,9 @@ export default {
     ctx.expose({ selectRepo });                // window.Ext.git.selectRepo(...) for inline handlers
     ctx.setBadge(repos.length);
   },
-  show(ctx) {},   // panel became visible (start polling)
-  hide(ctx) {},   // panel hidden (stop polling)
+  show(ctx) {},    // panel became visible
+  hide(ctx) {},    // panel hidden (stop work that only matters while visible)
+  refresh(ctx) {}, // the user pressed ↻ in the header
 };
 ```
 
@@ -174,10 +176,11 @@ export default {
 | `ctx.api.stream(path, body, onEvent)` | POST answered with SSE (e.g. git actions); resolves with the `exit` code |
 | `ctx.api.events(path, onEvent)` | GET answered with SSE (`EventSource`); returns a function that closes it |
 | `ctx.core` | Same client for `/api/core` |
-| `ctx.ui` | `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `output` (the panel's output drawer: `open(title)`, `append(text, 'out'|'err'|'sys')`, `clear()`, `close()`) |
+| `ctx.ui` | `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'|'err'|'sys')`, `clear()`, `close()`) |
 | `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions |
 | `ctx.expose(obj)` | Publishes functions as `window.Ext.<code>` for inline handlers |
 | `ctx.setBadge(value)` | Number or text on the tab (`null` hides it) |
+| `ctx.setPills(html)` | The extension's pills in the header bar (`''` removes them); `--ext-color` is available there too |
 | `ctx.open(code)`, `ctx.isActive()` | Navigate to another section; whether this panel is visible |
 
 Inline handlers in generated HTML call the functions exposed with `ctx.expose`, always escaping arguments with `ctx.ui.js(value)`; text goes through `ctx.ui.esc(value)`:
@@ -186,7 +189,9 @@ Inline handlers in generated HTML call the functions exposed with `ctx.expose`, 
 `<button onclick="Ext.git.selectRepo(${ctx.ui.js(repo.id)})">${ctx.ui.esc(repo.label)}</button>`
 ```
 
-Inside the panel the CSS variable `--ext-color` holds the extension colour, and the `hidden` attribute always hides an element.
+Inside the panel the CSS variable `--ext-color` holds the extension colour, and the `hidden` attribute always hides an element. Elements with `data-uptime="<ISO date>"` show an elapsed time that updates every second.
+
+The header (notifications toggle, export/import of `config.json` by section, ↻) belongs to the core.
 
 ## Core API
 

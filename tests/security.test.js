@@ -7,7 +7,7 @@ before(async () => { srv = await startServer(); });
 after(() => srv.stop());
 
 // Richiesta innocua che, se ammessa, fallisce per validazione (400) senza toccare la config
-const probe = (headers = {}) => srv.request('POST', '/api/config/groups', { body: {}, headers });
+const probe = (headers = {}) => srv.request('POST', '/api/ext/tunnels/groups', { body: {}, headers });
 
 test('Host non locale → 421 (DNS rebinding)', async () => {
   const r = await srv.request('GET', '/api/core/system', { headers: { Host: `evil.example:${srv.port}` } });
@@ -35,14 +35,14 @@ test('Origin della UI e richieste senza Origin (curl) ammesse', async () => {
 });
 
 test('POST senza Content-Type JSON → 415', async () => {
-  const r = await srv.request('POST', '/api/config/groups', {
+  const r = await srv.request('POST', '/api/ext/tunnels/groups', {
     raw: 'key=x', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   });
   assert.equal(r.status, 415);
 });
 
 test('JSON malformato → 400 JSON', async () => {
-  const r = await srv.request('POST', '/api/config/groups', { raw: '{bad', headers: { 'Content-Type': 'application/json' } });
+  const r = await srv.request('POST', '/api/ext/tunnels/groups', { raw: '{bad', headers: { 'Content-Type': 'application/json' } });
   assert.equal(r.status, 400);
   assert.equal(r.json.error, 'JSON non valido');
 });

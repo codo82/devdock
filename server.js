@@ -4,7 +4,6 @@ const path = require('path');
 const { ROOT, PORT, CONFIG_PATH, EXTENSIONS_DIR } = require('./lib/env');
 const { applySecurity } = require('./lib/security');
 const { ConfigError } = require('./lib/config');
-const { stopAllTunnels } = require('./lib/tunnels');
 const { stopAllProcesses } = require('./lib/process');
 const { loadExtensions, frontendRouter } = require('./lib/extensions');
 
@@ -22,7 +21,6 @@ const extensions = loadExtensions(EXTENSIONS_DIR, {
     system:   require('./lib/system'),
     process:  require('./lib/process'),
     git:      require('./lib/git'),
-    tunnels:  require('./lib/tunnels'),
     projects: require('./lib/projects'),
   },
 });
@@ -30,8 +28,6 @@ app.use('/api/ext', extensions.router);
 app.use('/ext', frontendRouter(extensions));
 app.use('/api/core', require('./routes/core')(extensions));
 
-app.use('/api', require('./routes/config'));
-app.use('/api', require('./routes/tunnels'));
 app.use('/api', require('./routes/projects'));
 app.use('/api', require('./routes/git'));
 
@@ -47,7 +43,6 @@ app.use((err, req, res, next) => {
 function shutdown(signal) {
   console.log(`\n${signal} — termino tunnel e processi npm...`);
   extensions.shutdown();
-  stopAllTunnels();
   stopAllProcesses();
   process.exit(0);
 }

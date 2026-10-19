@@ -76,7 +76,7 @@ Every feature becomes an extension with its own manifest, backend routes, HTML, 
 - [x] **M3.4** Backend loader: discover `extensions/*/setting.json`, validate manifests, resolve dependencies (`required: true` → not loaded; `false` → loaded with a warning), topological order, error on cycles, mount declared routes, check handlers, shutdown in reverse order
 - [x] **M3.5** Config ownership: each `config.json` key belongs to one extension; per-extension validation, export and import
 - [x] **M3.6** Frontend shell: header, section bar, sidebar, panels, modal, toast, SSE output panel, lazy loading of `view.html`/`view.js`/`style.css`, warning icon for missing optional dependencies, header-position extensions
-- [~] **M3.7** Migrate the sections one at a time, keeping the tests green: Swagger ✓ → PM2 ✓ → Tunnels (with their settings) → npm → Git
+- [~] **M3.7** Migrate the sections one at a time, keeping the tests green: Swagger ✓ → PM2 ✓ → Tunnels ✓ (with their settings) → npm → Git
 - [ ] **M3.8** Unify the push logic (`push`, fetch-error fallback, `pull_push`) in the Git extension into a single pipeline of sequential SSE commands
 - [ ] **M3.9** npm workspaces: `"workspaces": ["extensions/*"]`, a single `node_modules`
 - [ ] **M3.10** *(Backlog #5)* `CLAUDE.md`: purpose, structure, extension pattern, conventions (Italian UI messages, vanilla JS, no build step), how to run and test, reference to this roadmap
@@ -125,6 +125,43 @@ Built as an extension on the M3 architecture.
 
 ---
 
+# Future developments
+
+Planned after the current milestones, independent of the work in progress. Not ordered yet.
+
+## M6 — Internationalization (i18n)
+
+Goal: the whole UI (core and extensions) translatable into **any language**, with no list of languages hard-coded in the code: a language exists when its catalog exists. Adding one means adding JSON files, without touching JS. Italian is the **source language** (the complete reference and the last fallback); the first additional language is English. No build step and no external libraries: a small vanilla JS helper in the core, consistent with the rest of the project.
+
+**Languages and selection**
+- [ ] **M6.1** Language identifiers are BCP 47 tags (`it`, `en`, `pt-BR`, `zh-Hant`…). The available languages are discovered from the core catalogs (`public/core/i18n/*.json`) and exposed by `GET /api/core/i18n/languages` (tag, native name, direction, completeness %)
+- [ ] **M6.2** Each catalog carries its own metadata in a `_meta` block: `{ "name": "English", "nativeName": "English", "dir": "ltr" }`, so the selector and the layout need no per-language code
+- [ ] **M6.3** Active language resolved in this order: user choice (stored in `localStorage`) → `navigator.languages` → source language. Matching with progressive truncation (`pt-BR` → `pt`), so a regional variant falls back to the base language. Selector in the header listing the available languages by native name; changing language re-renders the shell and the mounted extensions without a page reload. `<html lang>` and `<html dir>` updated accordingly
+- [ ] **M6.4** Right-to-left support: shell and extension CSS use logical properties (`margin-inline-start`, `inset-inline-end`, `text-align: start`) instead of left/right, so an RTL language (Arabic, Hebrew) works without dedicated stylesheets
+
+**Core**
+- [ ] **M6.5** Catalogs as flat JSON files `public/core/i18n/<lang>.json` with dotted keys (`core.toast.saved`), served as static files and loaded lazily (only the chain needed: active language → its base language → source language)
+- [ ] **M6.6** Helper `t(key, params)` in `ui.js`: `{name}` interpolation, plurals via `Intl.PluralRules` with all CLDR categories (`zero`, `one`, `two`, `few`, `many`, `other`, only `other` mandatory), so languages with complex plurals (Polish, Arabic, Russian) work. Per-key fallback along the chain → the key itself, with a console warning for missing keys. A partially translated language is therefore usable
+- [ ] **M6.7** Static markup: `data-i18n`, `data-i18n-title`, `data-i18n-placeholder` attributes applied by the shell to `index.html` and to every loaded `view.html` / `sidebar.html`
+- [ ] **M6.8** Locale-aware formatting through `Intl` (`DateTimeFormat`, `NumberFormat`, `RelativeTimeFormat`, `ListFormat`) using the active tag: dates in the Git log, uptime in PM2, byte sizes, row counts. No date/number formats written by hand
+- [ ] **M6.9** Migrate every hard-coded string in `public/core/*` (toasts, modals, confirms, `toolNotice`, empty states, tooltips)
+
+**Extensions**
+- [ ] **M6.10** Contract extension (documented in `docs/EXTENSIONS.md`): optional `i18n/<lang>.json` folder per extension, keys automatically namespaced by the extension `code`; frontend modules receive `ctx.t` already bound to their namespace. An extension may support a different set of languages from the core: missing keys follow the same fallback chain. An extension may also ship a language the core lacks (its strings are used, the core falls back). Manifest `name` and `description` translatable as a map by tag (`"name": { "it": "…", "en": "…" }`) or a plain string as today
+- [ ] **M6.11** Migrate the existing extensions one at a time (Swagger, PM2, Tunnels, npm, Git); from then on every new extension (DB client) is born with at least the source-language catalog
+
+**Backend**
+- [ ] **M6.12** API errors become structured: `{ error: { code: "tunnels.not_found", params: { … }, message: "<source-language fallback>" } }`. The frontend translates `code` with `t()`, and falls back to `message` for unknown codes. The server stays language-agnostic (no `Accept-Language` handling). Applies to the core middlewares (`security.js`: host, origin, content-type), config validation and extension handlers
+- [ ] **M6.13** Output of external commands (`git`, `npm`, `pm2`, `ssh`) is **not** translated: it is shown as is in the SSE panel
+
+**Quality**
+- [ ] **M6.14** Tests on the catalogs, for the core and for each extension: the source language is complete; no other catalog has keys that don't exist in the source (stale keys); `{param}` placeholders match the source; every plural key has `other`; `_meta` is valid. Missing translations are **not** a failure: they are reported as completeness %
+- [ ] **M6.15** Script `npm run i18n:report`: completeness per language and per extension, with the list of missing keys, as a starting point for whoever adds a translation
+- [ ] **M6.16** Check that no hard-coded UI literal is left in `public/` and `extensions/*/view.js` (simple grep-based test with an allowlist)
+- [ ] **M6.17** Docs: README section "Languages" (how to switch, how to add a new language step by step: copy the source catalog, translate, fill `_meta`, run the report), update the M3.10 convention "Italian UI messages" → "UI messages through `t()`, Italian as source language"
+
+---
+
 ## Suggested order and size
 
 | Milestone | Size | Notes |
@@ -136,3 +173,4 @@ Built as an extension on the M3 architecture.
 | M3 Extension architecture | L | the largest; sections migrated one at a time, covered by tests |
 | M4 Branch switch | S | first feature built inside an extension |
 | M5 DB client | L | first new extension; includes the master password vault |
+| M6 i18n | M | language-agnostic: languages discovered from catalogs; core first, then extensions one at a time; structured API errors |

@@ -15,11 +15,7 @@ export default {
       if (!system.tools.pm2) {
         stats.innerHTML = '';
         ctx.setBadge(null);
-        content.innerHTML = `<div class="tool-notice">
-          <span>⚠️ PM2 non è installato o non è nel PATH del server.</span>
-          <code>npm install -g pm2</code>
-          <button class="btn btn-ghost btn-sm" onclick="Ext.pm2.recheck()">Ricontrolla</button>
-        </div>`;
+        content.innerHTML = ctx.ui.toolNotice('PM2 non è installato o non è nel PATH del server.', 'npm install -g pm2', 'Ext.pm2.recheck()');
         return;
       }
 

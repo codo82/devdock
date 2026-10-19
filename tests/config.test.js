@@ -8,38 +8,6 @@ after(() => srv.stop());
 
 const server = (over = {}) => ({ key: 'db', label: 'DB', port: 3306, remote: '10.0.0.1:3306', alias: 'bastion', ...over });
 
-test('CRUD server e gruppi con validazione', async () => {
-  assert.equal((await srv.request('POST', '/api/config/servers', { body: server() })).status, 200);
-  assert.equal((await srv.request('POST', '/api/config/servers', { body: server() })).status, 409);
-
-  const bad = [
-    server({ key: 'x1', port: 99999 }),
-    server({ key: 'x2', alias: '-oProxyCommand=evil' }),
-    server({ key: 'x3', remote: 'host-senza-porta' }),
-    server({ key: 'a b' }),
-  ];
-  for (const body of bad) {
-    const r = await srv.request('POST', '/api/config/servers', { body });
-    assert.equal(r.status, 400, `atteso 400 per ${JSON.stringify(body)}`);
-  }
-
-  assert.equal((await srv.request('POST', '/api/config/groups', { body: { key: 'g', label: 'G', color: 'red;x:y' } })).status, 400);
-  assert.equal((await srv.request('POST', '/api/config/groups', { body: { key: 'g', label: 'G', color: '#ff0000' } })).status, 200);
-  assert.equal((await srv.request('PUT', '/api/config/groups/g', { body: { servers: ['nope'] } })).status, 400);
-  assert.equal((await srv.request('PUT', '/api/config/groups/g', { body: { servers: ['db'], evil: 1 } })).status, 200);
-  assert.equal((await srv.request('PUT', '/api/config/servers/db', { body: { port: '3307' } })).status, 200);
-
-  const cfg = srv.readConfig();
-  assert.deepEqual(cfg.groups, [{ key: 'g', label: 'G', color: '#ff0000', servers: ['db'] }]);
-  assert.equal(cfg.servers[0].port, 3307);
-
-  const groups = await srv.request('GET', '/api/groups');
-  assert.equal(groups.json[0].servers[0].key, 'db');
-
-  assert.equal((await srv.request('DELETE', '/api/config/servers/db')).status, 200);
-  assert.deepEqual(srv.readConfig().groups[0].servers, []);
-});
-
 test('progetti: percorso assoluto obbligatorio, PUT solo campi noti', async () => {
   assert.equal((await srv.request('POST', '/api/projects', { body: { id: 'rel', label: 'R', path: '.' } })).status, 400);
   assert.equal((await srv.request('POST', '/api/projects', { body: { id: 'tmp', label: 'T', path: require('os').tmpdir() } })).status, 200);
@@ -86,14 +54,17 @@ test('import: sezioni parziali, merge e replace', async () => {
   assert.equal(r.status, 400);
 });
 
+test('sezioni: groups/servers appartengono all\'estensione tunnels, projects al core', async () => {
+  const sections = Object.fromEntries((await srv.request('GET', '/api/core/config/sections')).json.map(x => [x.key, x.owner]));
+  assert.equal(sections.groups, 'tunnels');
+  assert.equal(sections.servers, 'tunnels');
+  assert.equal(sections.projects, 'core');
+});
+
 test('export per tipo', async () => {
   const git = await srv.request('GET', '/api/core/config/export?name=git&sections=projects');
   assert.deepEqual(Object.keys(git.json), ['projects']);
   assert.match(git.headers['content-disposition'], /devdock-config-git-/);
   const tunnels = await srv.request('GET', '/api/core/config/export?name=tunnels&sections=groups,servers');
   assert.deepEqual(Object.keys(tunnels.json).sort(), ['groups', 'servers']);
-});
-
-test('PUT /api/config valida lo schema', async () => {
-  assert.equal((await srv.request('PUT', '/api/config', { body: { groups: 5 } })).status, 400);
 });

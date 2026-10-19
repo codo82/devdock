@@ -15,28 +15,23 @@
 <header>
   <div class="header-top">
     <div class="logo">Dev<span>Dock</span></div>
-    <div class="header-pills" id="activePills"></div>
+    <!-- pill delle estensioni (ctx.setPills) e delle sezioni non ancora migrate -->
+    <div class="header-pills" id="activePills"><span id="legacyPills"></span></div>
     <div class="header-actions">
-      <button class="notif-btn" id="notifBtn" onclick="App.toggleNotifications()" title="Notifiche desktop">🔔</button>
-      <button class="btn btn-ghost" onclick="App.exportConfig()" title="Esporta config.json">↓ Export</button>
-      <label class="btn btn-ghost" style="cursor:pointer" title="Importa config.json">↑ Import<input type="file" accept=".json" style="display:none" onchange="App.importConfig(this)"></label>
-      <button class="btn btn-ghost" onclick="App.refresh()">↻</button>
-      <button class="btn btn-danger" onclick="App.stopAll()" id="stopAllBtn" style="display:none">⏹ Stop all</button>
+      <button class="notif-btn" id="notifBtn" onclick="Shell.toggleNotifications()" title="Attiva notifiche desktop">🔔</button>
+      <button class="btn btn-ghost" onclick="Shell.exportConfig()" title="Esporta config.json">↓ Export</button>
+      <label class="btn btn-ghost" style="cursor:pointer" title="Importa config.json">↑ Import<input type="file" accept=".json" style="display:none" onchange="Shell.importConfig(this)"></label>
+      <button class="btn btn-ghost" onclick="Shell.refresh()" title="Aggiorna">↻</button>
     </div>
   </div>
   <!-- Section navigation -->
   <nav class="section-nav">
-    <button class="section-tab" id="navTunnel" onclick="App.goSection('tunnel')">
-      <span class="section-tab-icon">🔗</span>
-      <span>Tunnels SSH</span>
-      <span class="section-tab-badge" id="badgeTunnel">0</span>
-    </button>
-    <button class="section-tab" id="navNpm" onclick="App.goSection('npm')">
+    <button class="section-tab" id="navNpm" data-section="npm" data-order="20" onclick="App.goSection('npm')">
       <span class="section-tab-icon">📦</span>
       <span>NPM</span>
       <span class="section-tab-badge" id="badgeNpm">0</span>
     </button>
-    <button class="section-tab" id="navGit" onclick="App.goSection('git')">
+    <button class="section-tab" id="navGit" data-section="git" data-order="30" onclick="App.goSection('git')">
       <span class="section-tab-icon">🌿</span>
       <span>Git</span>
       <span class="section-tab-badge" id="badgeGit">0</span>
@@ -49,15 +44,12 @@
 ================================================================ -->
 <div class="app">
   <!-- SIDEBAR — contenuto cambia in base alla sezione -->
-  <nav class="sidebar" id="sidebar" data-section="tunnel">
+  <nav class="sidebar" id="sidebar">
     <div id="sidebarContent"></div>
   </nav>
 
   <!-- MAIN CONTENT: un pannello per sezione, mostrato/nascosto -->
   <main class="main" style="position:relative">
-    <div id="mainArea-tunnel" class="main-panel" style="display:flex">
-      <div class="empty-state"><div class="icon">🔗</div><p>Seleziona un gruppo dalla sidebar</p></div>
-    </div>
     <div id="mainArea-npm" class="main-panel" style="display:none">
       <div id="mainContent-npm" style="flex:1;overflow:auto;min-height:0"></div>
       <div class="sse-panel" id="ssePanel-npm">
@@ -84,30 +76,15 @@
         <div class="sse-body" id="sseBody-git"></div>
       </div>
     </div>
-    <div id="mainArea-settings" class="main-panel" style="display:none"></div>
   </main>
 </div>
-
-<!-- LOG DRAWER -->
-<div class="log-drawer" id="logDrawer">
-  <div class="log-drawer-header">
-    <span>🔗 SSH Log — <span id="logDrawerTitle" style="color:var(--c-tunnel)">—</span></span>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logBody').innerHTML=''" title="Pulisci">🗑</button>
-      <button class="btn btn-ghost btn-sm" onclick="App.closeLogs()">✕</button>
-    </div>
-  </div>
-  <div class="log-body" id="logBody"></div>
-</div>
-
-<!-- SSE OUTPUT PANELs: one per section, inside each main-panel via JS -->
 
 <!-- MODAL -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal" id="modal">
     <div class="modal-header">
       <h3 id="modalTitle">Titolo</h3>
-      <button class="btn-icon" onclick="App.closeModal()">✕</button>
+      <button class="btn-icon" onclick="UI.closeModal()">✕</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
     <div class="modal-footer" id="modalFooter"></div>

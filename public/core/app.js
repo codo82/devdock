@@ -1,17 +1,8 @@
-// Sezioni non ancora migrate a estensioni (tunnel, npm, git, settings)
+// Sezioni non ancora migrate a estensioni (npm, git)
 const App = (() => {
-  const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal } = window.UI;
+  const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, formatUptime } = window.UI;
 
-  let groups = [];
-  let tunnels = [];
-  let config = { groups: [], servers: [] };
-  let activeGroup = null;
-  let settingsGroup = null;
-  let section = 'tunnel'; // 'tunnel' | 'npm' | 'git' | 'settings' | codice di un'estensione
-  let logPollInterval = null;
-  let logTunnelId = null;
-  let notificationsEnabled = false;
-  let prevTunnelIds = new Set();
+  let section = null; // 'npm' | 'git' | codice di un'estensione
   let system = { platform: null, tools: {} }; // strumenti esterni disponibili (/api/system)
 
   // NPM state
@@ -31,7 +22,7 @@ const App = (() => {
 
   // Helper: restituisce il contenitore del contenuto dinamico della sezione.
   // Se esiste mainContent-{sec} lo usa (per non sovrascrivere il pannello SSE),
-  // altrimenti cade su mainArea-{sec} (tunnel e settings non hanno pannello SSE).
+  // altrimenti cade su mainArea-{sec}.
   function mainPanel(sec) {
     const s = sec || section;
     return document.getElementById(`mainContent-${s}`) || document.getElementById(`mainArea-${s}`);
@@ -48,7 +39,7 @@ const App = (() => {
   // ---- SECTION NAV ----
   // Mostra il pannello della sezione attiva, nasconde gli altri
   function switchMainPanel(sec) {
-    ['tunnel','npm','git','settings'].forEach(s => {
+    ['npm','git'].forEach(s => {
       const p = document.getElementById(`mainArea-${s}`);
       if (p) p.style.display = s === sec ? 'flex' : 'none';
     });
@@ -64,19 +55,13 @@ const App = (() => {
       }, 30000); // ogni 30 secondi
     }
     // Non chiudere closeSsePanel() — ogni sezione mantiene il suo pannello
-    closeLogs(); // chiudi log drawer SSH al cambio sezione (rimane globale)
 
     // Update section tabs
-    ['tunnel','npm','git'].forEach(s => {
+    ['npm','git'].forEach(s => {
       const el = document.getElementById('nav' + s.charAt(0).toUpperCase() + s.slice(1));
       if (!el) return;
       el.className = 'section-tab' + (section === s ? ` active-${s}` : '');
     });
-    // Tunnel tab resta attivo anche nelle impostazioni dei tunnel (sezione "nascosta")
-    const navTunnel = document.getElementById('navTunnel');
-    if (navTunnel && section === 'settings') {
-      navTunnel.className = 'section-tab active-tunnel';
-    }
 
     // Update sidebar data-section
     document.getElementById('sidebar').dataset.section = sec;
@@ -88,18 +73,14 @@ const App = (() => {
     if (isExt) return;
 
     // Render section (aggiorna sidebar + eventuale refresh leggero)
-    if (sec === 'tunnel')        renderTunnelSection();
-    else if (sec === 'npm')      renderNpmSection();
-    else if (sec === 'git')      renderGitSection();
-    else if (sec === 'settings') renderSettingsSection();
+    if (sec === 'npm')      renderNpmSection();
+    else if (sec === 'git') renderGitSection();
   }
 
   // ---- SECTION BADGES ----
   function updateBadges() {
-    const t = document.getElementById('badgeTunnel');
     const n = document.getElementById('badgeNpm');
     const g = document.getElementById('badgeGit');
-    if (t) t.textContent = tunnels.length;
     if (n) {
       const running = activeProcesses.filter(x => x.running).length;
       n.textContent = npmProjects.length + (running ? ` · ${running}▶` : '');
@@ -109,19 +90,7 @@ const App = (() => {
 
   // ---- PILLS HEADER ----
   function renderActivePills() {
-    const pills = document.getElementById('activePills');
-    const btn   = document.getElementById('stopAllBtn');
-    btn.style.display = tunnels.length > 0 ? '' : 'none';
-
-    const tunnelPills = tunnels.map(t => `
-      <span class="pill pill-tunnel ${t.reconnecting?'reconnecting':''}"
-            onclick="App.goSection('tunnel')"
-            title="${esc(t.label)} :${t.port}${t.reconnecting?' (riconnessione)':''}">
-        <span class="pill-dot"></span>
-        ${esc(t.label)}<span style="opacity:.7">:${t.port}</span>
-        <span style="cursor:pointer;opacity:.5;margin-left:2px" onclick="event.stopPropagation();App.stopTunnel(${js(t.id)})">✕</span>
-      </span>`).join('');
-
+    const pills = document.getElementById('legacyPills');
     const npmPills = activeProcesses.filter(p => p.running).map(p => {
       const portStr = (p.ports||[]).map(x => `:${x}`).join(' ');
       return `
@@ -135,105 +104,7 @@ const App = (() => {
       </span>`;
     }).join('');
 
-    pills.innerHTML = tunnelPills + npmPills;
-  }
-
-  // ================================================================
-  // TUNNEL SECTION
-  // ================================================================
-  function renderTunnelSection() {
-    // Sidebar: groups
-    const sidebar = document.getElementById('sidebarContent');
-    sidebar.innerHTML = `
-      <div class="sidebar-head">
-        <span class="sidebar-head-title">Gruppi</span>
-        <button class="btn btn-ghost btn-sm" onclick="App.goSection('settings')" title="Configurazione">≡</button>
-      </div>
-      <div class="sidebar-body" id="tunnelGroupsList">
-        ${groups.length === 0
-          ? '<p style="color:var(--muted);font-size:12px;padding:12px 14px">Nessun gruppo</p>'
-          : groups.map(g => {
-              const cnt = tunnels.filter(t => g.servers.some(s => s.key === t.serverKey)).length;
-              return `<button class="sb-item ${activeGroup===g.key?'active':''}" onclick="App.selectGroup(${js(g.key)})">
-                <span class="sb-dot" style="background:${cssColor(g.color)}"></span>
-                <span style="flex:1;text-align:left">${esc(g.label)}</span>
-                ${cnt>0
-                  ? `<span class="sb-count" style="color:${cssColor(g.color)};border-color:${cssColor(g.color)}">${cnt}</span>`
-                  : `<span class="sb-count">${g.servers.length}</span>`}
-              </button>`;
-            }).join('')}
-      </div>`;
-
-    // Main area — sempre aggiornata (i tunnel cambiano stato spesso)
-    renderTunnelMain();
-  }
-
-  function renderTunnelMain() {
-    const main = mainPanel('tunnel');
-    if (!activeGroup) {
-      main.innerHTML = `<div class="empty-state"><div class="icon">🔗</div><p>Seleziona un gruppo dalla sidebar</p></div>`;
-      return;
-    }
-    const g = groups.find(x => x.key === activeGroup);
-    if (!g) return;
-    const activeCnt = tunnels.filter(t => g.servers.some(s => s.key === t.serverKey)).length;
-    main.innerHTML = `
-      <div class="section-banner" style="border-left:3px solid ${cssColor(g.color)}">
-        <span class="section-banner-dot" style="background:${cssColor(g.color)}"></span>
-        <h2>${esc(g.label)}</h2>
-        ${activeCnt > 0 ? `<span class="section-banner-sub">${activeCnt} connessi</span>` : ''}
-        <div style="margin-left:auto;display:flex;gap:8px">
-          ${activeCnt>0?`<button class="btn btn-danger btn-sm" onclick="App.stopGroupTunnels(${js(g.key)})">⏹ Disconnetti tutti</button>`:''}
-        </div>
-      </div>
-      ${missingToolNotice('autossh', 'autossh non installato: i tunnel usano ssh e la riconnessione è gestita da DevDock.', system.platform === 'darwin' ? 'brew install autossh' : 'sudo apt install autossh')}
-      <div class="server-area">
-        <div class="server-grid">${g.servers.map(s=>renderServerCard(s)).join('')}</div>
-        ${g.servers.length===0?'<div class="empty-state" style="height:auto;padding:40px 0"><div class="icon">🖥</div><p>Nessun server in questo gruppo</p></div>':''}
-      </div>`;
-  }
-
-  function renderServerCard(s) {
-    const t = tunnels.find(t => t.serverKey === s.key);
-    return `<div class="server-card ${t?'connected':''}" id="card_${esc(s.key)}">
-      <div class="card-top">
-        <span class="card-label">${esc(s.label)}</span>
-        <span class="type-badge">${esc(s.type||'TCP')}</span>
-      </div>
-      <div class="card-meta">
-        <div>alias: <span class="val">${esc(s.alias)}</span></div>
-        <div>remote: <span class="val">${esc(s.remote)}</span></div>
-      </div>
-      ${t ? `<div class="card-meta" style="border-top:1px solid var(--border);padding-top:8px;margin-top:-2px">
-        <div>pid: <span class="val">${t.pid||'—'}</span></div>
-        <div>uptime: <span class="val" data-uptime="${t.startedAt}">${formatUptime(t.startedAt)}</span></div>
-      </div>` : ''}
-      <div class="card-bottom">
-        ${t
-          ? `<span class="connected-status ${t.reconnecting?'reconnecting':''}">:${t.port}${t.reconnecting?' ↻':''}</span>
-             <button class="btn btn-disconnect" onclick="App.stopTunnel(${js(t.id)})">Disconnetti</button>
-             <button class="btn btn-ghost btn-sm" onclick="App.showLogs(${js(t.id)},${js(s.label)})">Log</button>`
-          : `<input class="port-input" id="port_${s.key}" type="number" value="${s.port}" min="1" max="65535">
-             <button class="btn btn-connect" onclick="App.startTunnel(${js(s.key)})">Connetti</button>`}
-      </div>
-    </div>`;
-  }
-
-  function selectGroup(key) {
-    activeGroup = key;
-    if (section !== 'tunnel') goSection('tunnel');
-    else { renderTunnelSection(); }
-  }
-
-  async function stopGroupTunnels(groupKey) {
-    const g = groups.find(x => x.key === groupKey);
-    if (!g) return;
-    const toStop = tunnels.filter(t => g.servers.some(s => s.key === t.serverKey));
-    for (const t of toStop) {
-      try { await api.del(`/api/tunnels/${t.id}`); } catch {}
-    }
-    toast('Tunnel del gruppo disconnessi', 'success');
-    await refresh();
+    pills.innerHTML = npmPills;
   }
 
   // ================================================================
@@ -422,23 +293,6 @@ const App = (() => {
   // ---- STRUMENTI ESTERNI ----
   async function loadSystem(refresh = false) {
     try { system = await api.get('/api/core/system' + (refresh ? '?refresh=1' : '')); } catch {}
-  }
-
-  async function recheckTools() {
-    await loadSystem(true);
-    toast('Strumenti ricontrollati', 'info');
-    goSection(section);
-  }
-
-  // Avviso per strumento mancante ('' se presente o stato non ancora noto)
-  function missingToolNotice(tool, message, installCmd) {
-    if (!system.platform || system.tools[tool]) return '';
-    const cmd = system.platform === 'win32' && tool === 'autossh' ? '' : installCmd;
-    return `<div class="tool-notice">
-      <span>⚠️ ${esc(message)}</span>
-      ${cmd ? `<code>${esc(cmd)}</code>` : ''}
-      <button class="btn btn-ghost btn-sm" onclick="App.recheckTools()">Ricontrolla</button>
-    </div>`;
   }
 
   // ================================================================
@@ -1097,386 +951,15 @@ const App = (() => {
   }
 
   // SETTINGS SECTION
-  // ================================================================
-  function renderSettingsSection() {
-    // Sidebar: groups list
-    const sidebar = document.getElementById('sidebarContent');
-    sidebar.innerHTML = `
-      <div class="sidebar-head">
-        <button class="btn btn-ghost btn-sm" onclick="App.goSection('tunnel')" title="Torna ai tunnel" style="padding:3px 7px;font-size:11px;gap:4px">← Tunnel</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.modalAddGroup()">+</button>
-      </div>
-      <div class="sidebar-body">
-        <div id="settingsGroupsList"></div>
-      </div>`;
-
-    // Main area
-    const main = mainPanel('settings');
-    main.innerHTML = `
-      <div class="settings-area">
-        <div class="settings-body">
-          <div class="settings-groups-col" style="display:none"></div>
-          <div class="settings-detail-col" id="settingsDetail">
-            <div class="settings-detail-empty">
-              <div class="icon">←</div>
-              <p>Seleziona un gruppo dalla sidebar</p>
-            </div>
-          </div>
-        </div>
-      </div>`;
-
-    renderSettingsGroups();
-    if (settingsGroup) renderSettingsDetail();
-  }
-
-  function renderSettingsGroups() {
-    const el = document.getElementById('settingsGroupsList');
-    if (!el) return;
-    if (!config.groups.length) {
-      el.innerHTML = '<p style="color:var(--muted);font-size:12px;padding:12px 14px">Nessun gruppo.<br><br><button class="btn btn-ghost btn-sm" onclick="App.modalAddGroup()" style="margin-top:4px">+ Aggiungi</button></p>';
-      return;
-    }
-    el.innerHTML = config.groups.map(g => `
-      <div class="gli ${settingsGroup===g.key?'active':''}" onclick="App.selectSettingsGroup(${js(g.key)})">
-        <span class="gli-dot" style="background:${cssColor(g.color)}"></span>
-        <span class="gli-label">${esc(g.label)}</span>
-        <span class="gli-cnt">${g.servers.length}</span>
-        <button class="gli-edit" onclick="event.stopPropagation();App.modalEditGroup(${js(g.key)})" title="Modifica">✏️</button>
-        <button class="gli-del"  onclick="event.stopPropagation();App.deleteGroup(${js(g.key)})"  title="Elimina">🗑</button>
-      </div>`).join('');
-  }
-
-  function renderSettingsDetail() {
-    const el = document.getElementById('settingsDetail');
-    if (!el) return;
-    const g = config.groups.find(x => x.key === settingsGroup);
-    if (!g) {
-      el.innerHTML = `<div class="settings-detail-empty"><div class="icon">←</div><p>Seleziona un gruppo</p></div>`;
-      return;
-    }
-    const groupServers = g.servers.map(sk => config.servers.find(s => s.key === sk)).filter(Boolean);
-    const available    = config.servers.filter(s => !g.servers.includes(s.key));
-
-    el.innerHTML = `
-      <div class="settings-detail-header">
-        <span class="settings-detail-dot" style="background:${cssColor(g.color)}"></span>
-        <h3>${esc(g.label)}</h3>
-        <button class="btn btn-primary btn-sm" onclick="App.modalAddServer(${js(g.key)})">+ Nuovo server</button>
-        ${available.length ? `<button class="btn btn-ghost btn-sm" onclick="App.modalAssignServer(${js(g.key)})">+ Aggiungi esistente</button>` : ''}
-      </div>
-      <div class="settings-detail-body">
-        ${groupServers.length === 0
-          ? `<p style="color:var(--muted);font-size:13px;padding:20px 0">Nessun server in questo gruppo.</p>`
-          : groupServers.map(s => `
-            <div class="sli">
-              <div class="sli-info">
-                <div class="sli-label">${esc(s.label)}</div>
-                <div class="sli-meta">:${s.port} → ${esc(s.remote)} · alias: ${esc(s.alias)}</div>
-              </div>
-              <span class="sli-type">${esc(s.type||'TCP')}</span>
-              <div class="sli-actions">
-                <button class="sli-btn" onclick="App.modalEditServer(${js(s.key)})" title="Modifica">✏️</button>
-                <button class="sli-btn danger" onclick="App.removeServerFromGroup(${js(g.key)},${js(s.key)})" title="Rimuovi dal gruppo">✕</button>
-                <button class="sli-btn danger" onclick="App.deleteServer(${js(s.key)})" title="Elimina definitivamente">🗑</button>
-              </div>
-            </div>`).join('')}
-      </div>`;
-  }
-
-  function selectSettingsGroup(key) {
-    settingsGroup = key;
-    renderSettingsGroups();
-    renderSettingsDetail();
-  }
-
-  async function removeServerFromGroup(groupKey, serverKey) {
-    const cfg = JSON.parse(JSON.stringify(config));
-    const g = cfg.groups.find(x => x.key === groupKey);
-    if (!g) return;
-    g.servers = g.servers.filter(sk => sk !== serverKey);
-    try {
-      await api.put(`/api/config/groups/${groupKey}`, { servers: g.servers });
-      await refresh();
-      if (section === 'settings') renderSettingsDetail();
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  function modalAssignServer(groupKey) {
-    const g = config.groups.find(x => x.key === groupKey);
-    if (!g) return;
-    const available = config.servers.filter(s => !g.servers.includes(s.key));
-    openModal('Aggiungi server esistente', `
-      <div class="form-row">
-        <label>Server disponibili</label>
-        <select class="form-input" id="f_assign_server" size="8" style="height:auto">${available.map(s => `<option value="${s.key}">${esc(s.label)} (${esc(s.type||'TCP')} :${s.port})</option>`).join('')}</select>
-      </div>`, `
-      <button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button>
-      <button class="btn btn-primary" onclick="App.assignServer(${js(groupKey)})">Aggiungi</button>`);
-  }
-
-  async function assignServer(groupKey) {
-    const sel = document.getElementById('f_assign_server');
-    const serverKey = sel?.value;
-    if (!serverKey) { toast('Seleziona un server', 'error'); return; }
-    const g = config.groups.find(x => x.key === groupKey);
-    if (!g) return;
-    try {
-      await api.put(`/api/config/groups/${groupKey}`, { servers: [...g.servers, serverKey] });
-      closeModal();
-      toast('Server aggiunto al gruppo', 'success');
-      await refresh();
-      if (section === 'settings') renderSettingsDetail();
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  const SERVICE_TYPES = ['MySQL','MongoDB','PostgreSQL','SQL Server','HTTP','HTTPS','FTP','LDAP','Elastic','Redis','TCP'];
-
-  function groupForm(g={}) {
-    return `
-      <div class="form-row">
-        <label>Chiave (snake_case, non modificabile)</label>
-        <input class="form-input" id="f_key" value="${esc(g.key||'')}" placeholder="es. nuovo_gruppo" ${g.key?'disabled':''}>
-      </div>
-      <div class="form-row">
-        <label>Nome</label>
-        <input class="form-input" id="f_label" value="${esc(g.label||'')}" placeholder="es. Nuovo Gruppo">
-      </div>
-      <div class="form-row">
-        <label>Colore</label>
-        <div class="color-row">
-          <div class="color-preview" id="colorPreview" style="background:${cssColor(g.color)}" onclick="document.getElementById('f_color').click()"></div>
-          <span id="colorHex" style="font-family:var(--font);font-size:12px;color:var(--muted)">${cssColor(g.color)}</span>
-          <input type="color" id="f_color" value="${cssColor(g.color)}" oninput="document.getElementById('colorPreview').style.background=this.value;document.getElementById('colorHex').textContent=this.value">
-        </div>
-      </div>`;
-  }
-
-  function serverForm(s={}, preGroupKey='') {
-    const typeOptions  = SERVICE_TYPES.map(t=>`<option ${(s.type||'MySQL')===t?'selected':''}>${t}</option>`).join('');
-    const groupOptions = config.groups.map(g=>`<option value="${g.key}" ${(preGroupKey?g.key===preGroupKey:g.servers.includes(s.key))?'selected':''}>${esc(g.label)}</option>`).join('');
-    return `
-      <div class="form-row">
-        <label>Chiave (snake_case, non modificabile)</label>
-        <input class="form-input" id="f_key" value="${esc(s.key||'')}" placeholder="es. db_prod" ${s.key?'disabled':''}>
-      </div>
-      <div class="form-grid">
-        <div class="form-row">
-          <label>Nome</label>
-          <input class="form-input" id="f_label" value="${esc(s.label||'')}" placeholder="es. DB Produzione">
-        </div>
-        <div class="form-row">
-          <label>Tipo</label>
-          <select class="form-input" id="f_type">${typeOptions}</select>
-        </div>
-      </div>
-      <div class="form-grid">
-        <div class="form-row">
-          <label>Porta locale</label>
-          <input class="form-input" id="f_port" type="number" value="${s.port||3306}" min="1" max="65535">
-        </div>
-        <div class="form-row">
-          <label>Remote (host:port)</label>
-          <input class="form-input" id="f_remote" value="${esc(s.remote||'')}" placeholder="127.0.0.1:3306">
-        </div>
-      </div>
-      <div class="form-row">
-        <label>SSH Alias (da ~/.ssh/config)</label>
-        <input class="form-input" id="f_alias" value="${esc(s.alias||'')}" placeholder="es. MyServer">
-      </div>
-      ${!s.key ? `<div class="form-row">
-        <label>Gruppo</label>
-        <select class="form-input" id="f_group"><option value="">-- Nessuno --</option>${groupOptions}</select>
-      </div>` : ''}`;
-  }
-
-  function modalAddGroup()      { openModal('Nuovo gruppo', groupForm(), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveGroup()">Crea</button>`); }
-  function modalEditGroup(key)  { const g=config.groups.find(x=>x.key===key); if(!g) return; openModal('Modifica gruppo', groupForm(g), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveGroup(${js(key)})">Salva</button>`); }
-  function modalAddServer(gk)   { openModal('Nuovo server', serverForm({}, gk), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveServer(null,${js(gk||'')})">Crea</button>`); }
-  function modalEditServer(key) { const s=config.servers.find(x=>x.key===key); if(!s) return; openModal('Modifica server', serverForm(s), `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button><button class="btn btn-primary" onclick="App.saveServer(${js(key)})">Salva</button>`); }
-
-  async function saveGroup(existingKey) {
-    const key   = (document.getElementById('f_key')?.value||'').trim();
-    const label = (document.getElementById('f_label')?.value||'').trim();
-    const color = document.getElementById('f_color')?.value||'#6b7280';
-    if (!key||!label) { toast('Chiave e nome obbligatori','error'); return; }
-    try {
-      if (existingKey) await api.put(`/api/config/groups/${existingKey}`, { label, color });
-      else             await api.post('/api/config/groups', { key, label, color });
-      closeModal(); toast('Gruppo salvato','success'); await refresh();
-      if (section==='settings') { renderSettingsGroups(); renderSettingsDetail(); }
-    } catch(e) { toast(e.message,'error'); }
-  }
-
-  async function saveServer(existingKey, forceGroupKey) {
-    const key    = (document.getElementById('f_key')?.value||'').trim();
-    const label  = (document.getElementById('f_label')?.value||'').trim();
-    const port   = document.getElementById('f_port')?.value;
-    const remote = (document.getElementById('f_remote')?.value||'').trim();
-    const alias  = (document.getElementById('f_alias')?.value||'').trim();
-    const type   = document.getElementById('f_type')?.value||'TCP';
-    const group  = forceGroupKey || document.getElementById('f_group')?.value||'';
-    if (!key||!label||!port||!remote||!alias) { toast('Compila tutti i campi obbligatori','error'); return; }
-    try {
-      if (existingKey) await api.put(`/api/config/servers/${existingKey}`, { label, port, remote, alias, type });
-      else             await api.post('/api/config/servers', { key, label, port, remote, alias, type, groupKey: group });
-      closeModal(); toast('Server salvato','success'); await refresh();
-      if (section==='settings') renderSettingsSection();
-    } catch(e) { toast(e.message,'error'); }
-  }
-
-  async function deleteGroup(key) {
-    if (!confirm(`Eliminare il gruppo "${key}"?`)) return;
-    try {
-      await api.del(`/api/config/groups/${key}`);
-      if (settingsGroup === key) settingsGroup = null;
-      toast('Gruppo eliminato','success'); await refresh();
-      if (section==='settings') renderSettingsSection();
-    } catch(e) { toast(e.message,'error'); }
-  }
-
-  async function deleteServer(key) {
-    if (!confirm(`Eliminare definitivamente il server "${key}"?`)) return;
-    try {
-      await api.del(`/api/config/servers/${key}`);
-      toast('Server eliminato','success'); await refresh();
-      if (section==='settings') renderSettingsSection();
-    } catch(e) { toast(e.message,'error'); }
-  }
-
-  // ---- UPTIME ----
-  function formatUptime(startedAt) {
-    if (!startedAt) return '—';
-    const secs = Math.floor((Date.now() - new Date(startedAt)) / 1000);
-    if (secs < 60)   return `${secs}s`;
-    if (secs < 3600) return `${Math.floor(secs/60)}m ${secs%60}s`;
-    const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60);
-    return `${h}h ${m}m`;
-  }
-
-  // ---- NOTIFICHE ----
-  async function toggleNotifications() {
-    if (notificationsEnabled) {
-      notificationsEnabled = false; updateNotifBtn();
-      toast('Notifiche disattivate'); return;
-    }
-    if (!('Notification' in window)) { toast('Notifiche non supportate dal browser', 'error'); return; }
-    const perm = await Notification.requestPermission();
-    if (perm === 'granted') { notificationsEnabled = true; updateNotifBtn(); toast('Notifiche attivate', 'success'); }
-    else toast('Permesso notifiche negato', 'error');
-  }
-  function updateNotifBtn() {
-    const btn = document.getElementById('notifBtn');
-    if (!btn) return;
-    btn.classList.toggle('active', notificationsEnabled);
-    btn.title = notificationsEnabled ? 'Notifiche attive — clicca per disattivare' : 'Attiva notifiche desktop';
-  }
-  function notify(title, body, icon = '🔵') {
-    if (!notificationsEnabled || Notification.permission !== 'granted') return;
-    new Notification(`${icon} ${title}`, { body, silent: false });
-  }
-  function checkTunnelChanges(newTunnels) {
-    const newIds = new Set(newTunnels.map(t => t.id));
-    for (const t of newTunnels) {
-      if (!prevTunnelIds.has(t.id)) notify(t.label, `Tunnel connesso su :${t.port}`, '🟢');
-    }
-    for (const id of prevTunnelIds) {
-      if (!newIds.has(id)) { const old = tunnels.find(t => t.id === id); if (old) notify(old.label, `Tunnel disconnesso da :${old.port}`, '🔴'); }
-    }
-    for (const t of newTunnels) {
-      const was = tunnels.find(x => x.id === t.id);
-      if (t.reconnecting && was && !was.reconnecting) notify(t.label, 'Connessione persa — riconnessione...', '🟡');
-      if (!t.reconnecting && was && was.reconnecting) notify(t.label, `Riconnessione riuscita su :${t.port}`, '🟢');
-    }
-    prevTunnelIds = newIds;
-  }
-
-  // ---- EXPORT / IMPORT ----
-  function exportConfig() {
-    openModal('Esporta configurazione',
-      `<div style="display:flex;flex-direction:column;gap:10px">
-        <p style="font-size:13px;color:var(--muted)">Scegli cosa esportare:</p>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-          <input type="radio" name="exportType" value="all" checked style="accent-color:var(--c-tunnel)">
-          <div><div style="font-weight:600;font-size:13px">Tutto</div><div style="font-size:11px;color:var(--muted)">Tunnel, server e progetti Git</div></div>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-          <input type="radio" name="exportType" value="tunnels" style="accent-color:var(--c-tunnel)">
-          <div><div style="font-weight:600;font-size:13px">Solo Tunnel</div><div style="font-size:11px;color:var(--muted)">Gruppi e server</div></div>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-          <input type="radio" name="exportType" value="git" style="accent-color:var(--c-git)">
-          <div><div style="font-weight:600;font-size:13px">Solo Git / NPM</div><div style="font-size:11px;color:var(--muted)">Progetti e repository</div></div>
-        </label>
-      </div>`,
-      `<button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button>
-       <button class="btn btn-primary" onclick="App.doExport()">↓ Esporta</button>`
-    );
-  }
-  function doExport() {
-    const sel = document.querySelector('input[name="exportType"]:checked');
-    const type = sel ? sel.value : 'all';
-    closeModal();
-    const sections = { all: '', tunnels: 'groups,servers', git: 'projects' }[type] ?? '';
-    window.location.href = `/api/core/config/export?name=${type}${sections ? `&sections=${sections}` : ''}`;
-  }
-  async function importConfig(input) {
-    const file = input.files[0]; if (!file) return;
-    try {
-      const text = await file.text();
-      const cfg  = JSON.parse(text);
-      const found = [['groups','gruppi'],['servers','server'],['projects','progetti']]
-        .filter(([k]) => Array.isArray(cfg[k])).map(([k, label]) => `${cfg[k].length} ${label}`);
-      if (!found.length) { toast('File non valido: nessun gruppo, server o progetto', 'error'); return; }
-      const mode = confirm(`Trovati ${found.join(', ')}.\n\nOK = Sostituisci queste sezioni\nAnnulla = Merge (aggiungi i nuovi)\n\nLe sezioni assenti dal file non vengono toccate.`) ? 'replace' : 'merge';
-      await api.post('/api/core/config/import', { config: cfg, mode });
-      toast(`Import completato (${mode==='replace'?'sostituzione':'merge'})`, 'success');
-      await refresh();
-      if (section === 'settings') renderSettingsSection();
-    } catch(e) { toast('Errore import: ' + e.message, 'error'); }
-    input.value = '';
-  }
-
-  // ---- AZIONI TUNNEL ----
-  async function startTunnel(serverKey) {
-    const input = document.getElementById(`port_${serverKey}`);
-    const port  = input ? parseInt(input.value) : undefined;
-    try {
-      const r = await api.post('/api/tunnels/start', { serverKey, port });
-      toast(`Tunnel avviato su :${r.port}`, 'success');
-      await refresh();
-    } catch(e) { toast(e.message,'error'); }
-  }
-  async function stopTunnel(id) {
-    try {
-      await api.del(`/api/tunnels/${id}`);
-      if (logTunnelId===id) closeLogs();
-      toast('Tunnel terminato','success'); await refresh();
-    } catch(e) { toast(e.message,'error'); }
-  }
-  async function stopAll() {
-    try { await api.del('/api/tunnels'); closeLogs(); toast('Tutti i tunnel terminati','success'); await refresh(); }
-    catch(e) { toast(e.message,'error'); }
-  }
-
   // ---- REFRESH ----
   async function refresh() {
     try {
-      const [newGroups, newTunnels, newConfig, newProcs] = await Promise.all([
-        api.get('/api/groups'),
-        api.get('/api/tunnels'),
-        api.get('/api/config'),
-        api.get('/api/processes'),
-      ]);
-      checkTunnelChanges(newTunnels);
-      groups = newGroups; tunnels = newTunnels; config = newConfig;
-      activeProcesses = newProcs;
+      activeProcesses = await api.get('/api/processes');
       renderActivePills();
       updateBadges();
 
       // Aggiorna la sezione attiva senza ridisegnare tutto
-      if (section === 'tunnel') {
-        renderTunnelSection();
-      } else if (section === 'npm') {
+      if (section === 'npm') {
         renderNpmProjectsList();
         // Aggiorna stato scripts se visibile
         if (npmActiveTab === 'scripts' && activeProject) {
@@ -1682,57 +1165,19 @@ const App = (() => {
     body.scrollTop = body.scrollHeight;
   }
 
-  // ---- LOG SSH ----
-  async function showLogs(id, label) {
-    logTunnelId = id;
-    document.getElementById('logDrawerTitle').textContent = label;
-    document.getElementById('logDrawer').classList.add('open');
-    await pollLogs();
-    if (logPollInterval) clearInterval(logPollInterval);
-    logPollInterval = setInterval(pollLogs, 2000);
-  }
-  async function pollLogs() {
-    if (!logTunnelId) return;
-    try {
-      const logs = await api.get(`/api/tunnels/${logTunnelId}/logs`);
-      const body = document.getElementById('logBody');
-      body.innerHTML = logs.length
-        ? logs.map(l=>`<p><span class="log-ts">[${new Date(l.ts).toLocaleTimeString('it-IT')}]</span> ${ansiToHtml(l.text)}</p>`).join('')
-        : '<p style="color:#484f58">Nessun output</p>';
-      body.scrollTop = body.scrollHeight;
-    } catch { clearInterval(logPollInterval); }
-  }
-  function closeLogs() {
-    document.getElementById('logDrawer').classList.remove('open');
-    clearInterval(logPollInterval); logTunnelId = null;
-  }
-
   // ---- INIT ----
   async function init() {
-    // Set initial section tab styling
-    document.getElementById('navTunnel').className = 'section-tab active-tunnel';
     await window.Shell?.init();
     await loadSystem();
     await refresh();
-    goSection('tunnel');
+    goSection(window.Shell?.firstSection() || 'npm');
     setInterval(refresh, 5000);
-    setInterval(() => {
-      document.querySelectorAll('[data-uptime]').forEach(el => {
-        el.textContent = formatUptime(el.dataset.uptime);
-      });
-    }, 1000);
   }
   init();
 
   return {
-    goSection, selectGroup, stopGroupTunnels,
-    startTunnel, stopTunnel, stopAll,
-    showLogs, closeLogs,
+    goSection,
     closeModal,
-    modalAddGroup, modalEditGroup, modalAddServer, modalEditServer,
-    modalAssignServer, assignServer,
-    saveGroup, saveServer, deleteGroup, deleteServer, removeServerFromGroup,
-    toggleNotifications, exportConfig, doExport, importConfig,
     // NPM
     selectNpmProject, switchNpmTab,
     modalAddProject, saveProject, deleteProject,
@@ -1740,8 +1185,6 @@ const App = (() => {
     npmOutdated, npmUpdate,
     // PM2
     pm2StartScript,
-    recheckTools,
-    selectSettingsGroup,
     closeSsePanel, clearSseOutput,
     refresh,
     // Git
