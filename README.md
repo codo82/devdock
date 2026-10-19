@@ -1,47 +1,47 @@
 # DevDock
 
-Dashboard web locale per lo sviluppo quotidiano: tunnel SSH, script npm, PM2, Git e anteprima Swagger in un'unica interfaccia.
+Local web dashboard for everyday development: SSH tunnels, npm scripts, PM2, Git and Swagger preview in a single interface.
 
-Gira sul proprio computer e risponde solo su `http://127.0.0.1:3500`.
+It runs on your own machine and only answers on `http://127.0.0.1:3500`. The user interface is in Italian.
 
-## Requisiti
+## Requirements
 
-| Strumento | Necessario | Uso |
+| Tool | Required | Used for |
 |---|---|---|
-| Node.js ≥ 18 | sì | server |
-| `ssh` | per i tunnel | port forward `-L` (usa gli alias di `~/.ssh/config`) |
-| `git` | per la sezione Git | |
-| `autossh` | no | se presente viene usato per i tunnel; altrimenti `ssh` con riconnessione gestita da DevDock |
-| `pm2` | no | sezione PM2 |
-| `lsof` (macOS/Linux) o `ss` (Linux) | no | mostra le porte in ascolto dei processi npm |
+| Node.js ≥ 18 | yes | server |
+| `ssh` | for tunnels | `-L` port forwarding (uses the aliases in `~/.ssh/config`) |
+| `git` | for the Git section | |
+| `autossh` | no | used for tunnels when available; otherwise `ssh` with reconnection handled by DevDock |
+| `pm2` | no | PM2 section |
+| `lsof` (macOS/Linux) or `ss` (Linux) | no | shows the listening ports of npm processes |
 
-La UI segnala gli strumenti opzionali mancanti e indica come installarli.
+The UI reports missing optional tools and shows how to install them.
 
-## Avvio
+## Getting started
 
 ```bash
 npm install
-npm start          # oppure: npm run dev  (riavvio automatico alle modifiche)
+npm start          # or: npm run dev  (restarts automatically on changes)
 ```
 
-Poi apri <http://127.0.0.1:3500>.
+Then open <http://127.0.0.1:3500>.
 
-Variabili d'ambiente opzionali: `DEVDOCK_PORT` (porta, default 3500) e `DEVDOCK_CONFIG` (percorso della configurazione, default `config.json` nella cartella del progetto).
+Optional environment variables: `DEVDOCK_PORT` (port, default 3500) and `DEVDOCK_CONFIG` (configuration path, default `config.json` in the project folder).
 
-Alla chiusura del server (Ctrl+C, `kill` o chiusura del terminale) i tunnel e i processi npm avviati da DevDock vengono terminati.
+When the server stops (Ctrl+C, `kill` or closing the terminal), the tunnels and npm processes started by DevDock are terminated.
 
-## Sezioni
+## Sections
 
-- **🔗 Tunnel SSH** — server raggruppati per colore; un clic apre `ssh -N -L 127.0.0.1:<porta>:<remote> <alias>`. Riconnessione automatica con backoff (5s → 60s), log per tunnel, notifiche desktop, "Stop all".
-- **📦 NPM** — progetti locali: esecuzione degli script di `package.json` con log in tempo reale, riavvio/stop (dell'intero process group), porte in ascolto, dipendenze con versione installata e `npm outdated`.
-- **⚙️ PM2** — lista dei processi, start/stop/restart/delete, log in streaming. Si apre dall'icona ⚙️ nell'header.
-- **🌿 Git** — i repository vengono ricavati dai progetti NPM (risalendo fino alla cartella `.git`). Status, selezione file e commit, grafo dei commit, pull/push/merge/checkout/stash/fetch.
-- **📄 Swagger** — anteprima di un file OpenAPI `.yaml`/`.json` caricato dal disco (Swagger UI da CDN).
-- **≡ Configurazione** — gestione di gruppi e server dei tunnel; dall'header export/import della configurazione.
+- **🔗 SSH tunnels** — servers grouped by colour; one click opens `ssh -N -L 127.0.0.1:<port>:<remote> <alias>`. Automatic reconnection with backoff (5s → 60s), per-tunnel logs, desktop notifications, "Stop all".
+- **📦 NPM** — local projects: run the `package.json` scripts with live logs, restart/stop (the whole process group), listening ports, dependencies with installed version and `npm outdated`.
+- **⚙️ PM2** — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ icon in the header.
+- **🌿 Git** — repositories are derived from the NPM projects (walking up to the `.git` folder). Status, file selection and commit, commit graph, pull/push/merge/checkout/stash/fetch. Only one git operation at a time runs on each repository.
+- **📄 Swagger** — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
+- **≡ Configuration** — management of tunnel groups and servers; configuration export/import from the header.
 
-## Configurazione
+## Configuration
 
-Tutto è salvato in `config.json` nella cartella del progetto. Il file viene creato vuoto al primo avvio ed è escluso da git perché contiene host e percorsi personali.
+Everything is stored in `config.json` in the project folder. The file is created empty on first start and is excluded from git because it contains personal hosts and paths.
 
 ```json
 {
@@ -49,7 +49,7 @@ Tutto è salvato in `config.json` nella cartella del progetto. Il file viene cre
     { "key": "staging", "label": "Staging", "color": "#3b82f6", "servers": ["staging_db"] }
   ],
   "servers": [
-    { "key": "staging_db", "label": "DB staging", "port": 33060, "remote": "10.0.0.5:3306", "alias": "bastion-staging", "type": "MySQL" }
+    { "key": "staging_db", "label": "Staging DB", "port": 33060, "remote": "10.0.0.5:3306", "alias": "bastion-staging", "type": "MySQL" }
   ],
   "projects": [
     { "id": "my_app", "label": "My App", "path": "/Users/me/www/my-app" }
@@ -57,28 +57,28 @@ Tutto è salvato in `config.json` nella cartella del progetto. Il file viene cre
 }
 ```
 
-- `servers[].port` — porta locale su `127.0.0.1`
-- `servers[].remote` — `host:porta` raggiunto dal server SSH
-- `servers[].alias` — host o alias di `~/.ssh/config` (l'autenticazione è quella di ssh: chiavi, agent)
-- `projects[].path` — percorso assoluto della cartella con `package.json`
+- `servers[].port` — local port on `127.0.0.1`
+- `servers[].remote` — `host:port` reached from the SSH server
+- `servers[].alias` — host or alias from `~/.ssh/config` (authentication is ssh's own: keys, agent)
+- `projects[].path` — absolute path of the folder containing `package.json`
 
-L'export può comprendere tutto, solo i tunnel o solo i progetti; l'import può sostituire la configurazione o unirla a quella attuale.
+The export can include everything, only the tunnels or only the projects. The import applies only the sections present in the file: *replace* overwrites those sections, *merge* adds the new items; sections missing from the file are left untouched.
 
-## Sicurezza
+## Security
 
-DevDock è pensato **solo per uso locale**: ascolta su `127.0.0.1` e non ha autenticazione. Può eseguire `ssh`, `npm`, `git` e `pm2` sul tuo computer, quindi non va esposto in rete.
+DevDock is meant **for local use only**: it listens on `127.0.0.1` and has no authentication. It can run `ssh`, `npm`, `git` and `pm2` on your machine, so it must not be exposed on a network.
 
-Protezioni attive:
-- l'API accetta richieste solo dalla propria UI (controllo di `Origin`/`Referer` e `Host`), quindi le altre pagine aperte nel browser non possono usarla;
-- tutti i parametri che finiscono nei comandi (branch, remote, file, script, pacchetti, alias SSH) sono validati;
-- `config.json` viene validato a ogni salvataggio e import;
-- le librerie esterne (Swagger UI) sono caricate con Subresource Integrity.
+Active protections:
+- the API only accepts requests from its own UI (`Origin`/`Referer` and `Host` checks), so other pages open in the browser cannot use it;
+- every parameter that ends up in a command (branch, remote, file, script, package, SSH alias) is validated;
+- `config.json` is validated on every save and import;
+- external libraries (Swagger UI) are loaded with Subresource Integrity.
 
-Usa script e strumenti da riga di comando (curl, ecc.) senza header `Origin`: sono ammessi, come qualunque programma locale.
+Local command-line clients (curl, scripts) that send no `Origin` header are allowed, like any other local program.
 
-## Sviluppo
+## Development
 
 - Backend: `server.js` (Express)
-- Frontend: `public/index.html` (HTML, CSS e JavaScript vanilla in un unico file, nessuna build)
+- Frontend: `public/index.html` (HTML, CSS and vanilla JavaScript in a single file, no build step)
 
-Roadmap e stato dei lavori: [ROADMAP.md](ROADMAP.md) · Modifiche: [CHANGELOG.md](CHANGELOG.md)
+Roadmap and progress: [ROADMAP.md](ROADMAP.md) · Changes: [CHANGELOG.md](CHANGELOG.md)
