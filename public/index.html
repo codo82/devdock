@@ -1653,18 +1653,7 @@ const App = (() => {
       await loadGitLog();
     }
     openSsePanel(`git ${action} (${remote})`);
-    if (sseSource) sseSource.close();
-
-    try {
-      const r = await fetch(`/api/git/repos/${activeGitRepo}/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, remote, branch }),
-      });
-      sseSource = new EventSource(`/api/git/repos/${activeGitRepo}/action`);
-    } catch {}
-
-    // Usa SSE direttamente via fetch + ReadableStream
+    // Una sola richiesta: lo stream SSE arriva nella risposta della POST stessa
     gitRunSse({ action, remote, branch });
   }
 

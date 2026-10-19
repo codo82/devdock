@@ -57,11 +57,10 @@ Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco
 - [x] **M2.1** `npmUpdate` invia `script: "update <pkg>"` → il server esegue `npm run "update <pkg>"`. Correggere con un endpoint/azione dedicata (dipende da M1.8)
 - [ ] **M2.2** Import `merge`: includere anche i `projects` (oggi ignorati)
 - [ ] **M2.3** Commenti incoerenti col codice (polling SSE "300ms" vs 100ms reali) e altre piccole incongruenze
-- [ ] **M2.4** *(Backlog #1)* **Git push con due pushurl e più commit** — `cannot lock ref: is at X but expected Y`
-  - [ ] Riprodurre: repo di test con `origin` a due pushurl (due bare repo locali), push di 2+ commit
-  - [ ] **Ipotesi principale (trovata in M1):** `gitAction()` nel frontend esegue l'azione due volte — una `fetch` POST di cui ignora l'output, poi `gitRunSse()` che la rilancia — quindi due `git push` concorrenti si contendono l'aggiornamento di `refs/remotes/origin/<branch>`. Con più commit il push dura di più e la finestra di gara si allarga. Riprodurre e verificare prima delle altre ipotesi
-  - [ ] Altre ipotesi: (a) dopo il push sul primo URL git aggiorna `refs/remotes/origin/<branch>`, al secondo URL il valore "atteso" è vecchio; (b) il `git fetch` preventivo aggiunto in DevDock; (c) refspec esplicito `origin <branch>` vs `git push` da terminale
-  - [ ] Fix candidato: leggere i pushurl con `git remote get-url --push --all origin`, pushare su ciascun URL esplicitamente (non tocca i tracking ref), poi aggiornare una sola volta il tracking ref; output SSE separato per URL
+- [x] **M2.4** *(Backlog #1)* **Git push con due pushurl e più commit** — `cannot lock ref: is at X but expected Y`
+  - [x] Riprodotto con un repo di test con `origin` a due pushurl (due bare repo locali): un push singolo di 3 commit funziona; due push concorrenti danno esattamente l'errore del backlog (5 prove su 5)
+  - [x] Causa: `gitAction()` nel frontend eseguiva l'azione due volte (una `fetch` POST con output ignorato e poi `gitRunSse()`), quindi due `git push` si contendevano l'aggiornamento di `refs/heads/<branch>` sui remote. I due pushurl non c'entrano
+  - [x] Fix: richiesta unica dalla UI e lock per repo nel server (una seconda azione concorrente riceve 409)
 - [ ] **M2.5** *(Backlog #2)* **Lane del grafo con nome generico `branch-N`**
   - [ ] Ereditarietà del nome: la lane prende il nome dal primo commit con ref che la genera e lo porta con sé scendendo sui parent, invece di cercare in `allRefs` l'hash pendente in `finalLanes`
   - [ ] Fallback: nome ricavato dal subject dei merge (`Merge branch 'x'`) per branch già eliminati

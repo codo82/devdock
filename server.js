@@ -1127,6 +1127,8 @@ app.get('/api/git/repos/:id/commit/:hash', async (req, res) => {
   }
 });
 
+const busyRepos = new Set(); // path dei repo con un'azione git in corso
+
 // Azione git (commit, pull, push, merge) — SSE streaming
 app.post('/api/git/repos/:id/action', async (req, res) => {
   const repos = getGitRepos();
@@ -1138,6 +1140,12 @@ app.post('/api/git/repos/:id/action', async (req, res) => {
   // Validazione prima di aprire lo stream SSE, così l'errore arriva come JSON 400
   const invalid = await validateGitAction(repo.path, { action, branch, remote, message });
   if (invalid) { res.status(400).json({ error: invalid }); return; }
+
+  // Una sola operazione git alla volta per repo: due push concorrenti si
+  // contendono l'aggiornamento dei ref ("cannot lock ref ... but expected ...")
+  if (busyRepos.has(repo.path)) { res.status(409).json({ error: 'Un\'altra operazione git è in corso su questo repository' }); return; }
+  busyRepos.add(repo.path);
+  res.on('close', () => busyRepos.delete(repo.path));
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -1174,9 +1182,9 @@ app.post('/api/git/repos/:id/action', async (req, res) => {
     args = ['pull', remote, branch || '--rebase=false'].filter(Boolean);
   } else if (action === 'push') {
     // Fetch silenzioso per aggiornare i remote-tracking refs prima del push.
-    // Questo evita "cannot lock ref: is at X but expected Y" che si verifica
-    // quando il tracking ref locale è stale rispetto al server remoto
-    // (es. qualcuno ha pushato da console e i refs locali non sono aggiornati).
+    // Nota: il "cannot lock ref: is at X but expected Y" del backlog #1 non
+    // dipendeva da ref stale ma da due push concorrenti (la UI inviava l'azione
+    // due volte); ora lo impediscono busyRepos e la richiesta unica dalla UI.
     send('stdout', `$ git fetch ${remote}\n`);
     const fetchProc = spawn('git', ['fetch', remote].filter(Boolean), {
       cwd: repo.path,
