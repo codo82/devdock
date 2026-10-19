@@ -38,6 +38,12 @@ test('esecuzione di uno script con log ed exit code', async () => {
   }
   assert.equal(logs.exitCode, 0);
   assert.match(logs.logs.map(l => l.text).join(''), /ciao-devdock/);
+
+  // stream SSE di un processo terminato: storico + exit
+  const stream = await srv.request('GET', `/api/processes/${r.json.id}/stream`);
+  assert.equal(stream.events[0].type, 'history');
+  assert.match(stream.events[0].data, /ciao-devdock/);
+  assert.equal(stream.events.at(-1).type, 'exit');
   assert.equal((await srv.request('DELETE', `/api/processes/${r.json.id}/dismiss`)).status, 200);
 });
 
