@@ -56,7 +56,7 @@ Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco
 
 - [x] **M2.1** `npmUpdate` invia `script: "update <pkg>"` → il server esegue `npm run "update <pkg>"`. Correggere con un endpoint/azione dedicata (dipende da M1.8)
 - [x] **M2.2** Import `merge`: includere anche i `projects` (oggi ignorati)
-- [ ] **M2.3** Commenti incoerenti col codice (polling SSE "300ms" vs 100ms reali) e altre piccole incongruenze
+- [x] **M2.3** Commenti incoerenti col codice (polling SSE "300ms" vs 100ms reali) e altre piccole incongruenze
 - [x] **M2.4** *(Backlog #1)* **Git push con due pushurl e più commit** — `cannot lock ref: is at X but expected Y`
   - [x] Riprodotto con un repo di test con `origin` a due pushurl (due bare repo locali): un push singolo di 3 commit funziona; due push concorrenti danno esattamente l'errore del backlog (5 prove su 5)
   - [x] Causa: `gitAction()` nel frontend eseguiva l'azione due volte (una `fetch` POST con output ignorato e poi `gitRunSse()`), quindi due `git push` si contendevano l'aggiornamento di `refs/heads/<branch>` sui remote. I due pushurl non c'entrano

@@ -561,7 +561,7 @@ const App = (() => {
   let config = { groups: [], servers: [] };
   let activeGroup = null;
   let settingsGroup = null;
-  let section = 'tunnel'; // 'tunnel' | 'npm' | 'pm2' | 'settings'
+  let section = 'tunnel'; // 'tunnel' | 'npm' | 'pm2' | 'git' | 'swagger' | 'settings'
   let logPollInterval = null;
   let logTunnelId = null;
   let notificationsEnabled = false;
@@ -586,7 +586,7 @@ const App = (() => {
 
   // Helper: restituisce il contenitore del contenuto dinamico della sezione.
   // Se esiste mainContent-{sec} lo usa (per non sovrascrivere il pannello SSE),
-  // altrimenti cade su mainArea-{sec} (tunnel, settings non hanno SSE panel).
+  // altrimenti cade su mainArea-{sec} (tunnel, swagger e settings non hanno pannello SSE).
   function mainPanel(sec) {
     const s = sec || section;
     return document.getElementById(`mainContent-${s}`) || document.getElementById(`mainArea-${s}`);

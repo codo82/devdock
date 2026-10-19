@@ -836,7 +836,7 @@ app.get('/api/processes/:id/stream', (req, res) => {
   if (pd.logs.length) send('history', pd.logs.map(l => l.text).join(''));
   if (!pd.running) { send('exit', `[processo terminato, exit ${pd.exitCode}]`); res.end(); return; }
 
-  // Poi aggiorna ogni 300ms con i nuovi log
+  // Poi invia i nuovi log ogni 100ms
   let lastSentTs = pd.logs.length ? pd.logs[pd.logs.length - 1].ts : Date.now();
   const interval = setInterval(() => {
     const current = activeProcesses.get(req.params.id);
@@ -1063,7 +1063,7 @@ app.get('/api/git/repos/:id/status', async (req, res) => {
   }
 });
 
-// Log grafico (--graph --oneline --all)
+// Log per il grafo: commit di tutti i branch (--all) con parent e ref, più la mappa hash → branch
 app.get('/api/git/repos/:id/log', async (req, res) => {
   const repos = getGitRepos();
   const repo  = repos.find(r => r.id === req.params.id);
@@ -1136,7 +1136,7 @@ app.get('/api/git/repos/:id/commit/:hash', async (req, res) => {
 
 const busyRepos = new Set(); // path dei repo con un'azione git in corso
 
-// Azione git (commit, pull, push, merge) — SSE streaming
+// Azione git (commit, pull, push, merge, fetch, checkout, stash) — output in streaming SSE
 app.post('/api/git/repos/:id/action', async (req, res) => {
   const repos = getGitRepos();
   const repo  = repos.find(r => r.id === req.params.id);
