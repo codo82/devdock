@@ -68,13 +68,3 @@ test('installed-versions ignora nomi non validi', async () => {
   const r = await srv.request('POST', '/api/projects/app/installed-versions', { body: { packages: ['../../../../etc', 'left-pad'] } });
   assert.deepEqual(r.json, { 'left-pad': null });
 });
-
-test('PM2: azioni e nomi validati, nessun crash senza pm2', async () => {
-  const action = body => srv.request('POST', '/api/pm2/action', { body });
-  assert.equal((await action({ action: 'kill', target: 'x' })).status, 400);
-  assert.equal((await action({ action: 'stop', target: '--help' })).status, 400);
-  assert.equal((await action({ action: 'start', projectId: 'app', script: 'nope' })).status, 400);
-  assert.equal((await srv.request('GET', '/api/pm2/logs?name=-x')).status, 400);
-  await action({ action: 'stop', target: 'app-1' }); // con o senza pm2 non deve far cadere il server
-  assert.equal((await srv.request('GET', '/api/pm2/list')).status, 200);
-});

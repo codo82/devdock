@@ -47,21 +47,11 @@ export default {
   mount(ctx) {
     const el = role => ctx.root.querySelector(`[data-role="${role}"]`);
 
-    ctx.sidebar.innerHTML = `
-      <div class="swagger-sidebar">
-        <div class="swagger-sidebar-title">Swagger Preview</div>
-        <label class="btn btn-primary">
-          <span>📂 Carica file YAML</span>
-          <input type="file" accept=".yml,.yaml,.json" hidden>
-        </label>
-        <div class="swagger-file-info"></div>
-      </div>`;
-
-    const input = ctx.sidebar.querySelector('input[type=file]');
+    const input = ctx.sidebar.querySelector('[data-role="file"]');
     input.addEventListener('change', async () => {
       const file = input.files[0];
       if (!file) return;
-      ctx.sidebar.querySelector('.swagger-file-info').textContent = `📄 ${file.name}`;
+      ctx.sidebar.querySelector('[data-role="file-info"]').textContent = `📄 ${file.name}`;
       input.value = ''; // permette di ricaricare lo stesso file
 
       el('empty').hidden = true;

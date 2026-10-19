@@ -9,6 +9,7 @@
   "order": 40,
   "frontend": {
     "html": "view.html",
+    "sidebar": "sidebar.html",
     "js": "view.js",
     "css": "style.css"
   }

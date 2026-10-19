@@ -1,0 +1,37 @@
+{
+  "name": "PM2",
+  "code": "pm2",
+  "version": "1.0.0",
+  "description": "Processi PM2: lista, start/stop/restart/delete e log in streaming",
+  "color": "#bc8cff",
+  "icon": "⚙️",
+  "position": "header",
+  "order": 10,
+  "backend": {
+    "module": "server.js",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/list",
+        "handler": "list"
+      },
+      {
+        "method": "POST",
+        "path": "/action",
+        "handler": "action"
+      },
+      {
+        "method": "GET",
+        "path": "/logs",
+        "handler": "logs",
+        "stream": true
+      }
+    ]
+  },
+  "frontend": {
+    "html": "view.html",
+    "sidebar": "sidebar.html",
+    "js": "view.js",
+    "css": "style.css"
+  }
+}

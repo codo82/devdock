@@ -1,4 +1,4 @@
-// Sezioni non ancora migrate a estensioni (tunnel, npm, pm2, git, settings)
+// Sezioni non ancora migrate a estensioni (tunnel, npm, git, settings)
 const App = (() => {
   const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal } = window.UI;
 
@@ -7,19 +7,18 @@ const App = (() => {
   let config = { groups: [], servers: [] };
   let activeGroup = null;
   let settingsGroup = null;
-  let section = 'tunnel'; // 'tunnel' | 'npm' | 'pm2' | 'git' | 'settings' | codice di un'estensione
+  let section = 'tunnel'; // 'tunnel' | 'npm' | 'git' | 'settings' | codice di un'estensione
   let logPollInterval = null;
   let logTunnelId = null;
   let notificationsEnabled = false;
   let prevTunnelIds = new Set();
   let system = { platform: null, tools: {} }; // strumenti esterni disponibili (/api/system)
 
-  // NPM/PM2 state
+  // NPM state
   let npmProjects = [];
   let activeProject = null;
   let npmActiveTab = 'scripts';
   let sseSource = null;
-  let pm2List = [];
   let activeProcesses = [];
 
   // Git state
@@ -49,7 +48,7 @@ const App = (() => {
   // ---- SECTION NAV ----
   // Mostra il pannello della sezione attiva, nasconde gli altri
   function switchMainPanel(sec) {
-    ['tunnel','npm','pm2','git','settings'].forEach(s => {
+    ['tunnel','npm','git','settings'].forEach(s => {
       const p = document.getElementById(`mainArea-${s}`);
       if (p) p.style.display = s === sec ? 'flex' : 'none';
     });
@@ -73,9 +72,9 @@ const App = (() => {
       if (!el) return;
       el.className = 'section-tab' + (section === s ? ` active-${s}` : '');
     });
-    // Tunnel tab resta attivo anche quando si è in pm2/settings (sezioni "nascoste")
+    // Tunnel tab resta attivo anche nelle impostazioni dei tunnel (sezione "nascosta")
     const navTunnel = document.getElementById('navTunnel');
-    if (navTunnel && (section === 'pm2' || section === 'settings')) {
+    if (navTunnel && section === 'settings') {
       navTunnel.className = 'section-tab active-tunnel';
     }
 
@@ -91,7 +90,6 @@ const App = (() => {
     // Render section (aggiorna sidebar + eventuale refresh leggero)
     if (sec === 'tunnel')        renderTunnelSection();
     else if (sec === 'npm')      renderNpmSection();
-    else if (sec === 'pm2')      renderPm2Section();
     else if (sec === 'git')      renderGitSection();
     else if (sec === 'settings') renderSettingsSection();
   }
@@ -100,14 +98,12 @@ const App = (() => {
   function updateBadges() {
     const t = document.getElementById('badgeTunnel');
     const n = document.getElementById('badgeNpm');
-    const p = document.getElementById('badgePm2');
     const g = document.getElementById('badgeGit');
     if (t) t.textContent = tunnels.length;
     if (n) {
       const running = activeProcesses.filter(x => x.running).length;
       n.textContent = npmProjects.length + (running ? ` · ${running}▶` : '');
     }
-    if (p) p.textContent = pm2List.length;
     if (g) g.textContent = gitRepos.length;
   }
 
@@ -394,7 +390,7 @@ const App = (() => {
       return `
         <div class="pkg-section">
           <div class="pkg-section-title">${isDev ? 'devDependencies' : 'dependencies'} <span class="pkg-count">${list.length}</span></div>
-          <table class="pm2-table">
+          <table class="data-table">
             <thead><tr><th>Pacchetto</th><th>Versione config</th><th>Installata</th><th></th></tr></thead>
             <tbody>${list.map(([name, ver]) => `<tr>
               <td style="font-family:var(--font);color:var(--c-npm)">${esc(name)}</td>
@@ -421,113 +417,6 @@ const App = (() => {
       ${(!deps.length && !devDeps.length) ? '<p style="color:var(--muted);font-size:12px">Nessuna dipendenza nel package.json</p>' : ''}`;
 
     loadInstalledVersions(p.id, [...deps, ...devDeps].map(([n]) => n));
-  }
-
-  // ================================================================
-  // PM2 SECTION
-  // ================================================================
-  async function renderPm2Section() {
-    // Sidebar: stats o vuota
-    const sidebar = document.getElementById('sidebarContent');
-    sidebar.innerHTML = `
-      <div class="sidebar-head">
-        <span class="sidebar-head-title">PM2</span>
-        <button class="btn btn-ghost btn-sm" onclick="App.refreshPm2Tab()">↻</button>
-      </div>
-      <div class="sidebar-body" id="pm2SidebarStats">
-        <div style="padding:12px 14px;font-size:11px;color:var(--muted)">Caricamento...</div>
-      </div>`;
-
-    // Main area
-    const main = mainPanel('pm2');
-    main.innerHTML = `
-      <div class="pm2-area">
-        <div class="pm2-toolbar">
-          <span style="font-size:13px;font-weight:600;color:var(--c-pm2)">Processi attivi</span>
-          <div style="margin-left:auto;display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="App.showPm2Logs()">📋 Tutti i log</button>
-            <button class="btn btn-ghost btn-sm" onclick="App.refreshPm2Tab()">↻ Aggiorna</button>
-          </div>
-        </div>
-        <div class="pm2-content" id="pm2Content">
-          <div style="color:var(--muted);font-size:12px">Caricamento...</div>
-        </div>
-      </div>`;
-
-    await renderPm2Tab();
-  }
-
-  async function renderPm2Tab() {
-    const content = document.getElementById('pm2Content');
-    if (!content) return;
-    if (!system.tools.pm2) {
-      pm2List = [];
-      updateBadges();
-      const stats = document.getElementById('pm2SidebarStats');
-      if (stats) stats.innerHTML = '';
-      content.innerHTML = missingToolNotice('pm2', 'PM2 non è installato o non è nel PATH del server.', 'npm install -g pm2')
-        || '<p style="color:var(--muted);font-size:13px">PM2 non disponibile.</p>';
-      return;
-    }
-    try { pm2List = await api.get('/api/pm2/list'); } catch { pm2List = []; }
-
-    // Update badge
-    updateBadges();
-
-    // PM2 sidebar stats
-    const stats = document.getElementById('pm2SidebarStats');
-    if (stats) {
-      const online  = pm2List.filter(p => p.status === 'online').length;
-      const stopped = pm2List.filter(p => p.status === 'stopped').length;
-      const errored = pm2List.filter(p => p.status === 'errored').length;
-      stats.innerHTML = `
-        <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;justify-content:space-between;font-size:12px">
-            <span style="color:var(--muted)">Online</span>
-            <span style="color:var(--success);font-family:var(--font)">${online}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:12px">
-            <span style="color:var(--muted)">Fermi</span>
-            <span style="font-family:var(--font)">${stopped}</span>
-          </div>
-          ${errored>0?`<div style="display:flex;justify-content:space-between;font-size:12px">
-            <span style="color:var(--muted)">Errori</span>
-            <span style="color:var(--danger);font-family:var(--font)">${errored}</span>
-          </div>`:''}
-        </div>
-        <div style="border-top:1px solid var(--border);padding:8px 14px">
-          <p style="font-size:10px;color:var(--muted);font-family:var(--font)">Clicca il nome per i log</p>
-        </div>`;
-    }
-
-    const statusClass = s => ({online:'online',stopped:'stopped',errored:'errored'}[s]||'stopped');
-    content.innerHTML = pm2List.length === 0
-      ? '<p style="color:var(--muted);font-size:13px">Nessun processo PM2 attivo.</p>'
-      : `<table class="pm2-table">
-          <thead><tr><th>ID</th><th>Nome</th><th>Stato</th><th>PID</th><th>CPU</th><th>Mem</th><th>↺</th><th></th></tr></thead>
-          <tbody>${pm2List.map(proc => `<tr>
-            <td style="color:var(--muted)">${proc.id}</td>
-            <td><span class="pm2-name-link" onclick="App.showPm2Logs(${js(proc.name)})">${esc(proc.name)}</span></td>
-            <td><span class="pm2-status ${statusClass(proc.status)}>${esc(proc.status||'?')}</span></td>
-            <td style="font-family:var(--font);color:var(--muted)">${proc.pid||'—'}</td>
-            <td>${proc.cpu!=null?proc.cpu+'%':'—'}</td>
-            <td>${proc.memory!=null?Math.round(proc.memory/1024/1024)+'MB':'—'}</td>
-            <td>${proc.restarts||0}</td>
-            <td><div class="pm2-actions">
-              ${proc.status==='online'
-                ? `<button class="btn btn-ghost btn-sm" onclick="App.pm2Action('restart',${js(proc.name)})" title="Riavvia">↺</button>
-                   <button class="btn btn-ghost btn-sm" onclick="App.pm2Action('stop',${js(proc.name)})" title="Ferma">⏹</button>
-                   <button class="btn btn-ghost btn-sm" onclick="App.showPm2Logs(${js(proc.name)})" title="Log">📋</button>`
-                : `<button class="btn btn-ghost btn-sm" style="color:var(--c-pm2)" onclick="App.pm2Action('start',${js(proc.name)})" title="Avvia">▶</button>`}
-              <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="App.pm2Action('delete',${js(proc.name)})" title="Elimina">✕</button>
-            </div></td>
-          </tr>`).join('')}</tbody>
-        </table>`;
-  }
-
-  async function refreshPm2Tab() {
-    if (!system.tools.pm2) await loadSystem(true);
-    if (section === 'pm2') await renderPm2Tab();
   }
 
   // ---- STRUMENTI ESTERNI ----
@@ -1594,9 +1483,6 @@ const App = (() => {
           const p = npmProjects.find(x => x.id === activeProject);
           if (p) renderScriptsTab(p);
         }
-      } else if (section === 'pm2') {
-        // lieve: aggiorna badge solo, non ricarica PM2 ad ogni tick
-        updateBadges();
       }
     } catch(e) { toast('Errore connessione al server','error'); }
   }
@@ -1708,33 +1594,9 @@ const App = (() => {
     const p = npmProjects.find(x => x.id === projectId);
     if (!p) return;
     try {
-      await api.post('/api/pm2/action', { action: 'start', projectId, script });
+      await api.post('/api/ext/pm2/action', { action: 'start', projectId, script });
       toast(`PM2: ${script} avviato`, 'success');
     } catch(e) { toast('PM2 errore: ' + e.message, 'error'); }
-  }
-
-  async function pm2Action(action, name) {
-    if (action === 'delete' && !confirm(`Eliminare il processo PM2 "${name}"?`)) return;
-    try {
-      await api.post('/api/pm2/action', { action, target: name });
-      toast(`PM2: ${action} ${name}`, 'success');
-      if (section === 'pm2') await renderPm2Tab();
-    } catch(e) { toast('PM2 errore: ' + e.message, 'error'); }
-  }
-
-  function showPm2Logs(name) {
-    const title = name ? `pm2 logs ${name}` : 'pm2 logs (tutti)';
-    openSsePanel(title);
-    if (sseSource) sseSource.close();
-    const url = name ? `/api/pm2/logs?name=${encodeURIComponent(name)}&lines=100` : '/api/pm2/logs?lines=100';
-    const streamSection = section;
-    sseSource = new EventSource(url);
-    sseSource.onmessage = e => {
-      const { type, data } = JSON.parse(e.data);
-      appendSseToSection(streamSection, data, type === 'stderr' ? 'err' : type === 'exit' ? 'sys' : 'out');
-      if (type === 'exit') { sseSource.close(); sseSource = null; }
-    };
-    sseSource.onerror = () => { appendSseToSection(streamSection, 'Connessione persa', 'err'); sseSource.close(); sseSource = null; };
   }
 
   // ---- PROJECT ACTIONS ----
@@ -1877,7 +1739,7 @@ const App = (() => {
     runNpmScript, streamProcess, stopProcess, restartProcess, dismissProcess,
     npmOutdated, npmUpdate,
     // PM2
-    pm2StartScript, pm2Action, showPm2Logs, refreshPm2Tab,
+    pm2StartScript,
     recheckTools,
     selectSettingsGroup,
     closeSsePanel, clearSseOutput,

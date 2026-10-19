@@ -10,6 +10,7 @@ extensions/
     setting.json     manifest (required)
     server.js        backend: route handlers, services for other extensions
     view.html        markup of the panel
+    sidebar.html     markup of the sidebar (optional)
     view.js          frontend logic (ES module)
     style.css        styles (optional)
     package.json     own npm dependencies (optional, npm workspace)
@@ -43,6 +44,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (Swagger) or
   },
   "frontend": {
     "html": "view.html",
+    "sidebar": "sidebar.html",
     "js": "view.js",
     "css": "style.css"
   }
@@ -63,7 +65,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (Swagger) or
 | `config` | no | Top-level keys of `config.json` owned by the extension (see *Configuration*) |
 | `backend.module` | no | Backend file, relative to the extension folder |
 | `backend.routes` | no | Routes mounted under `/api/ext/<code>`; each one names a handler exported by the module |
-| `frontend.html` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served |
+| `frontend.html` / `sidebar` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served. Without `sidebar` the panel takes the full width |
 
 ### Routes
 
@@ -134,13 +136,24 @@ Writes are atomic (temporary file + rename). Export and import work per section:
 
 ## Frontend module
 
-The shell loads an extension's panel the first time it is opened: it injects `view.html` into the panel, adds `style.css`, then `import()`s `view.js` and calls `mount`. The panel keeps its DOM when the user switches to another section.
+The shell loads an extension's panel the first time it is opened: it injects `view.html` into the panel and `sidebar.html` into the sidebar, adds `style.css`, then `import()`s `view.js` and calls `mount`. The panel keeps its DOM when the user switches to another section.
+
+Static markup (titles, buttons, containers) lives in the HTML files; `view.js` only fills the dynamic parts, finding them by `data-role`, and wires static buttons through `data-action` attributes:
+
+```html
+<!-- sidebar.html -->
+<div class="sidebar-head">
+  <span class="sidebar-head-title">Repository</span>
+  <button class="btn btn-ghost btn-sm" data-action="refresh">↻</button>
+</div>
+<div class="sidebar-body" data-role="repos"></div>
+```
 
 ```js
 // extensions/git/view.js
 export default {
   async mount(ctx) {
-    ctx.sidebar.innerHTML = '…';               // the sidebar belongs to the extension while it is active
+    const list = ctx.sidebar.querySelector('[data-role="repos"]');
     const repos = await ctx.api.get('/repos'); // → GET /api/ext/git/repos
     ctx.expose({ selectRepo });                // window.Ext.git.selectRepo(...) for inline handlers
     ctx.setBadge(repos.length);
@@ -156,7 +169,7 @@ export default {
 |---|---|
 | `ctx.code`, `ctx.meta` | Extension code and the data from `/api/core/extensions` |
 | `ctx.root` | Panel element (already contains `view.html`) |
-| `ctx.sidebar` | Sidebar element shown while the extension is active |
+| `ctx.sidebar` | Sidebar element shown while the extension is active (already contains `sidebar.html`) |
 | `ctx.api.get/post/put/del(path)` | JSON calls to `/api/ext/<code><path>`; errors become `Error` with the server message |
 | `ctx.api.stream(path, body, onEvent)` | POST answered with SSE (e.g. git actions); resolves with the `exit` code |
 | `ctx.api.events(path, onEvent)` | GET answered with SSE (`EventSource`); returns a function that closes it |

@@ -101,7 +101,10 @@ window.Shell = (() => {
         document.head.appendChild(link);
       }
       const root = entry.panel.querySelector('.ext-root');
-      if (meta.frontend.html) root.innerHTML = await fetch(base + meta.frontend.html).then(r => r.text());
+      const [html, sidebar] = await Promise.all([meta.frontend.html, meta.frontend.sidebar]
+        .map(f => f ? fetch(base + f).then(r => r.ok ? r.text() : Promise.reject(new Error(`${f}: HTTP ${r.status}`))) : null));
+      if (html !== null) root.innerHTML = html;
+      if (sidebar !== null) entry.sidebar.innerHTML = sidebar;
       const mod = await import(base + meta.frontend.js);
       entry.module = mod.default || mod;
       entry.ctx = makeContext(entry);
@@ -217,6 +220,8 @@ window.Shell = (() => {
     }
     active = code;
     document.getElementById('sidebarContent').style.display = code ? 'none' : '';
+    // Estensione senza sidebar.html: il pannello occupa tutta la larghezza
+    document.querySelector('.app').classList.toggle('no-sidebar', !!code && !exts.get(code).meta.frontend.sidebar);
     if (!code) return;
 
     const entry = exts.get(code);

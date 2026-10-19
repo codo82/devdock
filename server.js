@@ -23,6 +23,7 @@ const extensions = loadExtensions(EXTENSIONS_DIR, {
     process:  require('./lib/process'),
     git:      require('./lib/git'),
     tunnels:  require('./lib/tunnels'),
+    projects: require('./lib/projects'),
   },
 });
 app.use('/api/ext', extensions.router);
@@ -32,7 +33,6 @@ app.use('/api/core', require('./routes/core')(extensions));
 app.use('/api', require('./routes/config'));
 app.use('/api', require('./routes/tunnels'));
 app.use('/api', require('./routes/projects'));
-app.use('/api', require('./routes/pm2'));
 app.use('/api', require('./routes/git'));
 
 // Errori non gestiti nelle route: le validazioni della config diventano 400 JSON

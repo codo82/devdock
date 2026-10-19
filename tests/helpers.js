@@ -25,7 +25,7 @@ function freePort() {
 }
 
 // Avvia il server con la config indicata; restituisce { port, configPath, request, stop }
-// opts.env: variabili aggiuntive (es. DEVDOCK_EXTENSIONS_DIR); di default nessuna estensione
+// opts.env: variabili aggiuntive (es. DEVDOCK_EXTENSIONS_DIR); di default le estensioni del repo
 async function startServer(config = { groups: [], servers: [], projects: [] }, opts = {}) {
   const dir = tmpDir();
   const configPath = path.join(dir, 'config.json');
@@ -37,7 +37,7 @@ async function startServer(config = { groups: [], servers: [], projects: [] }, o
       ...process.env,
       DEVDOCK_PORT: String(port),
       DEVDOCK_CONFIG: configPath,
-      DEVDOCK_EXTENSIONS_DIR: path.join(dir, 'no-extensions'),
+      DEVDOCK_EXTENSIONS_DIR: path.join(ROOT, 'extensions'),
       ...opts.env,
     },
     stdio: ['ignore', 'pipe', 'pipe'],

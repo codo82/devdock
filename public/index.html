@@ -21,7 +21,6 @@
       <button class="btn btn-ghost" onclick="App.exportConfig()" title="Esporta config.json">↓ Export</button>
       <label class="btn btn-ghost" style="cursor:pointer" title="Importa config.json">↑ Import<input type="file" accept=".json" style="display:none" onchange="App.importConfig(this)"></label>
       <button class="btn btn-ghost" onclick="App.refresh()">↻</button>
-      <button class="btn btn-ghost" onclick="App.goSection('pm2')" title="PM2" style="padding:5px 8px;font-size:12px">⚙️</button>
       <button class="btn btn-danger" onclick="App.stopAll()" id="stopAllBtn" style="display:none">⏹ Stop all</button>
     </div>
   </div>
@@ -70,19 +69,6 @@
           </div>
         </div>
         <div class="sse-body" id="sseBody-npm"></div>
-      </div>
-    </div>
-    <div id="mainArea-pm2" class="main-panel" style="display:none">
-      <div id="mainContent-pm2" style="flex:1;overflow:auto;min-height:0"></div>
-      <div class="sse-panel" id="ssePanel-pm2">
-        <div class="sse-panel-header">
-          <span id="ssePanelTitle-pm2">Output</span>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-ghost btn-sm" onclick="App.clearSseOutput()" title="Pulisci">🗑</button>
-            <button class="btn btn-ghost btn-sm" onclick="App.closeSsePanel()">✕</button>
-          </div>
-        </div>
-        <div class="sse-body" id="sseBody-pm2"></div>
       </div>
     </div>
     <div id="mainArea-git" class="main-panel" style="display:none">
