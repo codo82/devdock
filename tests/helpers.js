@@ -25,14 +25,21 @@ function freePort() {
 }
 
 // Avvia il server con la config indicata; restituisce { port, configPath, request, stop }
-async function startServer(config = { groups: [], servers: [], projects: [] }) {
+// opts.env: variabili aggiuntive (es. DEVDOCK_EXTENSIONS_DIR); di default nessuna estensione
+async function startServer(config = { groups: [], servers: [], projects: [] }, opts = {}) {
   const dir = tmpDir();
   const configPath = path.join(dir, 'config.json');
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
   const port = await freePort();
 
   const proc = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
-    env: { ...process.env, DEVDOCK_PORT: String(port), DEVDOCK_CONFIG: configPath },
+    env: {
+      ...process.env,
+      DEVDOCK_PORT: String(port),
+      DEVDOCK_CONFIG: configPath,
+      DEVDOCK_EXTENSIONS_DIR: path.join(dir, 'no-extensions'),
+      ...opts.env,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
@@ -40,7 +47,7 @@ async function startServer(config = { groups: [], servers: [], projects: [] }) {
     const timer = setTimeout(() => reject(new Error(`Server non avviato:\n${output}`)), 5000);
     const onData = d => {
       output += d.toString();
-      if (output.includes('DevDock →')) { clearTimeout(timer); resolve(); }
+      if (output.includes('Estensioni:')) { clearTimeout(timer); resolve(); }
     };
     proc.stdout.on('data', onData);
     proc.stderr.on('data', onData);
@@ -79,7 +86,7 @@ async function startServer(config = { groups: [], servers: [], projects: [] }) {
 
   const readConfig = () => JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
-  return { port, configPath, request, stop, readConfig };
+  return { port, configPath, request, stop, readConfig, output: () => output };
 }
 
 // Eventi SSE "data: {type, data}" di una risposta in streaming
