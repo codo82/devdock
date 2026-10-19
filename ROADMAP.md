@@ -14,7 +14,7 @@ Status legend: `[ ]` to do · `[~]` in progress · `[x]` done
 - [x] **D.2** Initial `CHANGELOG.md` in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format: `1.0.0` entry for the existing state + `[Unreleased]` section
 - [x] **D.3** Align `package.json` (name `devdock` instead of `port-forward-manager`, version, description) and the server startup log
 - [ ] **D.4** At the end of every milestone: update the CHANGELOG (Added/Changed/Fixed/Security/Removed) and the README where needed
-- [ ] **D.5** In M3: README section "Project structure"; in M5: section "Writing an extension"; in M6: section "DB client"
+- [ ] **D.5** In M3: README sections "Project structure" and "Writing an extension"; in M5: section "DB client"
 - [x] **D.6** Roadmap, README and CHANGELOG in English
 
 ---
@@ -66,53 +66,37 @@ Context: the app only listens on `127.0.0.1`, but the browser is an attack vecto
   - [x] Fallback: name taken from the merge subject (`Merge branch 'x'`, `Merge pull request #n from user/x`) for branches already deleted
   - [x] `branch-N` only as a last resort
 
-## M3 — Backend refactor + repo for Claude Code
+## M3 — Extension architecture *(Backlog #5, #6, #6 bis)*
 
-Prerequisite for the features: a modular structure for branch switching, the DB client and extensions.
+Every feature becomes an extension with its own manifest, backend routes, HTML, JS and CSS. Contract: [docs/EXTENSIONS.md](docs/EXTENSIONS.md). (Merges the former "backend refactor" and "extensions" milestones, so the code is moved only once.)
 
-- [ ] **M3.1** *(Backlog #6 — route split)* Split `server.js`:
-  ```
-  server.js            entry point: express, security middleware, route mounting, listen
-  lib/config.js        load/save/validate config
-  lib/validate.js      shared validators (branch, key, ports, ...)
-  lib/process.js       tracked spawns, process group kill, port detection
-  lib/sse.js           SSE helpers
-  routes/config.js     config, groups, servers, import/export
-  routes/tunnels.js    SSH port forwarding  (backlog: ports.js)
-  routes/projects.js   NPM projects + processes  (backlog: repos.js)
-  routes/pm2.js
-  routes/git.js
-  ```
-- [ ] **M3.2** Merge the duplicated push logic (`push`, fetch-error fallback, `pull_push`) into a single pipeline of sequential SSE commands
-- [ ] **M3.3** Minimal tests (`node:test`) for the validators and the critical routes (git action, npm start), using temporary git repos
-- [ ] **M3.4** *(Backlog #5)* `CLAUDE.md`: purpose, structure, local start, conventions (Italian UI messages, vanilla JS, no build step), reference to this roadmap
-- [x] **M3.5** Publish on GitHub
+- [x] **M3.1** Split `server.js` into `lib/` (shared services) and `routes/` (one file per area) as an intermediate step
+- [x] **M3.2** Integration tests (`node:test`) that start DevDock as a separate process with temporary config and git repos, used as a safety net for the migration
+- [x] **M3.3** Extension contract: `setting.json` with routes declared in the manifest, backend module `(ctx) → { handlers, services, validateConfig, shutdown }`, frontend module `{ mount, show, hide, badge }`, core API under `/api/core`, extension API under `/api/ext/<code>`
+- [ ] **M3.4** Backend loader: discover `extensions/*/setting.json`, validate manifests, resolve dependencies (`required: true` → not loaded; `false` → loaded with a warning), topological order, error on cycles, mount declared routes, check handlers, shutdown in reverse order
+- [ ] **M3.5** Config ownership: each `config.json` key belongs to one extension; per-extension validation, export and import
+- [ ] **M3.6** Frontend shell: header, section bar, sidebar, panels, modal, toast, SSE output panel, lazy loading of `view.html`/`view.js`/`style.css`, warning icon for missing optional dependencies, header-position extensions
+- [ ] **M3.7** Migrate the sections one at a time, keeping the tests green: Swagger → PM2 → Tunnels (with their settings) → npm → Git
+- [ ] **M3.8** Unify the push logic (`push`, fetch-error fallback, `pull_push`) in the Git extension into a single pipeline of sequential SSE commands
+- [ ] **M3.9** npm workspaces: `"workspaces": ["extensions/*"]`, a single `node_modules`
+- [ ] **M3.10** *(Backlog #5)* `CLAUDE.md`: purpose, structure, extension pattern, conventions (Italian UI messages, vanilla JS, no build step), how to run and test, reference to this roadmap
+- [x] **M3.11** Publish on GitHub
 
-## M4 — Branch switch / create *(Backlog #3)*
+## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
 
-- [ ] **M4.1** Backend: `GET /api/git/repos/:id/branches` (local + remote, current branch)
-- [ ] **M4.2** Backend: `checkout` action (already exists, validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
+- [ ] **M4.1** Backend: `GET /api/ext/git/repos/:id/branches` (local + remote, current branch)
+- [ ] **M4.2** Backend: `checkout` action (validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
 - [ ] **M4.3** Pre-check: uncommitted changes → structured response the UI uses to offer "Stash and switch" / "Cancel"
 - [ ] **M4.4** Pre-check: branch already exists → clear error; remote branch not yet local → `checkout --track`
 - [ ] **M4.5** UI: dropdown on the branch badge with search, local/remote sections, "New branch…" entry; SSE output during the operation, status and log refresh at the end
 
-## M5 — Extension architecture *(Backlog #6 bis)*
+## M5 — Integrated DB client *(Backlog #4)* — first new extension
 
-- [ ] **M5.1** Design: `setting.json` format (name, code, color, position, dependencies) + frontend entry point (`index.js` exporting `mount(container, api)`) and optional backend (`routes.js` mounted on `/api/ext/<code>`)
-- [ ] **M5.2** npm workspaces: `"workspaces": ["extensions/*"]` in the root `package.json`, a single `node_modules`
-- [ ] **M5.3** Backend loader: discover `extensions/*/setting.json` at startup, validation, dependency resolution (`required: true` → doesn't start; `false` → starts with a warning), topological order, error on cycles
-- [ ] **M5.4** Frontend loader: `GET /api/extensions` → tabs or header items depending on `position`, warning icon for missing optional dependencies, lazy loading (`import()` on first access)
-- [ ] **M5.5** Shared shell for extensions: API helper, toast, modal, SSE panel (extracted from `index.html`)
-- [ ] **M5.6** Migrate the existing sections to extensions one at a time: Swagger (the most isolated) → PM2 → Git → NPM → Tunnel
-- [ ] **M5.7** Update `CLAUDE.md` with the extension system
+Built as an extension on the M3 architecture.
 
-## M6 — Integrated DB client *(Backlog #4)* — first new extension
-
-Built as an extension: it is the test bed for M5.
-
-- [ ] **M6.1** `db-client` extension with the `mysql2` dependency in its own `package.json`
-- [ ] **M6.2** Connections configurable per project (host, port, db, user, password). "Use tunnel" option linking a connection to an already configured SSH server
-- [ ] **M6.2b** **Vault with master password** (works the same on macOS and Windows, `node:crypto` only, no native dependencies):
+- [ ] **M5.1** `db-client` extension with the `mysql2` dependency in its own `package.json`
+- [ ] **M5.2** Connections configurable per project (host, port, db, user, password). "Use tunnel" option linking a connection to an already configured SSH server
+- [ ] **M5.2b** **Vault with master password** (works the same on macOS and Windows, `node:crypto` only, no native dependencies):
   - First access to the Database section: the UI asks to **create** the master password (with confirmation, at least 10 characters). The server generates a random `salt` and derives the key with **scrypt** (`crypto.scrypt`, 32-byte key)
   - Each DB password is encrypted with **AES-256-GCM** using a random IV per value, and stored as `{ iv, tag, data }` in base64
   - **Separate keys**: from the scrypt key (`masterKey`) **HKDF-SHA256** derives two independent subkeys: `encKey` (info `"devdock-vault-enc"`) for encryption and `verifyKey` (info `"devdock-vault-verify"`) for verification, so the stored value reveals nothing about `encKey`
@@ -133,11 +117,11 @@ Built as an extension: it is the test bed for M5.
   - "I forgot the password": vault reset, which deletes the stored passwords (connections stay, without password) after explicit confirmation
   - Export/import: passwords travel encrypted together with the `vault` block, so they can be moved to another machine with the same master password. When importing into a config that already has a vault with a different salt, ask for the imported config's master password and re-encrypt
   - Tests: init/unlock/wrong password/change/lock, check that `config.json` never contains plaintext passwords
-- [ ] **M6.3** Backend: pool per connection, `POST /api/ext/db-client/query` with timeout, row limit, optional read-only flag
-- [ ] **M6.4** UI: editor with minimal syntax highlighting (CodeMirror 6 from CDN with SRI, or a light custom highlighter), run with Ctrl/Cmd+Enter
-- [ ] **M6.5** Results in a table (sortable columns, highlighted NULLs, row count/time), messages for queries without a result set
-- [ ] **M6.6** Per-session query history (in memory / `sessionStorage`)
-- [ ] **M6.7** Later: PostgreSQL, since it appears among the configured server types
+- [ ] **M5.3** Backend: pool per connection, `POST /api/ext/db-client/query` with timeout, row limit, optional read-only flag
+- [ ] **M5.4** UI: editor with minimal syntax highlighting (CodeMirror 6 from CDN with SRI, or a light custom highlighter), run with Ctrl/Cmd+Enter
+- [ ] **M5.5** Results in a table (sortable columns, highlighted NULLs, row count/time), messages for queries without a result set
+- [ ] **M5.6** Per-session query history (in memory / `sessionStorage`)
+- [ ] **M5.7** Later: PostgreSQL, since it appears among the configured server types
 
 ---
 
@@ -149,7 +133,6 @@ Built as an extension: it is the test bed for M5.
 | M0 Cleanup/macOS | S | unblocks daily use on the Mac |
 | M1 Security | M | done on the current `server.js`, moved into modules in M3 |
 | M2 Bugs | M | M2.4 required reproducing the case before fixing it |
-| M3 Refactor + CLAUDE.md | M | no functional change, covered by tests |
-| M4 Branch switch | S | first visible value on the new structure |
-| M5 Extensions | L | the largest; incremental migration |
-| M6 DB client | L | first native extension; includes the master password vault |
+| M3 Extension architecture | L | the largest; sections migrated one at a time, covered by tests |
+| M4 Branch switch | S | first feature built inside an extension |
+| M5 DB client | L | first new extension; includes the master password vault |
