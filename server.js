@@ -255,34 +255,41 @@ app.get('/api/config/export', (req, res) => {
   res.send(JSON.stringify(data, null, 2));
 });
 
-// Import config (sostituisce o fa merge)
+// Import config. Si importano solo le sezioni presenti nel file (groups, servers,
+// projects), così anche gli export parziali "Solo tunnel" e "Solo Git/NPM":
+//   replace → le sezioni presenti sostituiscono quelle attuali, le altre restano
+//   merge   → si aggiungono gli elementi nuovi (stessa chiave = si tiene l'attuale);
+//             per i gruppi già esistenti si uniscono le liste di server
 app.post('/api/config/import', (req, res) => {
   try {
-    const { config: incoming, mode } = req.body; // mode: 'replace' | 'merge'
-    if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.groups) || !Array.isArray(incoming.servers)) {
-      return res.status(400).json({ error: 'Config non valida' });
-    }
-    incoming.servers  = incoming.servers.map(normalizeServer);
-    incoming.groups   = incoming.groups.map(g => pick(g || {}, GROUP_FIELDS));
-    incoming.projects = Array.isArray(incoming.projects) ? incoming.projects.map(p => pick(p || {}, PROJECT_FIELDS)) : [];
-    validateConfig(incoming); // il file importato deve essere valido già da solo
-    if (mode === 'merge') {
-      const current = loadConfig();
-      const existingServerKeys = new Set(current.servers.map(s => s.key));
-      const existingGroupKeys  = new Set(current.groups.map(g => g.key));
-      incoming.servers.forEach(s => { if (!existingServerKeys.has(s.key)) current.servers.push(s); });
-      incoming.groups.forEach(g => {
-        if (!existingGroupKeys.has(g.key)) current.groups.push(g);
-        else {
-          const cur = current.groups.find(x => x.key === g.key);
-          g.servers.forEach(sk => { if (!cur.servers.includes(sk)) cur.servers.push(sk); });
+    const { config: incoming, mode } = req.body;
+    if (mode !== 'replace' && mode !== 'merge') return res.status(400).json({ error: 'Modalità di import non valida' });
+    if (!incoming || typeof incoming !== 'object') return res.status(400).json({ error: 'Config non valida' });
+    const sections = Object.keys(EMPTY_CONFIG).filter(k => Array.isArray(incoming[k]));
+    if (!sections.length) return res.status(400).json({ error: 'Il file non contiene gruppi, server o progetti' });
+
+    const normalize = {
+      servers:  list => list.map(normalizeServer),
+      groups:   list => list.map(g => pick(g || {}, GROUP_FIELDS)),
+      projects: list => list.map(p => pick(p || {}, PROJECT_FIELDS)),
+    };
+    const idField = { servers: 'key', groups: 'key', projects: 'id' };
+
+    const cfg = loadConfig();
+    for (const sec of sections) {
+      const items = normalize[sec](incoming[sec]);
+      if (mode === 'replace') { cfg[sec] = items; continue; }
+      const id = idField[sec];
+      for (const item of items) {
+        const cur = cfg[sec].find(x => x[id] === item[id]);
+        if (!cur) cfg[sec].push(item);
+        else if (sec === 'groups' && Array.isArray(item.servers)) {
+          item.servers.forEach(sk => { if (!cur.servers.includes(sk)) cur.servers.push(sk); });
         }
-      });
-      saveConfig(current);
-    } else {
-      saveConfig(incoming);
+      }
     }
-    res.json({ ok: true });
+    saveConfig(cfg); // valida il risultato (es. gruppi che puntano a server mancanti)
+    res.json({ ok: true, sections });
   } catch (e) {
     res.status(e instanceof ConfigError ? 400 : 500).json({ error: e.message });
   }

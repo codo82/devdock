@@ -2189,8 +2189,10 @@ const App = (() => {
     try {
       const text = await file.text();
       const cfg  = JSON.parse(text);
-      if (!cfg.groups || !cfg.servers) { toast('File non valido', 'error'); return; }
-      const mode = confirm(`Trovati ${cfg.groups.length} gruppi e ${cfg.servers.length} server.\n\nOK = Sostituisci tutto\nAnnulla = Merge`) ? 'replace' : 'merge';
+      const found = [['groups','gruppi'],['servers','server'],['projects','progetti']]
+        .filter(([k]) => Array.isArray(cfg[k])).map(([k, label]) => `${cfg[k].length} ${label}`);
+      if (!found.length) { toast('File non valido: nessun gruppo, server o progetto', 'error'); return; }
+      const mode = confirm(`Trovati ${found.join(', ')}.\n\nOK = Sostituisci queste sezioni\nAnnulla = Merge (aggiungi i nuovi)\n\nLe sezioni assenti dal file non vengono toccate.`) ? 'replace' : 'merge';
       await api.post('/api/config/import', { config: cfg, mode });
       toast(`Import completato (${mode==='replace'?'sostituzione':'merge'})`, 'success');
       await refresh();
