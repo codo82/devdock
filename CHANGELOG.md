@@ -1,72 +1,85 @@
 # Changelog
 
-Tutte le modifiche rilevanti di DevDock sono documentate in questo file.
+All notable changes to DevDock are documented in this file.
 
-Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) e il progetto usa il [Semantic Versioning](https://semver.org/lang/it/). Ogni milestone della [roadmap](ROADMAP.md) chiusa corrisponde a una versione minor.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Every closed milestone of the [roadmap](ROADMAP.md) is a minor version.
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-10-19 — M1 Sicurezza
+## [1.3.0] - 2026-10-19 — M2 Known bugs
+
+### Fixed
+- Git push failing with `cannot lock ref: is at X but expected Y` (backlog #1). The UI sent every git action twice (pull, push, fetch, merge, stash…), so two concurrent `git push` processes raced to update the same ref; more commits widened the race window. The UI now sends a single request, and the server runs only one git action at a time per repository (concurrent requests get 409).
+- Commit graph lanes named `branch-2`, `branch-3`… instead of the real branch (backlog #2). Lanes now inherit the branch name from the first commit with a ref, and merged branches that were later deleted take their name from the merge message (`Merge branch 'x'`, `Merge pull request #n from user/x`).
+- In the graph legend the ↗ icon now marks remote branches only (it used to mark any name containing `/`, such as a local `feature/x`); ◉ marks the current branch; `origin/HEAD` is no longer shown as a ref.
+- Importing a "Git / NPM only" export was rejected, *replace* with a partial export wiped the sections missing from the file, and *merge* ignored projects. The import now applies only the sections present in the file, projects included.
+- Comments out of sync with the code.
+
+### Changed
+- `.claude/launch.json` (local preview configuration) is ignored by git.
+- The git log endpoint also returns the list of local branches.
+
+## [1.2.0] - 2026-10-19 — M1 Security
 
 ### Security
-- Le richieste con `Origin` (o `Referer`) diverso dalla UI ricevono 403: una pagina web aperta nel browser non può più far eseguire comandi a DevDock (CSRF).
-- Sono accettati solo gli header `Host` `127.0.0.1:<porta>` e `localhost:<porta>` (difesa da DNS rebinding).
-- POST/PUT/PATCH su `/api` richiedono `Content-Type: application/json`.
-- Header di sicurezza: Content-Security-Policy, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`.
-- Git: azioni in whitelist; branch validati con `git check-ref-format`, remote tra quelli configurati, hash esadecimali; i valori che iniziano con `-` non possono più diventare opzioni di git.
-- Git commit: si possono passare solo file presenti in `git status`, dopo `--`.
-- npm: si eseguono solo `install` e gli script definiti in `package.json`; i nomi dei pacchetti sono validati (niente path traversal).
-- PM2: azioni in whitelist e nomi dei processi validati; l'avvio da progetto non accetta più una cartella arbitraria.
-- `config.json`: ogni scrittura (UI, import, API) è validata (chiavi, porte, `remote` host:porta, alias SSH, colori, percorsi assoluti, riferimenti tra gruppi e server) e le PUT accettano solo i campi noti.
-- Frontend: escape corretto dei valori negli handler `onclick` (nomi file, script, processi con apici potevano iniettare JavaScript) e dei colori negli stili.
-- Swagger UI e js-yaml vengono caricati con Subresource Integrity.
+- Requests whose `Origin` (or `Referer`) is not the UI itself get 403: a web page open in the browser can no longer make DevDock run commands (CSRF).
+- Only the `Host` headers `127.0.0.1:<port>` and `localhost:<port>` are accepted (DNS rebinding defence).
+- POST/PUT/PATCH on `/api` require `Content-Type: application/json`.
+- Security headers: Content-Security-Policy, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`.
+- Git: whitelisted actions; branches validated with `git check-ref-format`, remotes must be configured ones, hexadecimal hashes; values starting with `-` can no longer become git options.
+- Git commit: only files listed by `git status` can be passed, after `--`.
+- npm: only `install` and the scripts defined in `package.json` run; package names are validated (no path traversal).
+- PM2: whitelisted actions and validated process names; starting from a project no longer accepts an arbitrary folder.
+- `config.json`: every write (UI, import, API) is validated (keys, ports, `remote` host:port, SSH alias, colours, absolute paths, references between groups and servers) and PUT requests only accept known fields.
+- Frontend: correct escaping of values in `onclick` handlers (file names, scripts or processes containing quotes could inject JavaScript) and of colours in styles.
+- Swagger UI and js-yaml are loaded with Subresource Integrity.
 
 ### Added
-- Endpoint `POST /api/projects/:id/npm/update` per aggiornare una dipendenza.
-- Variabili d'ambiente `DEVDOCK_PORT` e `DEVDOCK_CONFIG`.
+- `POST /api/projects/:id/npm/update` endpoint to update a dependency.
+- `DEVDOCK_PORT` and `DEVDOCK_CONFIG` environment variables.
 
 ### Changed
-- Lo status git usa `--porcelain -z`: nomi file esatti anche con spazi o caratteri speciali.
-- Gli errori di validazione delle azioni git compaiono nel pannello di output.
+- Git status uses `--porcelain -z`: exact file names even with spaces or special characters.
+- Validation errors of git actions are shown in the output panel.
 
 ### Fixed
-- "Aggiorna" su una dipendenza eseguiva `npm run "update <pkg>"` e falliva sempre.
-- Senza `pm2` installato un'azione PM2 mandava in crash il server.
-- "Avvia con PM2" lanciava `npm` senza argomenti invece di `npm run <script>`.
-- Dopo un riavvio, la chiusura del processo npm precedente segnava come terminato quello nuovo.
+- "Update" on a dependency ran `npm run "update <pkg>"` and always failed.
+- Without `pm2` installed, any PM2 action crashed the server.
+- "Start with PM2" launched `npm` with no arguments instead of `npm run <script>`.
+- After a restart, the exit of the previous npm process marked the new one as stopped.
 
 ### Removed
-- Endpoint `/api/git/repos/:id/debug-push`: esponeva l'ambiente e `git config`, che può contenere token.
+- `/api/git/repos/:id/debug-push` endpoint: it exposed the environment and `git config`, which can contain tokens.
 
-## [1.1.0] - 2026-10-18 — M0 Pulizia e portabilità macOS
+## [1.1.0] - 2026-10-18 — M0 Cleanup and macOS portability
 
 ### Added
-- `README.md`, `CHANGELOG.md` e `ROADMAP.md`.
-- Endpoint `GET /api/system` che indica quali strumenti esterni sono installati (`ssh`, `autossh`, `git`, `npm`, `pm2`, `lsof`, `ss`).
-- Avvisi nella UI quando `pm2` o `autossh` mancano, con il comando per installarli e il pulsante "Ricontrolla".
+- `README.md`, `CHANGELOG.md` and `ROADMAP.md`.
+- `GET /api/system` endpoint reporting which external tools are installed (`ssh`, `autossh`, `git`, `npm`, `pm2`, `lsof`, `ss`).
+- UI notices when `pm2` or `autossh` are missing, with the install command and a "Ricontrolla" (recheck) button.
 
 ### Changed
-- Il pacchetto si chiama `devdock` (prima `port-forward-manager`); aggiunto `package-lock.json`.
-- Il rilevamento delle porte dei processi npm usa `lsof` (macOS e Linux), con fallback a `ss` su Linux, e non passa più dalla shell.
-- Il pulsante "PM2" negli script compare solo se `pm2` è installato.
+- The package is named `devdock` (previously `port-forward-manager`); added `package-lock.json`.
+- Port detection for npm processes uses `lsof` (macOS and Linux), falling back to `ss` on Linux, and no longer goes through the shell.
+- The "PM2" button on scripts only appears when `pm2` is installed.
 
 ### Fixed
-- Le porte dei processi npm risultavano sempre vuote su macOS (`ss` non esiste).
-- I tunnel e i processi npm restavano attivi chiudendo il server con `kill` (SIGTERM) o chiudendo il terminale (SIGHUP): ora vengono terminati come con Ctrl+C.
-- Una configurazione nuova, o creata con una versione precedente, non aveva la chiave `projects`.
+- npm process ports were always empty on macOS (`ss` does not exist there).
+- Tunnels and npm processes stayed alive when the server was stopped with `kill` (SIGTERM) or by closing the terminal (SIGHUP): they are now terminated as with Ctrl+C.
+- A new configuration, or one created by an older version, had no `projects` key.
 
 ### Removed
-- `index.html` nella root, duplicato non usato di `public/index.html`.
-- File `Zone.Identifier` lasciato da Windows.
+- Root `index.html`, an unused copy of `public/index.html`.
+- `Zone.Identifier` file left by Windows.
 
 ## [1.0.0] - 2026-10-18
 
-Prima versione sotto controllo di versione.
+First version under version control.
 
 ### Added
-- Tunnel SSH organizzati in gruppi, con riconnessione automatica, log e notifiche desktop.
-- Progetti npm: esecuzione degli script con log in streaming, porte in ascolto, dipendenze e `npm outdated`.
-- Gestione dei processi PM2.
-- Client Git: status, commit, grafo dei commit, pull/push/merge/checkout/stash.
-- Anteprima Swagger/OpenAPI.
-- Configurazione in `config.json` con export e import.
+- SSH tunnels organised in groups, with automatic reconnection, logs and desktop notifications.
+- npm projects: script execution with streaming logs, listening ports, dependencies and `npm outdated`.
+- PM2 process management.
+- Git client: status, commit, commit graph, pull/push/merge/checkout/stash.
+- Swagger/OpenAPI preview.
+- Configuration in `config.json` with export and import.
