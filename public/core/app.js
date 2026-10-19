@@ -1,4 +1,4 @@
-// Sezioni non ancora migrate a estensioni (tunnel, npm, pm2, git, swagger, settings)
+// Sezioni non ancora migrate a estensioni (tunnel, npm, pm2, git, settings)
 const App = (() => {
   const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal } = window.UI;
 
@@ -7,7 +7,7 @@ const App = (() => {
   let config = { groups: [], servers: [] };
   let activeGroup = null;
   let settingsGroup = null;
-  let section = 'tunnel'; // 'tunnel' | 'npm' | 'pm2' | 'git' | 'swagger' | 'settings'
+  let section = 'tunnel'; // 'tunnel' | 'npm' | 'pm2' | 'git' | 'settings' | codice di un'estensione
   let logPollInterval = null;
   let logTunnelId = null;
   let notificationsEnabled = false;
@@ -32,7 +32,7 @@ const App = (() => {
 
   // Helper: restituisce il contenitore del contenuto dinamico della sezione.
   // Se esiste mainContent-{sec} lo usa (per non sovrascrivere il pannello SSE),
-  // altrimenti cade su mainArea-{sec} (tunnel, swagger e settings non hanno pannello SSE).
+  // altrimenti cade su mainArea-{sec} (tunnel e settings non hanno pannello SSE).
   function mainPanel(sec) {
     const s = sec || section;
     return document.getElementById(`mainContent-${s}`) || document.getElementById(`mainArea-${s}`);
@@ -49,7 +49,7 @@ const App = (() => {
   // ---- SECTION NAV ----
   // Mostra il pannello della sezione attiva, nasconde gli altri
   function switchMainPanel(sec) {
-    ['tunnel','npm','pm2','git','swagger','settings'].forEach(s => {
+    ['tunnel','npm','pm2','git','settings'].forEach(s => {
       const p = document.getElementById(`mainArea-${s}`);
       if (p) p.style.display = s === sec ? 'flex' : 'none';
     });
@@ -68,7 +68,7 @@ const App = (() => {
     closeLogs(); // chiudi log drawer SSH al cambio sezione (rimane globale)
 
     // Update section tabs
-    ['tunnel','npm','git','swagger'].forEach(s => {
+    ['tunnel','npm','git'].forEach(s => {
       const el = document.getElementById('nav' + s.charAt(0).toUpperCase() + s.slice(1));
       if (!el) return;
       el.className = 'section-tab' + (section === s ? ` active-${s}` : '');
@@ -82,15 +82,17 @@ const App = (() => {
     // Update sidebar data-section
     document.getElementById('sidebar').dataset.section = sec;
 
-    // Mostra il pannello giusto
-    switchMainPanel(sec);
+    // Sezione fornita da un'estensione: la gestisce la shell
+    const isExt = window.Shell?.has(sec);
+    switchMainPanel(isExt ? null : sec);
+    window.Shell?.activate(isExt ? sec : null);
+    if (isExt) return;
 
     // Render section (aggiorna sidebar + eventuale refresh leggero)
     if (sec === 'tunnel')        renderTunnelSection();
     else if (sec === 'npm')      renderNpmSection();
     else if (sec === 'pm2')      renderPm2Section();
     else if (sec === 'git')      renderGitSection();
-    else if (sec === 'swagger')  renderSwaggerSection();
     else if (sec === 'settings') renderSettingsSection();
   }
 
@@ -1205,108 +1207,6 @@ const App = (() => {
     });
   }
 
-  // ================================================================
-  // SWAGGER SECTION
-  // ================================================================
-  let swaggerLoaded = false;
-
-  // Librerie da CDN con hash SRI (verificati contro api.cdnjs.com). Se si cambia
-  // versione vanno aggiornati anche gli hash.
-  const CDNJS = 'https://cdnjs.cloudflare.com/ajax/libs';
-  const CDN = {
-    swaggerCss:    { url: `${CDNJS}/swagger-ui/5.17.14/swagger-ui.min.css`,                   sri: 'sha512-+9UD8YSD9GF7FzOH38L9S6y56aYNx3R4dYbOCgvTJ2ZHpJScsahNdaMQJU/8osUiz9FPu0YZ8wdKf4evUbsGSg==' },
-    swaggerBundle: { url: `${CDNJS}/swagger-ui/5.17.14/swagger-ui-bundle.min.js`,             sri: 'sha512-7ihPQv5ibiTr0DW6onbl2MIKegdT6vjpPySyIb4Ftp68kER6Z7Yiub0tFoMmCHzZfQE9+M+KSjQndv6NhYxDgg==' },
-    swaggerPreset: { url: `${CDNJS}/swagger-ui/5.17.14/swagger-ui-standalone-preset.min.js`,  sri: 'sha512-UrYi+60Ci3WWWcoDXbMmzpoi1xpERbwjPGij6wTh8fXl81qNdioNNHExr9ttnBebKF0ZbVnPlTPlw+zECUK1Xw==' },
-    jsYaml:        { url: `${CDNJS}/js-yaml/4.1.0/js-yaml.min.js`,                            sri: 'sha512-CSBhVREyzHAjAFfBlIBakjoRUKp5h7VSweP0InR/pAJyptH7peuhCsqAI/snV+TwZmXZqoUklpXp6R6wMnYf5Q==' },
-  };
-
-  function renderSwaggerSection() {
-    const sidebar = document.getElementById('sidebarContent');
-    sidebar.innerHTML = `
-      <div style="padding:16px 12px">
-        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">Swagger Preview</div>
-        <label class="btn btn-primary" style="width:100%;justify-content:center;cursor:pointer;display:flex;align-items:center;gap:8px">
-          <span>📂 Carica file YAML</span>
-          <input type="file" id="swaggerFileInput" accept=".yml,.yaml,.json" style="display:none" onchange="App.loadSwaggerFile(this)">
-        </label>
-        <div id="swaggerFileInfo" style="margin-top:10px;font-size:12px;color:var(--muted);text-align:center"></div>
-      </div>`;
-
-    const main = document.getElementById('mainArea-swagger');
-    if (!swaggerLoaded) {
-      main.innerHTML = `
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--muted)">
-          <div style="font-size:48px">📄</div>
-          <div style="font-size:14px">Carica un file <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;color:var(--c-swagger)">.yml</code> o <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;color:var(--c-swagger)">.yaml</code> per vedere la preview Swagger</div>
-        </div>`;
-    }
-  }
-
-  async function loadSwaggerFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-
-    document.getElementById('swaggerFileInfo').textContent = `📄 ${file.name}`;
-
-    const text = await file.text();
-    const main = document.getElementById('mainArea-swagger');
-
-    // Carica Swagger UI via CDN se non già presente (SRI: il browser rifiuta file alterati)
-    if (!document.getElementById('swagger-ui-css')) {
-      const link = document.createElement('link');
-      link.id = 'swagger-ui-css';
-      link.rel = 'stylesheet';
-      link.href = CDN.swaggerCss.url;
-      link.integrity = CDN.swaggerCss.sri;
-      link.crossOrigin = 'anonymous';
-      document.head.appendChild(link);
-    }
-
-    main.innerHTML = `<div id="swagger-ui" style="flex:1;overflow:auto;background:#fff"></div>`;
-
-    const loadScript = ({ url: src, sri }) => new Promise((resolve, reject) => {
-      if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-      const s = document.createElement('script');
-      s.src = src;
-      s.integrity = sri;
-      s.crossOrigin = 'anonymous';
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-
-    try {
-      await loadScript(CDN.swaggerBundle);
-      await loadScript(CDN.swaggerPreset);
-
-      // Parse YAML — usiamo js-yaml se disponibile, altrimenti proviamo JSON
-      let spec;
-      try {
-        if (!window.jsyaml) {
-          await loadScript(CDN.jsYaml);
-        }
-        spec = window.jsyaml.load(text);
-      } catch {
-        spec = JSON.parse(text);
-      }
-
-      window.SwaggerUIBundle({
-        spec,
-        domNode: document.getElementById('swagger-ui'),
-        presets: [window.SwaggerUIBundle.presets.apis, window.SwaggerUIStandalonePreset],
-        layout: 'StandaloneLayout',
-        deepLinking: true,
-        defaultModelsExpandDepth: 1,
-        defaultModelExpandDepth: 1,
-        validatorUrl: null, // niente badge da validator.swagger.io (bloccato dalla CSP)
-      });
-
-      swaggerLoaded = true;
-    } catch(e) {
-      main.innerHTML = `<div style="padding:24px;color:var(--danger)">Errore nel caricamento: ${esc(e.message)}</div>`;
-    }
-  }
-
   // SETTINGS SECTION
   // ================================================================
   function renderSettingsSection() {
@@ -1949,6 +1849,7 @@ const App = (() => {
   async function init() {
     // Set initial section tab styling
     document.getElementById('navTunnel').className = 'section-tab active-tunnel';
+    await window.Shell?.init();
     await loadSystem();
     await refresh();
     goSection('tunnel');
@@ -1988,7 +1889,8 @@ const App = (() => {
     gitAction, gitCommit, gitCommitPush,
     openMergeModal, gitMerge,
     showCommitDetail,
-    // Swagger
-    loadSwaggerFile,
   };
 })();
+
+// La shell delle estensioni naviga tramite App.goSection
+window.App = App;

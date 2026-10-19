@@ -134,30 +134,46 @@ Writes are atomic (temporary file + rename). Export and import work per section:
 
 ## Frontend module
 
-The shell loads an extension's panel the first time it is opened: it injects `view.html` into the panel, adds `style.css`, then `import()`s `view.js` and calls `mount`.
+The shell loads an extension's panel the first time it is opened: it injects `view.html` into the panel, adds `style.css`, then `import()`s `view.js` and calls `mount`. The panel keeps its DOM when the user switches to another section.
 
 ```js
 // extensions/git/view.js
 export default {
-  mount(ctx) {
-    // ctx.root: panel element (already contains view.html)
-    // ctx.sidebar: sidebar element for this extension
-    // ctx.api.get/post/put/del('/repos') → /api/ext/git/repos
-    // ctx.ui: toast, modal, confirm, output (SSE panel), esc, js
-    // ctx.bus: emit/on for events between extensions
-    ctx.expose({ selectRepo });   // window.Ext.git.selectRepo(...) for inline handlers
+  async mount(ctx) {
+    ctx.sidebar.innerHTML = '…';               // the sidebar belongs to the extension while it is active
+    const repos = await ctx.api.get('/repos'); // → GET /api/ext/git/repos
+    ctx.expose({ selectRepo });                // window.Ext.git.selectRepo(...) for inline handlers
+    ctx.setBadge(repos.length);
   },
-  show(ctx) {},                   // panel became visible (start polling)
-  hide(ctx) {},                   // panel hidden (stop polling)
-  badge(ctx) { return 3; },       // optional: number/text on the tab
+  show(ctx) {},   // panel became visible (start polling)
+  hide(ctx) {},   // panel hidden (stop polling)
 };
 ```
 
-Inline handlers in generated HTML call the functions exposed with `ctx.expose`, always escaping arguments with `ctx.ui.js(value)`:
+`ctx` contains:
+
+| Member | Purpose |
+|---|---|
+| `ctx.code`, `ctx.meta` | Extension code and the data from `/api/core/extensions` |
+| `ctx.root` | Panel element (already contains `view.html`) |
+| `ctx.sidebar` | Sidebar element shown while the extension is active |
+| `ctx.api.get/post/put/del(path)` | JSON calls to `/api/ext/<code><path>`; errors become `Error` with the server message |
+| `ctx.api.stream(path, body, onEvent)` | POST answered with SSE (e.g. git actions); resolves with the `exit` code |
+| `ctx.api.events(path, onEvent)` | GET answered with SSE (`EventSource`); returns a function that closes it |
+| `ctx.core` | Same client for `/api/core` |
+| `ctx.ui` | `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `output` (the panel's output drawer: `open(title)`, `append(text, 'out'|'err'|'sys')`, `clear()`, `close()`) |
+| `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions |
+| `ctx.expose(obj)` | Publishes functions as `window.Ext.<code>` for inline handlers |
+| `ctx.setBadge(value)` | Number or text on the tab (`null` hides it) |
+| `ctx.open(code)`, `ctx.isActive()` | Navigate to another section; whether this panel is visible |
+
+Inline handlers in generated HTML call the functions exposed with `ctx.expose`, always escaping arguments with `ctx.ui.js(value)`; text goes through `ctx.ui.esc(value)`:
 
 ```js
-`<button onclick="Ext.git.selectRepo(${ctx.ui.js(repo.id)})">…</button>`
+`<button onclick="Ext.git.selectRepo(${ctx.ui.js(repo.id)})">${ctx.ui.esc(repo.label)}</button>`
 ```
+
+Inside the panel the CSS variable `--ext-color` holds the extension colour, and the `hidden` attribute always hides an element.
 
 ## Core API
 

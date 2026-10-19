@@ -1,0 +1,15 @@
+{
+  "name": "Swagger",
+  "code": "swagger",
+  "version": "1.0.0",
+  "description": "Anteprima di specifiche OpenAPI (.yaml/.json) caricate dal disco",
+  "color": "#e8b84b",
+  "icon": "📄",
+  "position": "tab",
+  "order": 40,
+  "frontend": {
+    "html": "view.html",
+    "js": "view.js",
+    "css": "style.css"
+  }
+}

@@ -19,7 +19,6 @@
 
     /* Section accent colors */
     --c-git:    #3fb950;
-    --c-swagger:#e8b84b;
 
     /* Active section accent (overridden per section) */
     --accent: #388bfd;
@@ -47,14 +46,12 @@
   .section-tab.active-npm   {color:var(--c-npm);   border-bottom-color:var(--c-npm);   background:color-mix(in srgb,var(--c-npm)    6%,transparent)}
   .section-tab.active-pm2   {color:var(--c-pm2);   border-bottom-color:var(--c-pm2);   background:color-mix(in srgb,var(--c-pm2)    6%,transparent)}
   .section-tab.active-git     {color:var(--c-git);     border-bottom-color:var(--c-git);     background:color-mix(in srgb,var(--c-git)     6%,transparent)}
-  .section-tab.active-swagger {color:var(--c-swagger); border-bottom-color:var(--c-swagger); background:color-mix(in srgb,var(--c-swagger) 6%,transparent)}
   .section-tab-icon{font-size:16px}
   .section-tab-badge{font-family:var(--font);font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);transition:background .15s,color .15s,border-color .15s}
   .section-tab.active-tunnel .section-tab-badge{color:var(--c-tunnel);border-color:color-mix(in srgb,var(--c-tunnel) 60%,transparent);background:color-mix(in srgb,var(--c-tunnel) 12%,transparent)}
   .section-tab.active-npm    .section-tab-badge{color:var(--c-npm);   border-color:color-mix(in srgb,var(--c-npm)    60%,transparent);background:color-mix(in srgb,var(--c-npm)    12%,transparent)}
   .section-tab.active-pm2    .section-tab-badge{color:var(--c-pm2);   border-color:color-mix(in srgb,var(--c-pm2)    60%,transparent);background:color-mix(in srgb,var(--c-pm2)    12%,transparent)}
   .section-tab.active-git     .section-tab-badge{color:var(--c-git);     border-color:color-mix(in srgb,var(--c-git)     60%,transparent);background:color-mix(in srgb,var(--c-git)     12%,transparent)}
-  .section-tab.active-swagger .section-tab-badge{color:var(--c-swagger); border-color:color-mix(in srgb,var(--c-swagger) 60%,transparent);background:color-mix(in srgb,var(--c-swagger) 12%,transparent)}
 
   /* ================================================================
      PILLS (header)
@@ -416,3 +413,15 @@
   ::-webkit-scrollbar-track{background:transparent}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
   ::-webkit-scrollbar-thumb:hover{background:#484f58}
+
+  /* ---- Estensioni (core/shell.js) ---- */
+  .section-tab.active-ext{color:var(--tab-color);border-bottom-color:var(--tab-color);background:color-mix(in srgb,var(--tab-color) 6%,transparent)}
+  .section-tab.active-ext .section-tab-badge{color:var(--tab-color);border-color:color-mix(in srgb,var(--tab-color) 60%,transparent);background:color-mix(in srgb,var(--tab-color) 12%,transparent)}
+  .ext-header-btn{gap:6px}
+  .ext-header-btn.active-ext{color:var(--tab-color);border-color:var(--tab-color)}
+  .ext-warning{color:var(--warning);font-size:11px;cursor:help}
+  .ext-root{flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column;position:relative}
+  .ext-sidebar{display:flex;flex-direction:column;min-height:0;flex:1}
+  .ext-sidebar .sidebar-head-title{color:var(--ext-color)}
+  .ext-sidebar .sb-item.active{border-left-color:var(--ext-color);color:var(--ext-color)}
+  .ext-root [hidden],.ext-sidebar [hidden]{display:none !important}

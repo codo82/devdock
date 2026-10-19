@@ -42,10 +42,6 @@
       <span>Git</span>
       <span class="section-tab-badge" id="badgeGit">0</span>
     </button>
-    <button class="section-tab" id="navSwagger" onclick="App.goSection('swagger')">
-      <span class="section-tab-icon">📄</span>
-      <span>Swagger</span>
-    </button>
   </nav>
 </header>
 
@@ -102,7 +98,6 @@
         <div class="sse-body" id="sseBody-git"></div>
       </div>
     </div>
-    <div id="mainArea-swagger" class="main-panel" style="display:none;flex-direction:column"></div>
     <div id="mainArea-settings" class="main-panel" style="display:none"></div>
   </main>
 </div>
@@ -136,6 +131,7 @@
 <div class="toasts" id="toasts"></div>
 
 <script src="core/ui.js"></script>
+<script src="core/shell.js"></script>
 <script src="core/app.js"></script>
 </body>
 </html>
