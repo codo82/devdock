@@ -61,10 +61,10 @@ Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco
   - [x] Riprodotto con un repo di test con `origin` a due pushurl (due bare repo locali): un push singolo di 3 commit funziona; due push concorrenti danno esattamente l'errore del backlog (5 prove su 5)
   - [x] Causa: `gitAction()` nel frontend eseguiva l'azione due volte (una `fetch` POST con output ignorato e poi `gitRunSse()`), quindi due `git push` si contendevano l'aggiornamento di `refs/heads/<branch>` sui remote. I due pushurl non c'entrano
   - [x] Fix: richiesta unica dalla UI e lock per repo nel server (una seconda azione concorrente riceve 409)
-- [ ] **M2.5** *(Backlog #2)* **Lane del grafo con nome generico `branch-N`**
-  - [ ] Ereditarietà del nome: la lane prende il nome dal primo commit con ref che la genera e lo porta con sé scendendo sui parent, invece di cercare in `allRefs` l'hash pendente in `finalLanes`
-  - [ ] Fallback: nome ricavato dal subject dei merge (`Merge branch 'x'`) per branch già eliminati
-  - [ ] `branch-N` solo come ultima risorsa
+- [x] **M2.5** *(Backlog #2)* **Lane del grafo con nome generico `branch-N`**
+  - [x] Ereditarietà del nome: la lane prende il nome dal primo commit con ref che la genera e lo porta con sé scendendo sui parent, invece di cercare in `allRefs` l'hash pendente in `finalLanes`
+  - [x] Fallback: nome ricavato dal subject dei merge (`Merge branch 'x'`) per branch già eliminati
+  - [x] `branch-N` solo come ultima risorsa
 
 ## M3 — Refactor backend + repo per Claude Code
 

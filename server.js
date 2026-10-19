@@ -1072,18 +1072,19 @@ app.get('/api/git/repos/:id/log', async (req, res) => {
   try {
     // Mappa hash-completo → [branch names] da tutti i ref (locali + remoti)
     const refMap = {}; // hash → [refname, ...]
+    const localBranches = []; // per distinguere "feature/x" locale da "origin/x" remoto
     try {
       const refOut = await gitExec(repo.path, [
         'for-each-ref',
-        '--format=%(objectname) %(refname:short)',
+        '--format=%(objectname) %(refname) %(refname:short)',
         'refs/heads/', 'refs/remotes/',
       ], { allowFail: true });
       refOut.out.split('\n').filter(Boolean).forEach(line => {
-        const sp = line.indexOf(' ');
-        const hash = line.slice(0, sp).trim();
-        const name = line.slice(sp + 1).trim();
+        const [hash, full, name] = line.split(' ');
+        if (!hash || !name || full.endsWith('/HEAD')) return; // origin/HEAD è solo un alias
         if (!refMap[hash]) refMap[hash] = [];
         refMap[hash].push(name);
+        if (full.startsWith('refs/heads/')) localBranches.push(name);
       });
     } catch (_) {}
 
@@ -1112,7 +1113,7 @@ app.get('/api/git/repos/:id/log', async (req, res) => {
     });
     // Passa anche la mappa completa refs: il frontend la usa per nominare le lane
     // anche quando il tip del branch non è nei commit visualizzati
-    res.json({ entries, refs: refMap });
+    res.json({ entries, refs: refMap, localBranches });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -1344,6 +1344,29 @@ const App = (() => {
   // Palette colori per le lane del grafico (ciclica)
   const GIT_GRAPH_COLORS = ['#3fb950','#388bfd','#bc8cff','#f0883e','#58a6ff','#56d364','#d2a8ff','#ffa657','#79c0ff','#f778ba'];
 
+  // Nome di branch più adatto tra i ref di un commit: niente tag né HEAD nudo,
+  // "HEAD -> x" diventa x, a parità preferisce il nome più corto (main su origin/main)
+  function bestBranchRef(refs) {
+    const names = (refs || [])
+      .filter(r => !r.startsWith('tag: ') && r !== 'HEAD' && !r.endsWith('/HEAD'))
+      .map(r => r.replace(/^HEAD -> /, ''));
+    return names.sort((a, b) => a.length - b.length)[0] || null;
+  }
+
+  // Branch unito da un merge commit, ricavato dal messaggio standard di git/GitHub/GitLab
+  function mergedBranchName(subject) {
+    const patterns = [
+      /^Merge (?:remote-tracking )?branch '([^']+)'/,          // git merge
+      /^Merge pull request #\d+ from [^/\s]+\/(\S+)/,          // GitHub
+      /^Merge branch "([^"]+)"/,
+    ];
+    for (const re of patterns) {
+      const m = re.exec(subject || '');
+      if (m) return m[1];
+    }
+    return null;
+  }
+
   function buildGitGraph(entries, allRefs = {}) {
     // Algoritmo: assegna ogni commit a una lane, mantieni le lane aperte tra una riga e l'altra
     // lanes[i] = hash del commit che "occupa" quella lane (il prossimo commit atteso)
@@ -1360,6 +1383,7 @@ const App = (() => {
     };
 
     let lanes = []; // array di hash: lanes[i] = hash del commit che "deve arrivare" in quella lane
+    let laneNames = []; // laneNames[i] = nome del branch che la lane sta percorrendo (o null)
 
     const result = entries.map((e, ri) => {
       const { hash, parents } = e;
@@ -1371,7 +1395,11 @@ const App = (() => {
         myLane = lanes.indexOf(null); // ricicla slot libero
         if (myLane === -1) myLane = lanes.length;
         lanes[myLane] = hash;
+        laneNames[myLane] = null; // slot riciclato: il nome del branch precedente non vale più
       }
+
+      // Nome del branch: un ref sul commit vince, altrimenti si eredita dalla lane
+      const name = bestBranchRef(e.refs) || laneNames[myLane] || null;
 
       // Assegna colore alla lane se non ce l'ha
       assignColor(myLane);
@@ -1382,32 +1410,40 @@ const App = (() => {
 
       // Aggiorna le lane: sostituisci hash con i parent
       lanes[myLane] = parents[0] || null; // primo parent continua la lane
+      laneNames[myLane] = parents[0] ? name : null; // ...e il nome del branch
       // parent aggiuntivi (merge): cerca slot libero o aggiunge
+      const mergedName = mergedBranchName(e.subject);
       for (let p = 1; p < parents.length; p++) {
         const parentHash = parents[p];
         // Se il parent è già in una lane, non duplicare
         if (!lanes.includes(parentHash)) {
-          const free = lanes.indexOf(null);
+          let free = lanes.indexOf(null);
           if (free !== -1) {
             lanes[free] = parentHash;
             // Slot riciclato: forza nuovo colore (il vecchio branch è finito)
             laneColor[free] = colorCounter % GIT_GRAPH_COLORS.length;
             colorCounter++;
           } else {
-            assignColor(lanes.length);
+            free = lanes.length;
+            assignColor(free);
             lanes.push(parentHash);
           }
+          // Il ramo unito prende il nome dal messaggio di merge ("Merge branch 'x'")
+          laneNames[free] = p === 1 ? mergedName : null;
+        } else if (p === 1 && mergedName) {
+          const idx = lanes.indexOf(parentHash);
+          if (!laneNames[idx]) laneNames[idx] = mergedName;
         }
       }
 
       // Rimuovi null in coda (compatta)
-      while (lanes.length && lanes[lanes.length - 1] === null) lanes.pop();
+      while (lanes.length && lanes[lanes.length - 1] === null) { lanes.pop(); laneNames.pop(); }
 
       // Snapshot DOPO la modifica (lane in uscita)
       const lanesOut = [...lanes];
       const maxLanes = Math.max(lanesIn.length, lanesOut.length, myLane + 1);
 
-      return { e, myLane, myColor, lanesIn, lanesOut, maxLanes };
+      return { e, myLane, myColor, lanesIn, lanesOut, maxLanes, name };
     });
     // finalLanes: stato delle lane DOPO l'ultimo commit visualizzato
     // lanes[i] contiene l'hash del parent atteso fuori dal range
@@ -1475,41 +1511,22 @@ const App = (() => {
       return `<svg width="${SVG_W}" height="${H}" viewBox="0 0 ${SVG_W} ${H}" style="display:block;flex-shrink:0">${parts.join('')}</svg>`;
     });
 
-    // Costruisci legenda: una voce per lane, con il nome del branch (esclusi i tag)
-    // Per lane senza refs espliciti nel range, usa il colore con label "branch-N"
-    const laneInfo = {}; // laneIdx → { color, label, priority }
-    result.forEach(({ e, myLane, myColor }) => {
-      if (!laneInfo[myLane]) laneInfo[myLane] = { color: myColor, label: null, priority: 99, laneIdx: myLane };
-      if (!e.refs || !e.refs.length) return;
-      e.refs.forEach(ref => {
-        if (ref.startsWith('tag: ')) return; // escludi tag
-        let prio = ref.includes('/') ? 2 : 1;
-        if (ref.startsWith('HEAD')) prio = 0;
-        if (prio < laneInfo[myLane].priority) {
-          laneInfo[myLane].priority = prio;
-          laneInfo[myLane].label = ref;
-        }
-      });
-    });
-    // Lane senza refs nel range → usa finalLanes: l'hash che la lane stava "aspettando"
-    // alla fine del range è il parent fuori-range, cercalo in allRefs
-    Object.values(laneInfo).forEach(info => {
-      if (info.label !== null) return;
-      const pendingHash = finalLanes[info.laneIdx]; // hash del parent atteso fuori range
-      if (pendingHash && allRefs[pendingHash]) {
-        const names = allRefs[pendingHash];
-        const local = names.find(n => !n.includes('/'));
-        info.label = local || names[0];
-      } else {
-        info.label = `branch-${info.laneIdx + 1}`;
+    // Legenda: una voce per branch (nome + colore della lane in cui compare per primo).
+    // Righe ancora senza nome: si prova con l'hash che la lane aspetta a fine range
+    // (allRefs mappa i tip dei branch), poi "branch-N" come ultima risorsa.
+    const legend = [];
+    const seen = new Set();
+    result.forEach(({ myLane, myColor, name }) => {
+      let label = name;
+      if (!label) {
+        const pending = finalLanes[myLane];
+        const names = pending && allRefs[pending];
+        label = names ? bestBranchRef(names) : `branch-${myLane + 1}`;
       }
+      if (seen.has(label)) return;
+      seen.add(label);
+      legend.push({ color: myColor, label, laneIdx: myLane });
     });
-    const legend = Object.values(laneInfo)
-      .sort((a, b) => a.laneIdx - b.laneIdx)
-      .reduce((acc, item) => {
-        if (!acc.some(x => x.label === item.label)) acc.push(item);
-        return acc;
-      }, []);
 
     return { svgs, svgW: SVG_W, legend };
   }
@@ -1526,6 +1543,9 @@ const App = (() => {
       if (!entries.length) { wrap.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:12px">Nessun commit</div>`; return; }
 
       const { svgs, svgW, legend } = buildGitGraph(entries, allRefs);
+      const localBranches = new Set(data.localBranches || []);
+      // Remoti = ref esistenti non locali (un branch unito e cancellato non è né l'uno né l'altro)
+      const remoteBranches = new Set(Object.values(allRefs).flat().filter(n => !localBranches.has(n)));
 
       // Render legenda rami
       const legendEl = document.getElementById('gitLogLegend');
@@ -1534,8 +1554,8 @@ const App = (() => {
           legendEl.innerHTML = legend.map(({ color, label }) => {
             const isAnon = /^branch-\d+$/.test(label);
             let icon = isAnon ? '●' : '⎇';
-            if (!isAnon && label.startsWith('HEAD')) icon = '◉';
-            else if (!isAnon && label.includes('/')) icon = '↗';
+            if (!isAnon && label === gitStatus?.branch) icon = '◉';           // branch corrente
+            else if (!isAnon && remoteBranches.has(label)) icon = '↗';        // remoto
             const opacity = isAnon ? '0.55' : '1';
             return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:10px;font-size:10px;font-family:var(--font);background:color-mix(in srgb,${color} 12%,transparent);border:1px solid color-mix(in srgb,${color} 40%,transparent);color:${color};white-space:nowrap;opacity:${opacity}">${icon} ${esc(label)}</span>`;
           }).join('');
