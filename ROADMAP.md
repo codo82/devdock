@@ -1,123 +1,123 @@
 # DevDock — Roadmap
 
-Milestone ordinate per dipendenza: prima si mette in sicurezza e si stabilizza il codice esistente, poi si rifattorizza, e solo dopo si costruiscono le feature nuove sulla struttura nuova (così non vanno riscritte due volte).
+Milestones are ordered by dependency: first secure and stabilise the existing code, then refactor, and only then build new features on the new structure (so they don't have to be rewritten twice).
 
-Legenda stato: `[ ]` da fare · `[~]` in corso · `[x]` fatto
+Status legend: `[ ]` to do · `[~]` in progress · `[x]` done
 
-**Regola per ogni milestone:** una milestone è chiusa solo quando `CHANGELOG.md` (sezione `[Unreleased]` → versione) e, se cambia qualcosa per l'utente, `README.md` sono aggiornati. Versionamento SemVer: ogni milestone chiusa = nuova versione minor (M0 → 1.1.0, M1 → 1.2.0, …).
-
----
-
-## Documentazione (trasversale)
-
-- [x] **D.1** `README.md` iniziale (in M0): cos'è DevDock, requisiti (Node ≥ 18, `ssh`; opzionali `autossh`, `pm2`), installazione e avvio (`npm install`, `npm start`, `npm run dev`), panoramica delle sezioni, formato di `config.json`, nota sulla sicurezza (solo uso locale)
-- [x] **D.2** `CHANGELOG.md` iniziale in formato [Keep a Changelog](https://keepachangelog.com/it/1.1.0/): voce `1.0.0` per lo stato attuale + sezione `[Unreleased]`
-- [x] **D.3** Allineare `package.json` (nome `devdock` al posto di `port-forward-manager`, versione, descrizione) e il log di avvio del server
-- [ ] **D.4** A fine di ogni milestone: aggiornare CHANGELOG (Added/Changed/Fixed/Security/Removed) e README dove serve
-- [ ] **D.5** In M3: sezione README "Struttura del progetto"; in M5: sezione "Scrivere un'estensione"; in M6: sezione "DB client"
+**Rule for every milestone:** a milestone is closed only when `CHANGELOG.md` (`[Unreleased]` section → version) and, if anything changes for the user, `README.md` are updated. Versioning is SemVer: every closed milestone is a new minor version (M0 → 1.1.0, M1 → 1.2.0, …).
 
 ---
 
-## M0 — Pulizia e portabilità macOS ✅ (1.1.0)
+## Documentation (cross-cutting)
 
-Obiettivo: il progetto parte pulito su macOS (e resta compatibile con Linux/WSL).
+- [x] **D.1** Initial `README.md` (in M0): what DevDock is, requirements (Node ≥ 18, `ssh`; optional `autossh`, `pm2`), install and start (`npm install`, `npm start`, `npm run dev`), overview of the sections, `config.json` format, security note (local use only)
+- [x] **D.2** Initial `CHANGELOG.md` in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format: `1.0.0` entry for the existing state + `[Unreleased]` section
+- [x] **D.3** Align `package.json` (name `devdock` instead of `port-forward-manager`, version, description) and the server startup log
+- [ ] **D.4** At the end of every milestone: update the CHANGELOG (Added/Changed/Fixed/Security/Removed) and the README where needed
+- [ ] **D.5** In M3: README section "Project structure"; in M5: section "Writing an extension"; in M6: section "DB client"
+- [x] **D.6** Roadmap, README and CHANGELOG in English
 
-- [x] **M0.1** Rimuovere `public/index.html:Zone.Identifier` (artefatto Windows) dal repo
-- [x] **M0.2** Rimuovere `index.html` in root (duplicato identico di `public/index.html`, non servito)
-- [x] **M0.3** Rilevamento porte cross-platform: `getPortsForPgid` usa `ss` (assente su macOS) → usare `lsof -nP -iTCP -sTCP:LISTEN -a -p <pids>` con fallback a `ss` su Linux
-- [x] **M0.4** `EMPTY_CONFIG` deve includere `projects: []`
-- [x] **M0.5** Gestire anche `SIGTERM` (oltre a `SIGINT`) per chiudere tunnel e processi figli
-- [x] **M0.6** Sezioni NPM/PM2 degradano con messaggio chiaro se `pm2`/`autossh` non sono installati (oggi lista vuota silenziosa)
-- [ ] **M0.7** Aggiornare i path dei progetti in `config.json` locale (oggi `/home/...`) — *azione manuale dell'utente da UI*
+---
 
-## M1 — Sicurezza ✅ (1.2.0)
+## M0 — Cleanup and macOS portability ✅ (1.1.0)
 
-Contesto: l'app gira solo su `127.0.0.1`, ma il browser è un vettore di attacco: qualunque pagina web aperta può inviare richieste a `localhost:3500` e l'API esegue `ssh`, `npm`, `git`, `pm2`.
+Goal: the project starts cleanly on macOS (and stays compatible with Linux/WSL).
 
-**Protezione dell'API**
-- [x] **M1.1** Middleware anti-CSRF: rifiutare richieste con `Origin`/`Referer` diverso da `http://127.0.0.1:3500` / `http://localhost:3500`
-- [x] **M1.2** Controllo header `Host` (difesa da DNS rebinding): accettare solo `127.0.0.1:PORT` e `localhost:PORT`
-- [x] **M1.3** Richiedere `Content-Type: application/json` sulle richieste che modificano stato (blocca i form cross-site "semplici")
-- [x] **M1.4** Rimuovere `/api/git/repos/:id/debug-push` (espone env e `git config`, possibili token) oppure abilitarlo solo con `DEVDOCK_DEBUG=1`
-- [x] **M1.5** Header di sicurezza base: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`
+- [x] **M0.1** Remove `public/index.html:Zone.Identifier` (Windows artefact) from the repo
+- [x] **M0.2** Remove the root `index.html` (identical copy of `public/index.html`, never served)
+- [x] **M0.3** Cross-platform port detection: `getPortsForPgid` used `ss` (missing on macOS) → `lsof -nP -iTCP -sTCP:LISTEN -a -p <pids>` with `ss` fallback on Linux
+- [x] **M0.4** `EMPTY_CONFIG` must include `projects: []`
+- [x] **M0.5** Handle `SIGTERM` (and `SIGHUP`) as well as `SIGINT` to stop tunnels and child processes
+- [x] **M0.6** NPM/PM2 sections degrade with a clear message when `pm2`/`autossh` are not installed (previously a silent empty list)
 
-**Validazione input (argument injection)**
-- [x] **M1.6** Git: validare `branch`/`remote` (no `-` iniziale, `git check-ref-format`), aggiungere `--` prima dei path; validare `:hash` con regex esadecimale
-- [x] **M1.7** Git commit: i file passati devono essere tra quelli restituiti da `git status`
-- [x] **M1.8** NPM: `script` ammesso solo se presente in `package.json` (o `install`); nuova azione esplicita `update <pkg>` con nome pacchetto validato
-- [x] **M1.9** PM2: whitelist di `action` (`start|stop|restart|delete`), `target` validato
-- [x] **M1.10** Config: validare schema in `PUT /api/config`, import e CRUD (key alfanumeriche, porte intere 1–65535, `remote` nel formato `host:port`, `alias` senza spazi/`-` iniziale, `color` esadecimale)
+## M1 — Security ✅ (1.2.0)
+
+Context: the app only listens on `127.0.0.1`, but the browser is an attack vector: any open web page can send requests to `localhost:3500`, and the API runs `ssh`, `npm`, `git`, `pm2`.
+
+**API protection**
+- [x] **M1.1** Anti-CSRF middleware: reject requests whose `Origin`/`Referer` is not `http://127.0.0.1:3500` / `http://localhost:3500`
+- [x] **M1.2** `Host` header check (DNS rebinding defence): accept only `127.0.0.1:PORT` and `localhost:PORT`
+- [x] **M1.3** Require `Content-Type: application/json` on state-changing requests (blocks "simple" cross-site forms)
+- [x] **M1.4** Remove `/api/git/repos/:id/debug-push` (exposed env and `git config`, possibly tokens)
+- [x] **M1.5** Basic security headers: CSP, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`
+
+**Input validation (argument injection)**
+- [x] **M1.6** Git: validate `branch`/`remote` (no leading `-`, `git check-ref-format`), add `--` before paths; validate `:hash` as hexadecimal
+- [x] **M1.7** Git commit: the files passed must be among those returned by `git status`
+- [x] **M1.8** NPM: `script` allowed only if defined in `package.json` (or `install`); new explicit `update <pkg>` action with a validated package name
+- [x] **M1.9** PM2: `action` whitelist (`start|stop|restart|delete`), validated `target`
+- [x] **M1.10** Config: schema validation on `PUT /api/config`, import and CRUD (alphanumeric keys, integer ports 1–65535, `remote` as `host:port`, `alias` without spaces/leading `-`, hex `color`)
 
 **Frontend (XSS)**
-- [x] **M1.11** Escapare tutti i valori interpolati in HTML/attributi (`color` negli `style`, key negli `onclick`, `e.message` in Swagger e nei toast HTML) — preferire `data-*` + event delegation agli `onclick` inline con stringhe
-- [x] **M1.12** Swagger UI e js-yaml da CDN con attributo `integrity` (SRI) + `crossorigin`
+- [x] **M1.11** Escape every value interpolated into HTML/attributes (`color` in `style`, keys in `onclick`, `e.message` in Swagger)
+- [x] **M1.12** Swagger UI and js-yaml from CDN with `integrity` (SRI) + `crossorigin`
 
-## M2 — Bug noti
+## M2 — Known bugs ✅ (1.3.0)
 
-- [x] **M2.1** `npmUpdate` invia `script: "update <pkg>"` → il server esegue `npm run "update <pkg>"`. Correggere con un endpoint/azione dedicata (dipende da M1.8)
-- [x] **M2.2** Import `merge`: includere anche i `projects` (oggi ignorati)
-- [x] **M2.3** Commenti incoerenti col codice (polling SSE "300ms" vs 100ms reali) e altre piccole incongruenze
-- [x] **M2.4** *(Backlog #1)* **Git push con due pushurl e più commit** — `cannot lock ref: is at X but expected Y`
-  - [x] Riprodotto con un repo di test con `origin` a due pushurl (due bare repo locali): un push singolo di 3 commit funziona; due push concorrenti danno esattamente l'errore del backlog (5 prove su 5)
-  - [x] Causa: `gitAction()` nel frontend eseguiva l'azione due volte (una `fetch` POST con output ignorato e poi `gitRunSse()`), quindi due `git push` si contendevano l'aggiornamento di `refs/heads/<branch>` sui remote. I due pushurl non c'entrano
-  - [x] Fix: richiesta unica dalla UI e lock per repo nel server (una seconda azione concorrente riceve 409)
-- [x] **M2.5** *(Backlog #2)* **Lane del grafo con nome generico `branch-N`**
-  - [x] Ereditarietà del nome: la lane prende il nome dal primo commit con ref che la genera e lo porta con sé scendendo sui parent, invece di cercare in `allRefs` l'hash pendente in `finalLanes`
-  - [x] Fallback: nome ricavato dal subject dei merge (`Merge branch 'x'`) per branch già eliminati
-  - [x] `branch-N` solo come ultima risorsa
+- [x] **M2.1** `npmUpdate` sent `script: "update <pkg>"` → the server ran `npm run "update <pkg>"`. Fixed with a dedicated endpoint (depends on M1.8)
+- [x] **M2.2** Import `merge`: include `projects` too (previously ignored)
+- [x] **M2.3** Comments out of sync with the code (SSE polling "300ms" vs the real 100ms) and other small inconsistencies
+- [x] **M2.4** *(Backlog #1)* **Git push with two pushurls and several commits** — `cannot lock ref: is at X but expected Y`
+  - [x] Reproduced with a test repo whose `origin` has two pushurls (two local bare repos): a single push of 3 commits works; two concurrent pushes give exactly the backlog error (5 runs out of 5)
+  - [x] Cause: `gitAction()` in the frontend ran the action twice (a `fetch` POST with ignored output, then `gitRunSse()`), so two `git push` processes raced to update `refs/heads/<branch>` on the remotes. The two pushurls were not involved
+  - [x] Fix: single request from the UI and a per-repo lock on the server (a second concurrent action gets 409)
+- [x] **M2.5** *(Backlog #2)* **Graph lanes with generic `branch-N` names**
+  - [x] Name inheritance: a lane takes its name from the first commit with a ref that creates it and carries it down to the parents, instead of looking up the pending hash of `finalLanes` in `allRefs`
+  - [x] Fallback: name taken from the merge subject (`Merge branch 'x'`, `Merge pull request #n from user/x`) for branches already deleted
+  - [x] `branch-N` only as a last resort
 
-## M3 — Refactor backend + repo per Claude Code
+## M3 — Backend refactor + repo for Claude Code
 
-Prerequisito per le feature: struttura modulare su cui poggiare branch switch, DB client ed estensioni.
+Prerequisite for the features: a modular structure for branch switching, the DB client and extensions.
 
-- [ ] **M3.1** *(Backlog #6 — split route)* Separare `server.js`:
+- [ ] **M3.1** *(Backlog #6 — route split)* Split `server.js`:
   ```
-  server.js            entry point: express, middleware sicurezza, mount route, listen
+  server.js            entry point: express, security middleware, route mounting, listen
   lib/config.js        load/save/validate config
-  lib/validate.js      validatori condivisi (branch, key, porte, ...)
-  lib/process.js       spawn tracciati, kill process group, rilevamento porte
-  lib/sse.js           helper SSE
-  routes/config.js     config, gruppi, server, import/export
-  routes/tunnels.js    port forward SSH  (nel backlog: ports.js)
-  routes/projects.js   progetti NPM + processi  (nel backlog: repos.js)
+  lib/validate.js      shared validators (branch, key, ports, ...)
+  lib/process.js       tracked spawns, process group kill, port detection
+  lib/sse.js           SSE helpers
+  routes/config.js     config, groups, servers, import/export
+  routes/tunnels.js    SSH port forwarding  (backlog: ports.js)
+  routes/projects.js   NPM projects + processes  (backlog: repos.js)
   routes/pm2.js
   routes/git.js
   ```
-- [ ] **M3.2** Unificare la logica duplicata di push (`push`, fallback fetch-error, `pull_push`) in un'unica pipeline di comandi SSE sequenziali
-- [ ] **M3.3** Test minimi (`node:test`) sui validatori e sulle route critiche (git action, npm start), con repo git temporanei
-- [ ] **M3.4** *(Backlog #5)* `CLAUDE.md`: scopo, struttura, avvio locale, convenzioni (italiano nei messaggi UI, vanilla JS, niente build step), riferimento a questa roadmap
-- [ ] **M3.5** Pubblicazione su GitHub: verificare che nessun segreto sia nel repo (config è in `.gitignore`), README e CHANGELOG aggiornati, `config.example.json`
+- [ ] **M3.2** Merge the duplicated push logic (`push`, fetch-error fallback, `pull_push`) into a single pipeline of sequential SSE commands
+- [ ] **M3.3** Minimal tests (`node:test`) for the validators and the critical routes (git action, npm start), using temporary git repos
+- [ ] **M3.4** *(Backlog #5)* `CLAUDE.md`: purpose, structure, local start, conventions (Italian UI messages, vanilla JS, no build step), reference to this roadmap
+- [x] **M3.5** Publish on GitHub
 
 ## M4 — Branch switch / create *(Backlog #3)*
 
-- [ ] **M4.1** Backend: `GET /api/git/repos/:id/branches` (locali + remoti, branch corrente)
-- [ ] **M4.2** Backend: azione `checkout` (esiste già, da validare con M1.6) e nuova `checkout_new` (`git checkout -b <nome>`, opzionale punto di partenza)
-- [ ] **M4.3** Pre-check: se ci sono modifiche non committate → risposta strutturata che la UI usa per proporre "Stash e cambia" / "Annulla"
-- [ ] **M4.4** Pre-check: branch già esistente → errore chiaro; branch remoto non ancora locale → `checkout --track`
-- [ ] **M4.5** UI: dropdown sul badge del branch con ricerca, sezione locali/remoti, voce "Nuovo branch…"; output SSE durante l'operazione, refresh di status e log al termine
+- [ ] **M4.1** Backend: `GET /api/git/repos/:id/branches` (local + remote, current branch)
+- [ ] **M4.2** Backend: `checkout` action (already exists, validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
+- [ ] **M4.3** Pre-check: uncommitted changes → structured response the UI uses to offer "Stash and switch" / "Cancel"
+- [ ] **M4.4** Pre-check: branch already exists → clear error; remote branch not yet local → `checkout --track`
+- [ ] **M4.5** UI: dropdown on the branch badge with search, local/remote sections, "New branch…" entry; SSE output during the operation, status and log refresh at the end
 
-## M5 — Architettura a estensioni *(Backlog #6 bis)*
+## M5 — Extension architecture *(Backlog #6 bis)*
 
-- [ ] **M5.1** Design: formato `setting.json` (name, code, color, position, dependencies) + entry point frontend (`index.js` che esporta `mount(container, api)`) e backend opzionale (`routes.js` montato su `/api/ext/<code>`)
-- [ ] **M5.2** npm workspaces: `"workspaces": ["extensions/*"]` nel `package.json` radice, un solo `node_modules`
-- [ ] **M5.3** Loader backend: scoperta di `extensions/*/setting.json` all'avvio, validazione, risoluzione dipendenze (`required: true` → non parte; `false` → parte con warning), ordine topologico, errore sui cicli
-- [ ] **M5.4** Loader frontend: `GET /api/extensions` → tab o elementi header in base a `position`, icona di avviso per dipendenze opzionali mancanti, caricamento lazy (`import()` al primo accesso)
-- [ ] **M5.5** Shell comune per le estensioni: API helper, toast, modal, pannello SSE (estratti da `index.html`)
-- [ ] **M5.6** Migrare le sezioni esistenti a estensioni una alla volta: Swagger (la più isolata) → PM2 → Git → NPM → Tunnel
-- [ ] **M5.7** Aggiornare `CLAUDE.md` con il sistema a estensioni
+- [ ] **M5.1** Design: `setting.json` format (name, code, color, position, dependencies) + frontend entry point (`index.js` exporting `mount(container, api)`) and optional backend (`routes.js` mounted on `/api/ext/<code>`)
+- [ ] **M5.2** npm workspaces: `"workspaces": ["extensions/*"]` in the root `package.json`, a single `node_modules`
+- [ ] **M5.3** Backend loader: discover `extensions/*/setting.json` at startup, validation, dependency resolution (`required: true` → doesn't start; `false` → starts with a warning), topological order, error on cycles
+- [ ] **M5.4** Frontend loader: `GET /api/extensions` → tabs or header items depending on `position`, warning icon for missing optional dependencies, lazy loading (`import()` on first access)
+- [ ] **M5.5** Shared shell for extensions: API helper, toast, modal, SSE panel (extracted from `index.html`)
+- [ ] **M5.6** Migrate the existing sections to extensions one at a time: Swagger (the most isolated) → PM2 → Git → NPM → Tunnel
+- [ ] **M5.7** Update `CLAUDE.md` with the extension system
 
-## M6 — DB client integrato *(Backlog #4)* — prima estensione nuova
+## M6 — Integrated DB client *(Backlog #4)* — first new extension
 
-Realizzato come estensione: fa da banco di prova per M5.
+Built as an extension: it is the test bed for M5.
 
-- [ ] **M6.1** Estensione `db-client` con dipendenza `mysql2` nel suo `package.json`
-- [ ] **M6.2** Connessioni configurabili per progetto (host, porta, db, user, pass). Opzione "usa tunnel" che collega una connessione a un server SSH già configurato
-- [ ] **M6.2b** **Vault con master password** (funziona uguale su macOS e Windows, solo `node:crypto`, nessuna dipendenza nativa):
-  - Primo accesso alla sezione Database: la UI chiede di **creare** la master password (con conferma, minimo 10 caratteri). Il server genera un `salt` casuale e ricava la chiave con **scrypt** (`crypto.scrypt`, chiave da 32 byte)
-  - Ogni password DB viene cifrata con **AES-256-GCM** usando un IV casuale per ogni valore, e salvata come `{ iv, tag, data }` in base64
-  - **Chiavi separate**: dalla chiave scrypt (`masterKey`) si ricavano con **HKDF-SHA256** due sottochiavi indipendenti: `encKey` (info `"devdock-vault-enc"`) per cifrare e `verifyKey` (info `"devdock-vault-verify"`) per la verifica. Così il valore salvato non rivela niente su `encKey`
-  - **Verificatore hashato** in `config.json`: `verifier = SHA-256(verifyKey)`, salvato alla creazione. Allo sblocco si ricalcola e si confronta con `crypto.timingSafeEqual`: se non coincide, la password è sbagliata
-  - Struttura in `config.json`:
+- [ ] **M6.1** `db-client` extension with the `mysql2` dependency in its own `package.json`
+- [ ] **M6.2** Connections configurable per project (host, port, db, user, password). "Use tunnel" option linking a connection to an already configured SSH server
+- [ ] **M6.2b** **Vault with master password** (works the same on macOS and Windows, `node:crypto` only, no native dependencies):
+  - First access to the Database section: the UI asks to **create** the master password (with confirmation, at least 10 characters). The server generates a random `salt` and derives the key with **scrypt** (`crypto.scrypt`, 32-byte key)
+  - Each DB password is encrypted with **AES-256-GCM** using a random IV per value, and stored as `{ iv, tag, data }` in base64
+  - **Separate keys**: from the scrypt key (`masterKey`) **HKDF-SHA256** derives two independent subkeys: `encKey` (info `"devdock-vault-enc"`) for encryption and `verifyKey` (info `"devdock-vault-verify"`) for verification, so the stored value reveals nothing about `encKey`
+  - **Hashed verifier** in `config.json`: `verifier = SHA-256(verifyKey)`, stored at creation. On unlock it is recomputed and compared with `crypto.timingSafeEqual`: if it doesn't match, the password is wrong
+  - Structure in `config.json`:
     ```json
     "vault": {
       "version": 1,
@@ -125,31 +125,31 @@ Realizzato come estensione: fa da banco di prova per M5.
       "verifier": "<base64 sha256(verifyKey)>"
     }
     ```
-    e in ogni connessione `"password": { "iv": "…", "tag": "…", "data": "…" }`
-  - **Sessione**: la chiave ricavata resta **solo nella memoria del server**. Scade al riavvio del server, con il pulsante "Blocca" o dopo un timeout di inattività configurabile (default 30 min). Al primo accesso di ogni sessione la UI chiede di sbloccare
-  - Le password in chiaro **non tornano mai al frontend**: il server le decifra solo al momento di aprire la connessione. In modifica il campo password resta vuoto ("lascia vuoto per non cambiare")
-  - Endpoint: `GET /api/ext/db-client/vault` (stato: `uninitialized | locked | unlocked`), `POST …/vault/init`, `POST …/vault/unlock`, `POST …/vault/lock`, `POST …/vault/change` (ri-cifra tutte le password con la chiave nuova, scrivendo il file in modo atomico)
-  - Protezione da brute force: ritardo crescente dopo ogni tentativo di sblocco fallito
-  - "Ho dimenticato la password": reset del vault, che cancella le password salvate (le connessioni restano, ma senza password) dopo una conferma esplicita
-  - Export/import: le password viaggiano cifrate insieme al blocco `vault`, quindi si possono portare su un'altra macchina con la stessa master password. Se si importa in una config che ha già un vault con un salt diverso, bisogna chiedere la master password della config importata e ri-cifrare
-  - Test: init/unlock/password sbagliata/change/lock, verifica che `config.json` non contenga mai password in chiaro
-- [ ] **M6.3** Backend: pool per connessione, `POST /api/ext/db-client/query` con timeout, limite righe, flag di sola lettura opzionale
-- [ ] **M6.4** UI: editor con syntax highlight minimale (CodeMirror 6 da CDN con SRI, o highlight custom leggero), esecuzione con Ctrl/Cmd+Enter
-- [ ] **M6.5** Risultati in tabella (colonne ordinabili, NULL evidenziati, conteggio righe/tempo), messaggi per query senza risultato
-- [ ] **M6.6** Storico query per sessione (in memoria / `sessionStorage`)
-- [ ] **M6.7** Dopo: PostgreSQL, visto che compare tra i tipi di server configurati
+    and in each connection `"password": { "iv": "…", "tag": "…", "data": "…" }`
+  - **Session**: the derived key lives **only in the server's memory**. It expires when the server restarts, with the "Lock" button or after a configurable inactivity timeout (default 30 min). On the first access of each session the UI asks to unlock
+  - Plaintext passwords **never go back to the frontend**: the server decrypts them only when opening the connection. When editing, the password field stays empty ("leave empty to keep it")
+  - Endpoints: `GET /api/ext/db-client/vault` (state: `uninitialized | locked | unlocked`), `POST …/vault/init`, `POST …/vault/unlock`, `POST …/vault/lock`, `POST …/vault/change` (re-encrypts every password with the new key, writing the file atomically)
+  - Brute-force protection: increasing delay after each failed unlock attempt
+  - "I forgot the password": vault reset, which deletes the stored passwords (connections stay, without password) after explicit confirmation
+  - Export/import: passwords travel encrypted together with the `vault` block, so they can be moved to another machine with the same master password. When importing into a config that already has a vault with a different salt, ask for the imported config's master password and re-encrypt
+  - Tests: init/unlock/wrong password/change/lock, check that `config.json` never contains plaintext passwords
+- [ ] **M6.3** Backend: pool per connection, `POST /api/ext/db-client/query` with timeout, row limit, optional read-only flag
+- [ ] **M6.4** UI: editor with minimal syntax highlighting (CodeMirror 6 from CDN with SRI, or a light custom highlighter), run with Ctrl/Cmd+Enter
+- [ ] **M6.5** Results in a table (sortable columns, highlighted NULLs, row count/time), messages for queries without a result set
+- [ ] **M6.6** Per-session query history (in memory / `sessionStorage`)
+- [ ] **M6.7** Later: PostgreSQL, since it appears among the configured server types
 
 ---
 
-## Ordine consigliato e dimensioni
+## Suggested order and size
 
-| Milestone | Dimensione | Note |
+| Milestone | Size | Notes |
 |---|---|---|
-| D Documentazione | S | README e CHANGELOG creati in M0, poi aggiornati a ogni milestone |
-| M0 Pulizia/macOS | S | sblocca l'uso quotidiano su Mac |
-| M1 Sicurezza | M | fatta sul `server.js` attuale, poi spostata nei moduli in M3 |
-| M2 Bug | M | M2.4 richiede di riprodurre il caso prima di correggerlo |
-| M3 Refactor + CLAUDE.md | M | nessun cambiamento funzionale, coperto da test |
-| M4 Branch switch | S | primo valore visibile sulla nuova struttura |
-| M5 Estensioni | L | la più grossa; migrazione incrementale |
-| M6 DB client | L | prima estensione nativa; include il vault con master password |
+| D Documentation | S | README and CHANGELOG created in M0, then updated at every milestone |
+| M0 Cleanup/macOS | S | unblocks daily use on the Mac |
+| M1 Security | M | done on the current `server.js`, moved into modules in M3 |
+| M2 Bugs | M | M2.4 required reproducing the case before fixing it |
+| M3 Refactor + CLAUDE.md | M | no functional change, covered by tests |
+| M4 Branch switch | S | first visible value on the new structure |
+| M5 Extensions | L | the largest; incremental migration |
+| M6 DB client | L | first native extension; includes the master password vault |
