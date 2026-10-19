@@ -47,6 +47,12 @@ before(async () => {
         unused: () => {},
       },
       services: { greet: name => 'ciao ' + name },
+      config: {
+        alpha: {
+          empty: {},
+          validate(value) { if (value.bad) throw new Error('valore non ammesso'); },
+        },
+      },
     });`,
     'view.js': 'export default { mount() {} };',
     'view.html': '<div>alpha</div>',
@@ -160,4 +166,23 @@ test('solo i file frontend dichiarati vengono serviti', async () => {
 
 test('avviso per handler senza route', () => {
   assert.match(srv.output(), /\[ext:alpha\] handler senza route: unused/);
+});
+
+test('sezioni di config: proprietario, validazione e import dell\'estensione', async () => {
+  const sections = (await srv.request('GET', '/api/core/config/sections')).json;
+  assert.deepEqual(sections.find(x => x.key === 'alpha'), { key: 'alpha', owner: 'alpha' });
+  assert.deepEqual(sections.find(x => x.key === 'servers'), { key: 'servers', owner: 'core' });
+
+  const bad = await srv.request('POST', '/api/ext/alpha/config', { body: { bad: true } });
+  assert.equal(bad.status, 400);
+  assert.match(bad.json.error, /alpha: valore non ammesso/);
+
+  await srv.request('POST', '/api/ext/alpha/config', { body: { a: 1 } });
+  const r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'merge', config: { alpha: { a: 9, b: 2 }, sconosciuta: 1 } } });
+  assert.deepEqual(r.json.sections, ['alpha']);
+  assert.deepEqual(r.json.ignored, ['sconosciuta']);
+  assert.deepEqual(srv.readConfig().alpha, { a: 1, b: 2 }); // merge: chiavi nuove aggiunte, esistenti invariate
+
+  const exp = await srv.request('GET', '/api/core/config/export?name=alpha&sections=alpha');
+  assert.deepEqual(exp.json, { alpha: { a: 1, b: 2 } });
 });

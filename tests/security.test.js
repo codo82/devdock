@@ -10,12 +10,12 @@ after(() => srv.stop());
 const probe = (headers = {}) => srv.request('POST', '/api/config/groups', { body: {}, headers });
 
 test('Host non locale → 421 (DNS rebinding)', async () => {
-  const r = await srv.request('GET', '/api/system', { headers: { Host: `evil.example:${srv.port}` } });
+  const r = await srv.request('GET', '/api/core/system', { headers: { Host: `evil.example:${srv.port}` } });
   assert.equal(r.status, 421);
 });
 
 test('Host locale accettato anche come localhost', async () => {
-  const r = await srv.request('GET', '/api/system', { headers: { Host: `localhost:${srv.port}` } });
+  const r = await srv.request('GET', '/api/core/system', { headers: { Host: `localhost:${srv.port}` } });
   assert.equal(r.status, 200);
 });
 
@@ -61,7 +61,7 @@ test('endpoint debug-push rimosso', async () => {
 });
 
 test('/api/system descrive piattaforma e strumenti', async () => {
-  const r = await srv.request('GET', '/api/system');
+  const r = await srv.request('GET', '/api/core/system');
   assert.equal(r.json.platform, process.platform);
   assert.equal(typeof r.json.tools.git, 'boolean');
 });

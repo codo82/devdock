@@ -93,6 +93,9 @@ module.exports = function createGit(ctx) {
       },
     },
     services: { repos },                     // available to extensions that depend on this one
+    config: {                                // rules for the config keys declared in setting.json
+      git: { empty: {}, validate(value, cfg) { /* throw to reject */ } },
+    },
     shutdown() { /* stop timers, child processes */ },
   };
 
@@ -115,7 +118,19 @@ Backends are created in dependency order (topological sort; cycles are an error)
 
 ## Configuration
 
-`config.json` keeps its top-level keys (`groups`, `servers`, `projects`, …). Each key belongs to exactly one extension, declared in `setting.json → config`. An extension can export `validateConfig(values)` from its backend: the core calls it before every save and on import, and rejects the write with a 400 when it throws. Export and import work per extension section.
+`config.json` keeps its top-level keys (`groups`, `servers`, `projects`, …). Each key is a **section** with exactly one owner: the core or the extension that lists it in `setting.json → config`. Two extensions cannot claim the same key; an extension can take over a core section (it then inherits the core rules unless it provides its own).
+
+The backend describes each of its sections in `instance.config[key]`:
+
+| Field | Purpose |
+|---|---|
+| `empty` | Default value, written when the key is missing |
+| `validate(value, cfg)` | Called before every save and import; throwing rejects the write with a 400 |
+| `normalize(value)` | Applied to imported data (e.g. keep only known fields) |
+| `idField` | For lists: field that identifies an item in a *merge* import |
+| `merge(current, incoming)` | Custom *merge* import (default: lists add the items with a new `idField`, objects add the new keys) |
+
+Writes are atomic (temporary file + rename). Export and import work per section: `GET /api/core/config/export?sections=a,b`, `POST /api/core/config/import` with `{ config, mode: "replace" | "merge" }`; sections missing from the file are left untouched, unknown keys are ignored and reported.
 
 ## Frontend module
 
@@ -150,7 +165,9 @@ Inline handlers in generated HTML call the functions exposed with `ctx.expose`, 
 |---|---|
 | `GET /api/core/extensions` | Loaded extensions with manifest data, state (`ok`, `warning`, `disabled`) and missing dependencies |
 | `GET /api/core/system` | Platform and external tools |
-| `GET /api/core/config/export`, `POST /api/core/config/import` | Export/import, per extension section |
+| `GET /api/core/config/sections` | Config sections and their owner |
+| `GET /api/core/config/export?sections=a,b&name=x` | Export (download), optionally limited to some sections |
+| `POST /api/core/config/import` | Import `{ config, mode }`, per section |
 
 ## Dependencies and npm workspaces
 

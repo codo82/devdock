@@ -1,7 +1,6 @@
 const express = require('express');
 const {
-  EMPTY_CONFIG, ConfigError, loadConfig, saveConfig,
-  pick, normalizeServer, GROUP_FIELDS, PROJECT_FIELDS, getServerMap,
+  ConfigError, loadConfig, saveConfig, listSections, pick, normalizeServer, getServerMap,
 } = require('../lib/config');
 
 const router = express.Router();
@@ -10,72 +9,11 @@ router.get('/config', (req, res) => {
   res.json(loadConfig());
 });
 
-// Export config come download (type: 'all'|'tunnels'|'git')
-router.get('/config/export', (req, res) => {
-  const cfg = loadConfig();
-  const type = req.query.type || 'all';
-  let data;
-  let suffix;
-  if (type === 'tunnels') {
-    data = { groups: cfg.groups || [], servers: cfg.servers || [] };
-    suffix = 'tunnels';
-  } else if (type === 'git') {
-    data = { projects: cfg.projects || [] };
-    suffix = 'git';
-  } else {
-    data = cfg;
-    suffix = 'all';
-  }
-  res.setHeader('Content-Disposition', `attachment; filename="devdock-config-${suffix}-${new Date().toISOString().slice(0,10)}.json"`);
-  res.setHeader('Content-Type', 'application/json');
-  res.send(JSON.stringify(data, null, 2));
-});
-
-// Import config. Si importano solo le sezioni presenti nel file (groups, servers,
-// projects), così anche gli export parziali "Solo tunnel" e "Solo Git/NPM":
-//   replace → le sezioni presenti sostituiscono quelle attuali, le altre restano
-//   merge   → si aggiungono gli elementi nuovi (stessa chiave = si tiene l'attuale);
-//             per i gruppi già esistenti si uniscono le liste di server
-router.post('/config/import', (req, res) => {
-  try {
-    const { config: incoming, mode } = req.body;
-    if (mode !== 'replace' && mode !== 'merge') return res.status(400).json({ error: 'Modalità di import non valida' });
-    if (!incoming || typeof incoming !== 'object') return res.status(400).json({ error: 'Config non valida' });
-    const sections = Object.keys(EMPTY_CONFIG).filter(k => Array.isArray(incoming[k]));
-    if (!sections.length) return res.status(400).json({ error: 'Il file non contiene gruppi, server o progetti' });
-
-    const normalize = {
-      servers:  list => list.map(normalizeServer),
-      groups:   list => list.map(g => pick(g || {}, GROUP_FIELDS)),
-      projects: list => list.map(p => pick(p || {}, PROJECT_FIELDS)),
-    };
-    const idField = { servers: 'key', groups: 'key', projects: 'id' };
-
-    const cfg = loadConfig();
-    for (const sec of sections) {
-      const items = normalize[sec](incoming[sec]);
-      if (mode === 'replace') { cfg[sec] = items; continue; }
-      const id = idField[sec];
-      for (const item of items) {
-        const cur = cfg[sec].find(x => x[id] === item[id]);
-        if (!cur) cfg[sec].push(item);
-        else if (sec === 'groups' && Array.isArray(item.servers)) {
-          item.servers.forEach(sk => { if (!cur.servers.includes(sk)) cur.servers.push(sk); });
-        }
-      }
-    }
-    saveConfig(cfg); // valida il risultato (es. gruppi che puntano a server mancanti)
-    res.json({ ok: true, sections });
-  } catch (e) {
-    res.status(e instanceof ConfigError ? 400 : 500).json({ error: e.message });
-  }
-});
-
 // Salva intera config
 router.put('/config', (req, res) => {
   try {
     // Le chiavi non gestite qui (es. dati di estensioni) restano quelle attuali
-    const cfg = { ...loadConfig(), ...pick(req.body || {}, Object.keys(EMPTY_CONFIG)) };
+    const cfg = { ...loadConfig(), ...pick(req.body || {}, listSections().map(s => s.key)) };
     saveConfig(cfg);
     res.json({ ok: true });
   } catch (e) {

@@ -29,7 +29,6 @@ app.use('/api/ext', extensions.router);
 app.use('/ext', frontendRouter(extensions));
 app.use('/api/core', require('./routes/core')(extensions));
 
-app.use('/api', require('./routes/system'));
 app.use('/api', require('./routes/config'));
 app.use('/api', require('./routes/tunnels'));
 app.use('/api', require('./routes/projects'));

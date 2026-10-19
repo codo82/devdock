@@ -53,11 +53,11 @@ test('import: sezioni parziali, merge e replace', async () => {
     groups: [{ key: 'g2', label: 'G2', color: '#112233', servers: ['s1'] }],
     servers: [server({ key: 's1', port: 1001 })],
   };
-  let r = await srv.request('POST', '/api/config/import', { body: { mode: 'merge', config: tunnels } });
+  let r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'merge', config: tunnels } });
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.sections, ['groups', 'servers']);
 
-  r = await srv.request('POST', '/api/config/import', {
+  r = await srv.request('POST', '/api/core/config/import', {
     body: { mode: 'merge', config: { projects: [{ id: 'q', label: 'Q', path: '/tmp/q' }] } },
   });
   assert.equal(r.status, 200);
@@ -66,7 +66,7 @@ test('import: sezioni parziali, merge e replace', async () => {
   assert.deepEqual(cfg.projects.map(p => p.id), ['q']);
 
   // replace di una sola sezione non tocca le altre
-  r = await srv.request('POST', '/api/config/import', {
+  r = await srv.request('POST', '/api/core/config/import', {
     body: { mode: 'replace', config: { projects: [{ id: 'z', label: 'Z', path: '/tmp/z' }] } },
   });
   assert.equal(r.status, 200);
@@ -75,21 +75,22 @@ test('import: sezioni parziali, merge e replace', async () => {
   assert.ok(cfg.servers.some(s => s.key === 's1'));
 
   // risultato non valido (gruppi verso server rimossi) → 400 e config invariata
-  r = await srv.request('POST', '/api/config/import', { body: { mode: 'replace', config: { servers: [] } } });
+  r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'replace', config: { servers: [] } } });
   assert.equal(r.status, 400);
   assert.ok(srv.readConfig().servers.some(s => s.key === 's1'));
 
-  r = await srv.request('POST', '/api/config/import', { body: { mode: 'merge', config: { foo: 1 } } });
+  r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'merge', config: { foo: 1 } } });
   assert.equal(r.status, 400);
-  r = await srv.request('POST', '/api/config/import', { body: { mode: 'boh', config: tunnels } });
+  assert.match(r.json.error, /sezioni riconosciute/);
+  r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'boh', config: tunnels } });
   assert.equal(r.status, 400);
 });
 
 test('export per tipo', async () => {
-  const git = await srv.request('GET', '/api/config/export?type=git');
+  const git = await srv.request('GET', '/api/core/config/export?name=git&sections=projects');
   assert.deepEqual(Object.keys(git.json), ['projects']);
   assert.match(git.headers['content-disposition'], /devdock-config-git-/);
-  const tunnels = await srv.request('GET', '/api/config/export?type=tunnels');
+  const tunnels = await srv.request('GET', '/api/core/config/export?name=tunnels&sections=groups,servers');
   assert.deepEqual(Object.keys(tunnels.json).sort(), ['groups', 'servers']);
 });
 

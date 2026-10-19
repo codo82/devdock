@@ -74,7 +74,7 @@ Every feature becomes an extension with its own manifest, backend routes, HTML, 
 - [x] **M3.2** Integration tests (`node:test`) that start DevDock as a separate process with temporary config and git repos, used as a safety net for the migration
 - [x] **M3.3** Extension contract: `setting.json` with routes declared in the manifest, backend module `(ctx) → { handlers, services, validateConfig, shutdown }`, frontend module `{ mount, show, hide, badge }`, core API under `/api/core`, extension API under `/api/ext/<code>`
 - [x] **M3.4** Backend loader: discover `extensions/*/setting.json`, validate manifests, resolve dependencies (`required: true` → not loaded; `false` → loaded with a warning), topological order, error on cycles, mount declared routes, check handlers, shutdown in reverse order
-- [ ] **M3.5** Config ownership: each `config.json` key belongs to one extension; per-extension validation, export and import
+- [x] **M3.5** Config ownership: each `config.json` key belongs to one extension; per-extension validation, export and import
 - [ ] **M3.6** Frontend shell: header, section bar, sidebar, panels, modal, toast, SSE output panel, lazy loading of `view.html`/`view.js`/`style.css`, warning icon for missing optional dependencies, header-position extensions
 - [ ] **M3.7** Migrate the sections one at a time, keeping the tests green: Swagger → PM2 → Tunnels (with their settings) → npm → Git
 - [ ] **M3.8** Unify the push logic (`push`, fetch-error fallback, `pull_push`) in the Git extension into a single pipeline of sequential SSE commands

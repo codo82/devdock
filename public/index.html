@@ -1094,7 +1094,7 @@ const App = (() => {
 
   // ---- STRUMENTI ESTERNI ----
   async function loadSystem(refresh = false) {
-    try { system = await api.get('/api/system' + (refresh ? '?refresh=1' : '')); } catch {}
+    try { system = await api.get('/api/core/system' + (refresh ? '?refresh=1' : '')); } catch {}
   }
 
   async function recheckTools() {
@@ -2202,7 +2202,8 @@ const App = (() => {
     const sel = document.querySelector('input[name="exportType"]:checked');
     const type = sel ? sel.value : 'all';
     closeModal();
-    window.location.href = `/api/config/export?type=${type}`;
+    const sections = { all: '', tunnels: 'groups,servers', git: 'projects' }[type] ?? '';
+    window.location.href = `/api/core/config/export?name=${type}${sections ? `&sections=${sections}` : ''}`;
   }
   async function importConfig(input) {
     const file = input.files[0]; if (!file) return;
@@ -2213,7 +2214,7 @@ const App = (() => {
         .filter(([k]) => Array.isArray(cfg[k])).map(([k, label]) => `${cfg[k].length} ${label}`);
       if (!found.length) { toast('File non valido: nessun gruppo, server o progetto', 'error'); return; }
       const mode = confirm(`Trovati ${found.join(', ')}.\n\nOK = Sostituisci queste sezioni\nAnnulla = Merge (aggiungi i nuovi)\n\nLe sezioni assenti dal file non vengono toccate.`) ? 'replace' : 'merge';
-      await api.post('/api/config/import', { config: cfg, mode });
+      await api.post('/api/core/config/import', { config: cfg, mode });
       toast(`Import completato (${mode==='replace'?'sostituzione':'merge'})`, 'success');
       await refresh();
       if (section === 'settings') renderSettingsSection();
