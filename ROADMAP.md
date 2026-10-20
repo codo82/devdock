@@ -130,6 +130,8 @@ Built as an extension on the M3 architecture.
 - [ ] **M4.3** Pre-check: uncommitted changes → structured response the UI uses to offer "Stash and switch" / "Cancel"
 - [ ] **M4.4** Pre-check: branch already exists → clear error; remote branch not yet local → `checkout --track`
 - [ ] **M4.5** UI: dropdown on the branch badge with search, local/remote sections, "New branch…" entry; SSE output during the operation, status and log refresh at the end
+- [ ] **M4.6** Merge of branches: pick the branch to merge from the list (local and remote), preview of the incoming commits (`HEAD..branch`) and changed files, options `--no-ff` / `--squash`; on conflicts the UI lists the conflicted files and offers "Annulla merge" (`git merge --abort`) or, once resolved, "Concludi merge" (commit); SSE output, status and log refresh
+- [ ] **M4.7** Delete local branches (not the current one): merged ones directly, unmerged ones only after an explicit confirmation (`-D`)
 
 ---
 
