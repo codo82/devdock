@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-20 — M4 Branches
+
+### Added
+- Git: `GET /repos/:id/branches` with local branches (upstream, ahead/behind, gone, merged, last commit) and remote branches.
+- Git: branch panel opened from the branch badge, with search, local/remote sections and "New branch…".
+- Git: branch switch with pre-checks — uncommitted changes return a structured `dirty` response and the UI offers "stash and switch"; remote branches without a local copy are checked out with `--track`; existing or missing branches give clear errors.
+- Git: `checkout_new` action (new branch from an optional start point).
+- Git: merge of a chosen branch with a preview (`GET /repos/:id/merge-preview`: incoming commits, changed files, fast-forward/up to date), modes fast-forward, `--no-ff` and `--squash`; on conflicts a banner lists the files and offers "Annulla merge" (`merge --abort`) and "Concludi merge" (refused while conflict markers remain).
+- Git: deletion of local branches (not the current one); unmerged branches only after an explicit confirmation (`-D`).
+- Core: API errors in the browser carry `status` and the response `data`.
+
+### Fixed
+- Git graph legend no longer shows internal refs such as `refs/stash`.
+
 ## [1.5.0] - 2026-10-20 — M5 Database client
 
 ### Added

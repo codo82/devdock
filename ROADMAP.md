@@ -123,7 +123,7 @@ Built as an extension on the M3 architecture.
 - [x] **M5.11b** Multiple row deletion: checkbox per row and "select all" for the page; a single `DELETE … WHERE pk IN (…) LIMIT n` (max 1000 rows) shown in the confirmation dialog
 - [x] **M5.12** Data export as CSV, SQL (`INSERT` statements, optional `CREATE TABLE`) and JSON: of a whole table, of the rows matching the current search/filters of the data browser, and of the result of a custom `SELECT` from the editor. Generated and streamed by the server (no full result in memory); only read statements can be exported
 
-## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
+## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension ✅ (1.6.0)
 
 - [x] **M4.1** Backend: `GET /api/ext/git/repos/:id/branches` (local + remote, current branch)
 - [x] **M4.2** Backend: `checkout` action (validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
