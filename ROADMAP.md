@@ -151,7 +151,7 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 - [x] **M6.1** Language identifiers are BCP 47 tags (`it`, `en`, `pt-BR`, `zh-Hant`…). The available languages are discovered from the core catalogs (`public/core/i18n/*.json`) and exposed by `GET /api/core/i18n/languages` (tag, native name, direction, completeness %)
 - [x] **M6.2** Each catalog carries its own metadata in a `_meta` block: `{ "name": "English", "nativeName": "English", "dir": "ltr" }`, so the selector and the layout need no per-language code
 - [x] **M6.3** Active language resolved in this order: user choice (stored in `localStorage`) → `navigator.languages` → source language. Matching with progressive truncation (`pt-BR` → `pt`), so a regional variant falls back to the base language. Selector in the header listing the available languages by native name; changing language re-renders the shell and the mounted extensions without a page reload. `<html lang>` and `<html dir>` updated accordingly
-- [ ] **M6.4** Right-to-left support: shell and extension CSS use logical properties (`margin-inline-start`, `inset-inline-end`, `text-align: start`) instead of left/right, so an RTL language (Arabic, Hebrew) works without dedicated stylesheets
+- [x] **M6.4** Right-to-left support: shell and extension CSS use logical properties (`margin-inline-start`, `inset-inline-end`, `text-align: start`) instead of left/right, so an RTL language (Arabic, Hebrew) works without dedicated stylesheets
 
 **Core**
 - [x] **M6.5** Catalogs as flat JSON files `public/core/i18n/<lang>.json` with dotted keys (`core.toast.saved`), served as static files and loaded lazily (only the chain needed: active language → its base language → source language)

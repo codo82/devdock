@@ -14,12 +14,12 @@
 
 /* connessioni */
 .db-group{padding:10px 14px 4px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.db-conn-name{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db-conn-name{flex:1;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db-workspace{flex:1;display:flex;flex-direction:column;min-height:0}
 .db-conn-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border)}
 .db-conn-header h3{font-size:14px;color:var(--ext-color)}
 .db-conn-meta{font-size:11px;color:var(--muted);font-family:var(--font)}
-.db-conn-actions{margin-left:auto;display:flex;gap:6px}
+.db-conn-actions{margin-inline-start:auto;display:flex;gap:6px}
 .db-badge{font-size:10px;padding:1px 7px;border-radius:10px;border:1px solid var(--border);color:var(--muted)}
 .db-badge-warn{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 40%,transparent)}
 .db-danger{color:var(--danger)}
@@ -29,7 +29,7 @@
 .db-toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .db-select{width:auto;min-width:140px;padding:4px 8px;font-size:12px}
 .db-limit{min-width:0}
-.db-hint{font-size:11px;color:var(--muted);margin-left:auto}
+.db-hint{font-size:11px;color:var(--muted);margin-inline-start:auto}
 .db-editor{position:relative;height:180px;min-height:80px;resize:vertical;overflow:hidden;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg)}
 .db-editor-highlight,.db-editor-input{position:absolute;inset:0;margin:0;padding:10px 14px;font-family:var(--font);font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-wrap:break-word;tab-size:2;border:none}
 .db-editor-highlight{overflow:hidden;pointer-events:none;color:var(--text)}
@@ -54,17 +54,17 @@
 
 /* albero dello schema */
 .db-tree{padding:4px 0;font-size:12.5px}
-.db-row{display:flex;align-items:center;gap:5px;padding:3px 10px 3px 8px;cursor:pointer;white-space:nowrap;border-left:2px solid transparent;user-select:none}
+.db-row{display:flex;align-items:center;gap:5px;padding-block:3px;padding-inline:8px 10px;cursor:pointer;white-space:nowrap;border-inline-start:2px solid transparent;user-select:none}
 .db-row:hover{background:var(--surface2)}
-.db-row.active{border-left-color:var(--ext-color);color:var(--ext-color);background:color-mix(in srgb,var(--ext-color) 8%,transparent)}
+.db-row.active{border-inline-start-color:var(--ext-color);color:var(--ext-color);background:color-mix(in srgb,var(--ext-color) 8%,transparent)}
 .db-caret{width:14px;flex-shrink:0;text-align:center;color:var(--muted);font-size:10px}
 .db-caret[data-act]:hover{color:var(--text)}
 .db-row-icon{width:16px;flex-shrink:0;text-align:center;font-size:11px}
 .db-row-label{overflow:hidden;text-overflow:ellipsis}
-.db-children{padding-left:12px}
+.db-children{padding-inline-start:12px}
 .db-row-col{cursor:default;color:var(--muted);font-size:11.5px}
-.db-col-type{margin-left:auto;padding-left:8px;font-family:var(--font);font-size:10px;color:var(--muted)}
-.db-tree-msg{padding:3px 10px 3px 36px;font-size:11px;color:var(--muted)}
+.db-col-type{margin-inline-start:auto;padding-inline-start:8px;font-family:var(--font);font-size:10px;color:var(--muted)}
+.db-tree-msg{padding-block:3px;padding-inline:36px 10px;font-size:11px;color:var(--muted)}
 .db-tree-err{color:var(--danger);white-space:normal}
 .db-active{font-size:12px;font-family:var(--font);padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db-structure h4{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:12px 16px 6px}
@@ -73,10 +73,10 @@
 .db-grid-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--border)}
 .db-grid-title{font-family:var(--font);font-size:12px;color:var(--ext-color)}
 .db-grid-search{width:220px;padding:4px 8px;font-size:12px}
-.db-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:var(--font);padding:2px 4px 2px 8px;border-radius:10px;border:1px solid color-mix(in srgb,var(--ext-color) 40%,transparent);background:color-mix(in srgb,var(--ext-color) 10%,transparent)}
+.db-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:var(--font);padding-block:2px;padding-inline:8px 4px;border-radius:10px;border:1px solid color-mix(in srgb,var(--ext-color) 40%,transparent);background:color-mix(in srgb,var(--ext-color) 10%,transparent)}
 .db-chip button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px}
 .db-chip button:hover{color:var(--danger)}
-.db-pager{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.db-pager{margin-inline-start:auto;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
 .db-page-size{min-width:0;width:70px}
 .db-table th[data-grid="sort"]{cursor:pointer;user-select:none}
 .db-table th[data-grid="sort"]:hover{color:var(--text)}
@@ -93,7 +93,7 @@
 .db-new-row .db-cell-input{border-color:var(--border)}
 .db-row-form{max-height:60vh;overflow:auto}
 .db-row-actions{width:74px}
-.db-row-actions input[type=checkbox]{vertical-align:middle;margin-right:4px;cursor:pointer}
+.db-row-actions input[type=checkbox]{vertical-align:middle;margin-inline-end:4px;cursor:pointer}
 .db-selected td{background:color-mix(in srgb,var(--danger) 8%,transparent)}
 
 /* designer di tabelle */
@@ -112,7 +112,7 @@
 
 /* storico */
 .db-history{display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow:auto}
-.db-history-item{display:flex;flex-direction:column;gap:4px;text-align:left;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;cursor:pointer;color:var(--text)}
+.db-history-item{display:flex;flex-direction:column;gap:4px;text-align:start;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;cursor:pointer;color:var(--text)}
 .db-history-item:hover{border-color:var(--ext-color)}
 .db-history-meta{font-size:11px;color:var(--muted)}
 .db-history-item code{font-family:var(--font);font-size:11.5px;white-space:pre-wrap;word-break:break-word}

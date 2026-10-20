@@ -35,8 +35,8 @@
 
   /* ---- SECTION NAV ---- */
   .section-nav{display:flex;border-top:1px solid var(--border)}
-  .section-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;height:40px;background:none;border:none;border-right:1px solid var(--border);border-bottom:3px solid transparent;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--sans);color:var(--muted);transition:background .15s,color .15s,border-color .15s;position:relative}
-  .section-tab:last-child{border-right:none}
+  .section-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;height:40px;background:none;border:none;border-inline-end:1px solid var(--border);border-bottom:3px solid transparent;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--sans);color:var(--muted);transition:background .15s,color .15s,border-color .15s;position:relative}
+  .section-tab:last-child{border-inline-end:none}
   .section-tab:hover{background:var(--surface2);color:var(--text)}
   .section-tab-icon{font-size:16px}
   .section-tab-badge{font-family:var(--font);font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);transition:background .15s,color .15s,border-color .15s}
@@ -56,7 +56,7 @@
   /* ================================================================
      SIDEBAR — comune ma colorata in base alla sezione
   ================================================================ */
-  .sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+  .sidebar{background:var(--surface);border-inline-end:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 
   /* Intestazione sidebar */
   .sidebar-head{padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:6px}
@@ -67,14 +67,14 @@
   .sidebar-body{overflow-y:auto;flex:1;padding:4px 0}
 
   /* Voci sidebar generiche */
-  .sb-item{display:flex;align-items:center;gap:8px;padding:7px 14px;background:none;border:none;border-left:2px solid transparent;color:var(--muted);cursor:pointer;font-size:13px;font-family:var(--sans);text-align:left;width:100%;transition:background .15s,color .15s}
+  .sb-item{display:flex;align-items:center;gap:8px;padding:7px 14px;background:none;border:none;border-inline-start:2px solid transparent;color:var(--muted);cursor:pointer;font-size:13px;font-family:var(--sans);text-align:start;width:100%;transition:background .15s,color .15s}
   .sb-item:hover{background:var(--surface2);color:var(--text)}
   .sb-item.active{background:var(--surface2);color:var(--text)}
 
   /* Border colorato per sezione attiva */
 
   .sb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-  .sb-count{margin-left:auto;font-size:10px;font-family:var(--font);padding:1px 6px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted)}
+  .sb-count{margin-inline-start:auto;font-size:10px;font-family:var(--font);padding:1px 6px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted)}
 
   /* NPM project list items */
 
@@ -102,7 +102,7 @@
   /* ---- PM2 AREA ---- */
   .tool-notice{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:12px 16px;padding:10px 14px;border:1px solid color-mix(in srgb,var(--warning) 40%,transparent);background:color-mix(in srgb,var(--warning) 8%,transparent);border-radius:8px;font-size:12px}
   .tool-notice code{font-family:var(--font);background:var(--surface2);padding:2px 8px;border-radius:4px}
-  .tool-notice .btn{margin-left:auto}
+  .tool-notice .btn{margin-inline-start:auto}
 
   /* ---- GIT AREA ---- */
 
@@ -169,7 +169,8 @@
   .form-input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:13px;padding:7px 10px;outline:none;width:100%;transition:border-color .15s}
   .form-input:focus{border-color:var(--accent)}
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .form-row select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237d8590' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+  .form-row select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237d8590' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-inline-end:28px}
+  [dir=rtl] .form-row select.form-input{background-position:left 10px center}
   .color-row{display:flex;align-items:center;gap:10px}
   .color-preview{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;cursor:pointer}
   input[type=color]{width:0;height:0;opacity:0;position:absolute}
@@ -181,7 +182,7 @@
   /* ================================================================
      SSE OUTPUT PANEL
   ================================================================ */
-  .sse-panel{position:absolute;bottom:0;left:0;right:0;height:260px;background:#0d1117;border-top:1px solid var(--border);display:flex;flex-direction:column;z-index:10;transform:translateY(100%);transition:transform .25s ease}
+  .sse-panel{position:absolute;bottom:0;inset-inline-start:0;inset-inline-end:0;height:260px;background:#0d1117;border-top:1px solid var(--border);display:flex;flex-direction:column;z-index:10;transform:translateY(100%);transition:transform .25s ease}
   .sse-panel.open{transform:translateY(0)}
   .sse-panel-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;border-bottom:1px solid var(--border);font-size:11px;font-family:var(--font);color:var(--muted);flex-shrink:0;background:var(--surface)}
   .sse-panel-header span{color:var(--text)}
@@ -190,7 +191,7 @@
   /* ================================================================
      TOAST
   ================================================================ */
-  .toasts{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:500;pointer-events:none}
+  .toasts{position:fixed;bottom:24px;inset-inline:0;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:500;pointer-events:none}
   .toast{padding:8px 16px;border-radius:var(--radius);font-size:13px;background:var(--surface2);border:1px solid var(--border);color:var(--text);opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:auto}
   .toast.show{opacity:1;transform:none}
   .toast.error{border-color:var(--danger);color:var(--danger)}
@@ -232,13 +233,13 @@
   .ext-root{flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column;position:relative}
   .ext-sidebar{display:flex;flex-direction:column;min-height:0;flex:1}
   .ext-sidebar .sidebar-head-title{color:var(--ext-color)}
-  .ext-sidebar .sb-item.active{border-left-color:var(--ext-color);color:var(--ext-color)}
+  .ext-sidebar .sb-item.active{border-inline-start-color:var(--ext-color);color:var(--ext-color)}
   .ext-root [hidden],.ext-sidebar [hidden]{display:none !important}
   .app.no-sidebar{grid-template-columns:1fr}
   .app.no-sidebar .sidebar{display:none}
   /* Tabella dati generica */
   .data-table{width:100%;border-collapse:collapse;font-size:12px}
-  .data-table th{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);font-weight:500;font-family:var(--font);font-size:11px}
+  .data-table th{text-align:start;padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);font-weight:500;font-family:var(--font);font-size:11px}
   .data-table td{padding:7px 10px;border-bottom:1px solid color-mix(in srgb,var(--border) 50%,transparent);font-family:var(--font)}
   .data-table tr:hover td{background:var(--surface2)}
   .ext-pills{display:contents}
@@ -250,7 +251,7 @@
   .export-keys{font-size:11px;color:var(--muted);font-family:var(--font)}
   /* Menu contestuale (UI.contextMenu) */
   .ctx-menu{position:fixed;z-index:1000;min-width:200px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;display:flex;flex-direction:column}
-  .ctx-item{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--text);text-align:left;padding:6px 10px;border-radius:4px;font-size:12px;cursor:pointer;font-family:var(--sans)}
+  .ctx-item{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--text);text-align:start;padding:6px 10px;border-radius:4px;font-size:12px;cursor:pointer;font-family:var(--sans)}
   .ctx-item:hover:not(:disabled),.ctx-item:focus-visible{background:color-mix(in srgb,var(--accent) 18%,transparent);outline:none}
   .ctx-item:disabled{opacity:.4;cursor:default}
   .ctx-item.danger{color:var(--danger)}
