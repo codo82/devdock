@@ -213,33 +213,24 @@ Migration format (decided): **one SQL file per migration, `NNN_<table>_<operatio
 
 Goal: expose DevDock to AI agents (Claude Code, Claude Desktop, any MCP client) through a **Model Context Protocol server**, so an agent can query the extensions: tunnel and PM2 status, Git state, npm scripts, API specs, DB schema. As with the UI, every capability comes from an extension: the core only hosts the server and aggregates what the extensions declare. Done **after M6 and M7**: it reuses the M6 structured error codes and the M7 migration pipeline.
 
-**Server**
-- [ ] **M8.1** MCP endpoint served by DevDock itself over **Streamable HTTP** at `/mcp` (same process, same port, same services as the UI), built on the official `@modelcontextprotocol/sdk`. A stdio bridge (`npx devdock-mcp`) forwards to the running instance for clients that only support stdio, with a clear error when DevDock is not running
-- [ ] **M8.2** Authentication: random bearer token generated on first start and stored outside `config.json` (not exported); `Origin` validation as required by the MCP spec, consistent with the M1 rules (browser requests rejected). Token regenerable from the UI
-- [ ] **M8.3** Server `instructions` describing what DevDock is and which extensions are loaded, so the agent knows what it can ask
+First version (agreed scope): **read-only** tools for every extension, plus running npm scripts; nothing else changes state. DB tools work only while the vault is unlocked from the DevDock UI — the master password never goes through the agent.
 
-**Extension contract**
-- [ ] **M8.4** Optional `mcp` block in `setting.json` declaring **tools** (`name`, `description`, JSON Schema `inputSchema`, `handler`, annotations `readOnlyHint` / `destructiveHint` / `idempotentHint`) and **resources** (URI template, `handler`). Handlers live in the extension backend module, receive the same `ctx` as the HTTP routes and reuse its services and validation. Documented in `docs/EXTENSIONS.md`
-- [ ] **M8.5** The core loads and namespaces everything by extension code (`git_status`, `pm2_logs`, resources `devdock://<code>/…`); extensions not loaded or with missing dependencies expose nothing. Tool and resource lists are refreshed (`list_changed` notifications) when the configuration changes
-- [ ] **M8.6** Uniform results: structured JSON (`structuredContent`) plus a short text summary; long outputs (logs, diffs, query results) truncated with an explicit limit parameter and a "truncated" flag; errors as MCP tool errors with the M6 structured error code
+- [ ] **M8.1** MCP endpoint served by DevDock itself over **Streamable HTTP** at `/mcp` (same process, same port, same services as the UI), built on the official `@modelcontextprotocol/sdk`, stateless
+- [ ] **M8.2** Authentication: random bearer token generated on first start and stored outside `config.json` (not exported), regenerable from the UI; requests with an `Origin` header (browsers) rejected
+- [ ] **M8.3** Server `instructions` describing DevDock and the loaded extensions
+- [ ] **M8.4** Optional `mcp.tools` block in `setting.json` (`name`, `description`, JSON Schema `inputSchema`, `handler`, `readOnly`); handlers live in the extension backend (`instance.mcp`), with the same `ctx` and services as the HTTP routes. Documented in `docs/EXTENSIONS.md`
+- [ ] **M8.5** Tools namespaced by extension code (`git_repo_status`, `db_client_query`); disabled extensions expose nothing
+- [ ] **M8.6** Results as structured JSON plus text, long outputs limited by parameters and truncated with a flag; errors as MCP tool errors with the M6 error codes
+- [ ] **M8.7** Tools: Tunnels (servers and active tunnels); PM2 (processes, log tail); Git (repos with branch and ahead/behind, status, log); npm (projects and scripts, running processes, output of a process; **run a script** and **stop a process**); DB client (connections without credentials, tables, structure of a table, read-only query with row limit run in a `READ ONLY` transaction) — only with the vault unlocked, otherwise a clear error
+- [ ] **M8.8** "MCP" panel: endpoint, token (show, copy, regenerate), ready-to-copy setup for Claude Code and Claude Desktop, list of the tools per extension
+- [ ] **M8.9** Tests with the SDK client: initialize, list and call tools, rejection without token or with a browser `Origin`, DB tools with the vault locked and unlocked, secrets never returned
+- [ ] **M8.10** Docs: README section "MCP server" and the `mcp` manifest block in `docs/EXTENSIONS.md`
 
-**Permissions**
-- [ ] **M8.7** **Read-only by default**: only tools marked `readOnlyHint` are enabled out of the box. State-changing tools (start/stop tunnel, PM2 restart, git pull/push, npm run, DDL) are disabled until the user enables them one by one, per extension, in the UI
-- [ ] **M8.8** Activity log in the UI: every MCP call with time, client name, tool, arguments (secrets redacted), outcome and duration; filter by extension
-- [ ] **M8.9** Secrets never leave through MCP: no passwords, tokens, vault data or remote URLs with credentials; DB tools work only while the vault is unlocked from the UI (the agent can't unlock it)
-
-**First tools per extension** (read-only unless noted)
-- [ ] **M8.10** Tunnels: list servers and tunnels with status and ports; *(write)* start/stop a tunnel
-- [ ] **M8.11** PM2: list processes with status, CPU/memory, uptime; tail of the logs of a process (line limit); *(write)* start/stop/restart
-- [ ] **M8.12** Git: list repos with branch and ahead/behind; status, log (with the M2.5 lane names), diff of a file or commit; *(write)* fetch/pull/push
-- [ ] **M8.13** npm: list projects and their scripts; *(write)* run a script, with output returned at the end and truncated
-- [ ] **M8.14** Swagger: list specs; endpoints of a spec; detail of an operation (parameters, schemas) — useful to let an agent write a client against a local API
-- [ ] **M8.15** DB client: list connections (without credentials), tables, structure of a table, **read-only** query with row limit and timeout (enforced with a read-only transaction, not only by parsing); migration status of M7. DDL through MCP only if enabled and always through the M7 pipeline, so it ends up in a migration
-
-**UI, tests, docs**
-- [ ] **M8.16** "MCP" panel: on/off switch, endpoint and token, ready-to-copy setup snippets (`claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header …`, Claude Desktop JSON), tool list per extension with enable toggles, activity log
-- [ ] **M8.17** Tests with the SDK client against a DevDock instance: initialize, list tools/resources, call read-only tools, rejection without token or with a browser `Origin`, disabled write tools not listed, secrets redacted in the log
-- [ ] **M8.18** Docs: README section "MCP server" (setup for Claude Code and Claude Desktop, permissions model) and the `mcp` manifest block in `docs/EXTENSIONS.md`
+**Later (not in the first version)**
+- [ ] **M8.11** Other state-changing tools (start/stop tunnels, PM2 restart, git pull/push, DDL through the migration pipeline), each enabled one by one in the UI
+- [ ] **M8.12** Activity log of the MCP calls in the UI
+- [ ] **M8.13** stdio bridge (`npx devdock-mcp`) for clients that only support stdio; MCP resources and `list_changed` notifications
+- [ ] **M8.14** Swagger tools (needs specs stored on the server, today they are only loaded in the browser)
 
 ---
 
