@@ -37,10 +37,18 @@ Each section is an extension (see [Writing an extension](#writing-an-extension))
 - **🔗 SSH tunnels** (`tunnels`) — servers grouped by colour; one click opens `ssh -N -L 127.0.0.1:<port>:<remote> <alias>`. Automatic reconnection with backoff (5s → 60s), per-tunnel logs, header pills with "Stop all", desktop notifications. Groups and servers are managed from the ≡ button in the sidebar.
 - **📦 NPM** (`npm`) — local projects: run the `package.json` scripts with live logs, restart/stop (the whole process group), listening ports, dependencies with installed version, `npm outdated` and updates.
 - **🌿 Git** (`git`) — repositories derived from the NPM projects (walking up to the `.git` folder). Status, file selection and commit, commit graph with branch legend, pull/push/merge/checkout/stash/fetch. Only one git operation at a time runs on each repository.
+- **🗄️ Database** (`db-client`) — MySQL/MariaDB client. Connections (direct or through an SSH tunnel of the Tunnels section) with passwords encrypted by a **master password** asked once per session; sidebar tree connection ▸ database ▸ tables ▸ columns with a context menu on tables; SQL editor with highlighting; data browser with pagination, search, filters and sorting; row insert/edit/delete inline or through a dialog, multiple deletion; table designer; export of tables and queries as CSV, JSON or SQL; session query history. **Every statement that changes data or schema is shown and must be confirmed before it runs**; read-only connections refuse them.
 - **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
 - **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ button in the header.
 
 The header also holds desktop notifications (🔔), **Export**/**Import** of the configuration and ↻ to refresh.
+
+## Database client
+
+- **Master password**: the first time you open the Database section you create it (at least 10 characters). It encrypts the stored database passwords (scrypt + AES-256-GCM) and is never saved: only a verifier is kept in `config.json`. The key stays in the server's memory until you lock it (🔒), restart DevDock or after the inactivity timeout (30 minutes by default). If you forget it, the stored passwords are deleted and must be entered again; the connections remain.
+- **Connections** can point to a host and port, or to a server of the Tunnels section (only if that extension is active): the tunnel is started when needed.
+- **Confirmations**: reads (`SELECT`, `SHOW`, `DESCRIBE`, `EXPLAIN`) run immediately; anything else — `INSERT`, `UPDATE`, `DELETE`, DDL, unknown statements — is shown in a confirmation dialog with the exact SQL and runs only after you confirm it. The same applies to rows edited in the data browser and to tables created with the designer.
+- **Moving connections**: export them with the "Connessioni database" checkbox (passwords travel encrypted together with the vault). On a machine with a different master password, import them from the Database section (⤒) entering the file's master password: they are re-encrypted with yours.
 
 ## Configuration
 
@@ -65,7 +73,7 @@ Everything is stored in `config.json` in the project folder. The file is created
 - `servers[].alias` — host or alias from `~/.ssh/config` (authentication is ssh's own: keys, agent)
 - `projects[].path` — absolute path of the folder containing `package.json`
 
-Each key belongs to an extension (`groups` and `servers` to tunnels, `projects` to npm), which validates it on every save. **Export** offers the checkboxes declared by the extensions (Tunnel SSH, Progetti NPM) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
+Each key belongs to an extension (`groups` and `servers` to tunnels, `projects` to npm, `dbConnections` and `vault` to db-client), which validates it on every save. **Export** offers the checkboxes declared by the extensions (Tunnel SSH, Progetti NPM, Connessioni database) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
 
 ## Security
 

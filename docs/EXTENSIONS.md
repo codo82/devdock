@@ -9,6 +9,7 @@ Every feature of DevDock is an **extension**: a folder under `extensions/` that 
 | `tunnels` | tab | 10 | `groups`, `servers` | Tunnel SSH | — | yes |
 | `pm2` | header | 10 | — | — | `npm` (optional) | no |
 | `npm` | tab | 20 | `projects` | Progetti NPM | — | yes |
+| `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `npm` (optional) | no |
 | `git` | tab | 30 | — | — | `npm` (required) | no |
 | `swagger` | tab | 40 | — | — | — | no |
 

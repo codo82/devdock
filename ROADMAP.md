@@ -14,7 +14,7 @@ Status legend: `[ ]` to do · `[~]` in progress · `[x]` done
 - [x] **D.2** Initial `CHANGELOG.md` in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format: `1.0.0` entry for the existing state + `[Unreleased]` section
 - [x] **D.3** Align `package.json` (name `devdock` instead of `port-forward-manager`, version, description) and the server startup log
 - [ ] **D.4** At the end of every milestone: update the CHANGELOG (Added/Changed/Fixed/Security/Removed) and the README where needed
-- [~] **D.5** In M3: README sections "Project structure" and "Writing an extension" ✓; in M5: section "DB client"
+- [x] **D.5** In M3: README sections "Project structure" and "Writing an extension"; in M5: section "DB client"
 - [x] **D.6** Roadmap, README and CHANGELOG in English
 
 ---
@@ -83,7 +83,7 @@ Every feature becomes an extension with its own manifest, backend routes, HTML, 
 - [x] **M3.11** Publish on GitHub
 - [x] **M3.12** Export/import checkboxes declared by the extensions (`setting.json → export`, each covering some of the extension's config sections); the Export and Import dialogs show only those, Import lets you pick the checkboxes found in the file and the mode (merge/replace)
 
-## M5 — Integrated DB client *(Backlog #4)* — first new extension
+## M5 — Integrated DB client *(Backlog #4)* — first new extension ✅ (1.5.0)
 
 Built as an extension on the M3 architecture.
 
@@ -122,7 +122,6 @@ Built as an extension on the M3 architecture.
 - [x] **M5.11** Row insert and edit, both inline in the data browser (double click on a cell; empty row at the bottom to insert) and through a dialog with one field per column (type-aware: NULL toggle, numbers, dates, long text). Rows are identified by the primary key (editing disabled without one). Every save generates the `INSERT`/`UPDATE` and goes through the same confirmation dialog before running; row deletion too
 - [x] **M5.11b** Multiple row deletion: checkbox per row and "select all" for the page; a single `DELETE … WHERE pk IN (…) LIMIT n` (max 1000 rows) shown in the confirmation dialog
 - [x] **M5.12** Data export as CSV, SQL (`INSERT` statements, optional `CREATE TABLE`) and JSON: of a whole table, of the rows matching the current search/filters of the data browser, and of the result of a custom `SELECT` from the editor. Generated and streamed by the server (no full result in memory); only read statements can be exported
-- [ ] **M5.7** Later: PostgreSQL, since it appears among the configured server types
 
 ## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
 
@@ -137,6 +136,10 @@ Built as an extension on the M3 architecture.
 # Future developments
 
 Planned after the current milestones, independent of the work in progress. Not ordered yet.
+
+## DB client — PostgreSQL
+
+- [ ] **M5.7** PostgreSQL support in the `db-client` extension (it appears among the configured server types): driver, classification of statements, schema browser, data browser and export
 
 ## M6 — Internationalization (i18n)
 
