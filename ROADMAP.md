@@ -274,6 +274,18 @@ Goal: let the user put the extension tabs in the order they prefer. It is part o
 - [ ] **M12.3** "Restore default order" (context menu on the section bar)
 - [ ] **M12.4** Tests (API, validation of the list, unknown codes ignored), README, CHANGELOG
 
+
+## M13 — MongoDB client — new extension `mongo-client`
+
+Goal: browse and edit MongoDB databases like the MySQL client does, with the same safety rules. Minimal version.
+
+- [ ] **M13.1** Connections (host and port, or a `mongodb://` / `mongodb+srv://` URI, user, authentication database, TLS) in their own config section, optionally through an SSH tunnel of the Tunnels extension; passwords encrypted with the master password vault of the DB client (dependency on `db-client`), never shown or exported in clear; read-only option; connection test. Driver: official `mongodb` package (npm workspace)
+- [ ] **M13.2** Sidebar tree connection ▸ databases ▸ collections (with estimated document count); context menu on collections (open, count, indexes, export, drop through confirmation)
+- [ ] **M13.3** Document browser: filter as a JSON query, sort, projection, pagination; documents shown as JSON (Extended JSON for ObjectId, dates, decimals)
+- [ ] **M13.4** Insert, edit (full JSON document) and delete documents, single and multiple; like every change in the DB client, **never run automatically**: the server returns the exact operation and runs it only after the user confirms it (token bound to the operation); read-only connections refuse writes
+- [ ] **M13.5** Indexes of a collection (read-only list); export of a collection or of a filtered result as JSON
+- [ ] **M13.6** MCP tools (read-only, only with the vault unlocked): connections without credentials, databases, collections, `find` with filter and limit, count
+- [ ] **M13.7** Tests against a disposable `mongod` (skipped when not installed), README, CHANGELOG
 ---
 
 ## Suggested order and size
@@ -294,3 +306,4 @@ Goal: let the user put the extension tabs in the order they prefer. It is part o
 | M10 Environment files | S | read and write, comments and order kept; values never stored in DevDock or sent to agents |
 | M11 HTTP client | M | secrets through the DB client vault (optional dependency) |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
+| M13 MongoDB client | L | same vault and confirmation rules as the MySQL client; read-only MCP tools |
