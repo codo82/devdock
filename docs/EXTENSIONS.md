@@ -4,12 +4,12 @@ Every feature of DevDock is an **extension**: a folder under `extensions/` that 
 
 ## Existing extensions
 
-| Code | Position | Order | Owns in `config.json` | Dependencies | Export / import formats | Preload |
+| Code | Position | Order | Owns in `config.json` | Export/import checkboxes | Dependencies | Preload |
 |---|---|---|---|---|---|---|
-| `tunnels` | tab | 10 | `groups`, `servers` | — | export `ssh-commands` | yes |
-| `pm2` | header | 10 | — | `npm` (optional) | — | no |
-| `npm` | tab | 20 | `projects` | — | import `folders` | yes |
-| `git` | tab | 30 | — | `npm` (required) | — | no |
+| `tunnels` | tab | 10 | `groups`, `servers` | Tunnel SSH | — | yes |
+| `pm2` | header | 10 | — | — | `npm` (optional) | no |
+| `npm` | tab | 20 | `projects` | Progetti NPM | — | yes |
+| `git` | tab | 30 | — | — | `npm` (required) | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
 ## Folder layout
@@ -72,9 +72,9 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
 | `order` | no | Sort order among tabs and among header buttons (default 100). The first tab opens at startup |
 | `dependencies` | no | `required: true` → the extension is not loaded if the dependency is missing or disabled · `required: false` → it loads with a warning icon and must cope with the dependency being absent |
 | `config` | no | Top-level keys of `config.json` owned by the extension (see *Configuration*) |
+| `export` | no | Checkboxes the extension adds to the Export and Import dialogs, each with the sections it covers (see *Export and import*) |
 | `backend.module` | no | Backend file, relative to the extension folder |
 | `backend.routes` | no | Routes mounted under `/api/ext/<code>`; each one names a handler of the backend |
-| `transfer` | no | Extra export/import formats offered in the header dialogs (see *Export and import formats*) |
 | `frontend.html` / `sidebar` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served (never `server.js` or `setting.json`) |
 | `frontend.preload` | no | `true`: the module is mounted at startup (hidden) instead of on first open — for extensions that keep header pills, badges or notifications up to date in the background |
 
@@ -97,7 +97,7 @@ Routes are declared in the manifest, not registered by code, so the whole API su
 - `handler`: name of a function in the backend's `handlers`; the loader refuses an extension whose manifest names a handler that does not exist, and warns about handlers that no route uses
 - `stream: true`: the handler answers with Server-Sent Events (documentation only; the handler opens the stream with `ctx.sse(res)`)
 
-Every route goes through the core security middleware (Host and Origin checks, JSON content type, body up to 5 MB) and the core error handler: errors thrown by handlers, also asynchronous ones, become a JSON 500 (a 400 for a `ConfigError`).
+Every route goes through the core security middleware (Host and Origin checks, JSON content type) and the core error handler: errors thrown by handlers, also asynchronous ones, become a JSON 500 (a 400 for a `ConfigError`).
 
 ## Backend module
 
@@ -120,7 +120,6 @@ module.exports = function createGit(ctx) {
     },
     services: { repos },                           // for extensions that depend on this one
     config: {},                                    // rules for the keys in setting.json → config
-    transfer: {},                                  // functions named in setting.json → transfer
     shutdown() { /* stop timers and child processes */ },
   };
 
@@ -156,30 +155,27 @@ Only `handlers` is needed when the manifest declares routes; everything else is 
 | `idField` | For lists: field that identifies an item in a *merge* import |
 | `merge(current, incoming)` | Custom *merge* import (default: lists add the items with a new `idField`, objects add the new keys) |
 
-Writes are atomic (temporary file + rename). The header **Export** dialog lists the sections grouped by owner; **Import** applies only the sections present in the file (*replace* overwrites them, *merge* adds the new items) and leaves the others untouched. Keys without an owner are ignored and reported.
+Writes are atomic (temporary file + rename).
 
-## Export and import formats
+## Export and import
 
-Besides the `config.json` sections, an extension can offer its own formats in the header **Export** and **Import** dialogs:
+The header **Export** and **Import** dialogs are built from the checkboxes the extensions declare in `setting.json → export`. Each checkbox covers one or more of the extension's own `config` sections:
 
 ```json
-"transfer": [
-  { "id": "ssh-commands", "label": "Comandi ssh", "description": "Script con un comando ssh -N -L per ogni server",
-    "export": "exportSshCommands", "filename": "devdock-tunnels.sh" },
-  { "id": "folders", "label": "Cartelle di progetto", "description": "Un percorso assoluto per riga", "import": "importFolders" }
+"config": ["groups", "servers"],
+"export": [
+  { "id": "tunnels", "label": "Tunnel SSH", "description": "Gruppi e server", "sections": ["groups", "servers"] }
 ]
 ```
 
-Each entry has `export`, `import` or both, naming functions in the backend's `instance.transfer` (the loader refuses an extension whose manifest names a missing one):
+| Field | Meaning |
+|---|---|
+| `id` | Unique within the extension, `[a-z0-9-]` |
+| `label` | Checkbox label |
+| `description` | Optional hint under the label |
+| `sections` | Sections included when the box is checked; they must be listed in the extension's `config` (otherwise the extension is disabled) |
 
-```js
-transfer: {
-  exportSshCommands() { return '#!/bin/sh\n…'; },                   // string → text file; object → JSON file
-  importFolders(content) { /* … */ return '2 progetti aggiunti'; },  // file content as text → message for the user
-},
-```
-
-The download is named after `filename`, or `devdock-<code>-<id>.txt|json`. A `ConfigError` thrown by an import becomes a 400 with its message.
+Sections not covered by any checkbox are not exported. **Export** downloads a single `.json` file with the checked sections. **Import** reads the file in the browser, shows the checkboxes whose sections the file contains, and applies the checked ones in *merge* mode (new items added, existing ones unchanged, using `idField`/`merge`) or *replace* mode (the sections take the place of the current ones); everything else is left untouched.
 
 ## Frontend module
 
@@ -237,19 +233,17 @@ Inline handlers call the functions published with `ctx.expose`, always escaping 
 
 Inside the panel, the sidebar and the pills the CSS variable `--ext-color` holds the extension colour; the `hidden` attribute always hides an element; elements with `data-uptime="<ISO date>"` show an elapsed time that updates every second. Shared classes (`btn`, `sidebar-head`, `sb-item`, `empty-state`, `data-table`, `form-row`, `pill`, `tool-notice`, …) are defined in `public/core/shell.css`.
 
-The header (notifications, export/import, ↻) belongs to the core.
+The header (notifications, Export/Import dialogs built from the extensions' checkboxes, ↻) belongs to the core.
 
 ## Core API
 
 | Route | Purpose |
 |---|---|
-| `GET /api/core/extensions` | Extensions with manifest data, state, warnings, error and transfer formats |
+| `GET /api/core/extensions` | Extensions with manifest data, state, warnings and error |
 | `GET /api/core/system` | Platform and external tools (`?refresh=1` checks again) |
 | `GET /api/core/config/sections` | Config sections and their owner |
 | `GET /api/core/config/export?sections=a,b&name=x` | Export (download), optionally limited to some sections |
-| `POST /api/core/config/import` | Import `{ config, mode }`, per section |
-| `GET /api/core/transfers` | Export/import formats offered by the extensions |
-| `GET /api/core/transfers/<code>/<id>/export`, `POST …/import` | Run one of them |
+| `POST /api/core/config/import` | Import `{ config, mode }`, per section (keys without an owner are ignored and reported) |
 
 ## Dependencies and npm workspaces
 
@@ -269,7 +263,7 @@ A single `npm install` at the root installs everything into the shared `node_mod
 
 1. Create `extensions/<code>/setting.json` with at least `name`, `code`, `color` and `position`.
 2. Backend (if needed): declare the routes in `backend.routes` and write `server.js` returning `handlers` with the same names; use `ctx.lib.validate` and `ConfigError` for input coming from the UI.
-3. Configuration (if needed): list the keys in `config` and describe them in `instance.config`.
+3. Configuration (if needed): list the keys in `config`, describe them in `instance.config` and add the `export` checkboxes that should appear in the Export/Import dialogs.
 4. Frontend (if needed): `view.html`, optionally `sidebar.html` and `style.css`, and `view.js` with `mount(ctx)`.
 5. Restart the server: the log line `Estensioni: …` lists the loaded extensions, and `GET /api/core/extensions` explains why one is disabled.
 6. Add tests in `tests/` (see `tests/helpers.js`: `startServer()` runs DevDock on a free port with a temporary config).

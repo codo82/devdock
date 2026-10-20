@@ -11,73 +11,31 @@
     "groups",
     "servers"
   ],
-  "transfer": [
+  "export": [
     {
-      "id": "ssh-commands",
-      "label": "Comandi ssh",
-      "description": "Script con un comando ssh -N -L per ogni server, raggruppati come in DevDock",
-      "export": "exportSshCommands",
-      "filename": "devdock-tunnels.sh"
+      "id": "tunnels",
+      "label": "Tunnel SSH",
+      "description": "Gruppi e server",
+      "sections": [
+        "groups",
+        "servers"
+      ]
     }
   ],
   "backend": {
     "module": "server.js",
     "routes": [
-      {
-        "method": "GET",
-        "path": "/state",
-        "handler": "state"
-      },
-      {
-        "method": "POST",
-        "path": "/tunnels",
-        "handler": "startTunnel"
-      },
-      {
-        "method": "DELETE",
-        "path": "/tunnels",
-        "handler": "stopAll"
-      },
-      {
-        "method": "DELETE",
-        "path": "/tunnels/:id",
-        "handler": "stopTunnel"
-      },
-      {
-        "method": "GET",
-        "path": "/tunnels/:id/logs",
-        "handler": "tunnelLogs"
-      },
-      {
-        "method": "POST",
-        "path": "/groups",
-        "handler": "createGroup"
-      },
-      {
-        "method": "PUT",
-        "path": "/groups/:key",
-        "handler": "updateGroup"
-      },
-      {
-        "method": "DELETE",
-        "path": "/groups/:key",
-        "handler": "deleteGroup"
-      },
-      {
-        "method": "POST",
-        "path": "/servers",
-        "handler": "createServer"
-      },
-      {
-        "method": "PUT",
-        "path": "/servers/:key",
-        "handler": "updateServer"
-      },
-      {
-        "method": "DELETE",
-        "path": "/servers/:key",
-        "handler": "deleteServer"
-      }
+      { "method": "GET",     "path": "/state",            "handler": "state" },
+      { "method": "POST",    "path": "/tunnels",          "handler": "startTunnel" },
+      { "method": "DELETE",  "path": "/tunnels",          "handler": "stopAll" },
+      { "method": "DELETE",  "path": "/tunnels/:id",      "handler": "stopTunnel" },
+      { "method": "GET",     "path": "/tunnels/:id/logs", "handler": "tunnelLogs" },
+      { "method": "POST",    "path": "/groups",           "handler": "createGroup" },
+      { "method": "PUT",     "path": "/groups/:key",      "handler": "updateGroup" },
+      { "method": "DELETE",  "path": "/groups/:key",      "handler": "deleteGroup" },
+      { "method": "POST",    "path": "/servers",          "handler": "createServer" },
+      { "method": "PUT",     "path": "/servers/:key",     "handler": "updateServer" },
+      { "method": "DELETE",  "path": "/servers/:key",     "handler": "deleteServer" }
     ]
   },
   "frontend": {

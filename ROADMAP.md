@@ -81,7 +81,7 @@ Every feature becomes an extension with its own manifest, backend routes, HTML, 
 - [x] **M3.9** npm workspaces: `"workspaces": ["extensions/*"]`, a single `node_modules`
 - [ ] **M3.10** *(Backlog #5)* `CLAUDE.md`: purpose, structure, extension pattern, conventions (Italian UI messages, vanilla JS, no build step), how to run and test, reference to this roadmap
 - [x] **M3.11** Publish on GitHub
-- [x] **M3.12** Extension export/import formats: `transfer` entries in `setting.json` (export and/or import handlers of the backend), offered by the header Export/Import dialogs next to the `config.json` sections; first formats: tunnels → `ssh -N -L` script, npm ← list of project folders
+- [x] **M3.12** Export/import checkboxes declared by the extensions (`setting.json → export`, each covering some of the extension's config sections); the Export and Import dialogs show only those, Import lets you pick the checkboxes found in the file and the mode (merge/replace)
 
 ## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
 

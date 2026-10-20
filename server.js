@@ -9,7 +9,7 @@ const { loadExtensions, frontendRouter } = require('./lib/extensions');
 const app = express();
 
 applySecurity(app);
-app.use(express.json({ limit: '5mb' })); // anche file di import delle estensioni
+app.use(express.json());
 app.use(express.static(path.join(ROOT, 'public')));
 
 // Estensioni: API su /api/ext/<code>, file frontend dichiarati su /ext/<code>

@@ -68,3 +68,10 @@ test('export per tipo', async () => {
   const tunnels = await srv.request('GET', '/api/core/config/export?name=tunnels&sections=groups,servers');
   assert.deepEqual(Object.keys(tunnels.json).sort(), ['groups', 'servers']);
 });
+
+test('le estensioni dichiarano le caselle del dialog di export', async () => {
+  const exts = Object.fromEntries((await srv.request('GET', '/api/core/extensions')).json.map(e => [e.code, e.export]));
+  assert.deepEqual(exts.tunnels.map(x => x.sections), [['groups', 'servers']]);
+  assert.deepEqual(exts.npm.map(x => x.sections), [['projects']]);
+  assert.deepEqual(exts.git, []);
+});

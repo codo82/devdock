@@ -10,93 +10,34 @@
   "config": [
     "projects"
   ],
-  "transfer": [
+  "export": [
     {
-      "id": "folders",
-      "label": "Cartelle di progetto",
-      "description": "File di testo con un percorso assoluto per riga: ogni cartella diventa un progetto",
-      "import": "importFolders"
+      "id": "projects",
+      "label": "Progetti NPM",
+      "description": "Cartelle dei progetti (usate anche da Git)",
+      "sections": [
+        "projects"
+      ]
     }
   ],
   "backend": {
     "module": "server.js",
     "routes": [
-      {
-        "method": "GET",
-        "path": "/projects",
-        "handler": "listProjects"
-      },
-      {
-        "method": "POST",
-        "path": "/projects",
-        "handler": "createProject"
-      },
-      {
-        "method": "PUT",
-        "path": "/projects/:id",
-        "handler": "updateProject"
-      },
-      {
-        "method": "DELETE",
-        "path": "/projects/:id",
-        "handler": "deleteProject"
-      },
-      {
-        "method": "GET",
-        "path": "/projects/:id/package",
-        "handler": "packageInfo"
-      },
-      {
-        "method": "POST",
-        "path": "/projects/:id/installed-versions",
-        "handler": "installedVersions"
-      },
-      {
-        "method": "GET",
-        "path": "/projects/:id/outdated",
-        "handler": "outdated"
-      },
-      {
-        "method": "POST",
-        "path": "/projects/:id/run",
-        "handler": "runScript"
-      },
-      {
-        "method": "POST",
-        "path": "/projects/:id/update",
-        "handler": "updatePackage"
-      },
-      {
-        "method": "GET",
-        "path": "/processes",
-        "handler": "listProcesses"
-      },
-      {
-        "method": "DELETE",
-        "path": "/processes/:id",
-        "handler": "stopProcess"
-      },
-      {
-        "method": "POST",
-        "path": "/processes/:id/restart",
-        "handler": "restartProcess"
-      },
-      {
-        "method": "DELETE",
-        "path": "/processes/:id/dismiss",
-        "handler": "dismissProcess"
-      },
-      {
-        "method": "GET",
-        "path": "/processes/:id/logs",
-        "handler": "processLogs"
-      },
-      {
-        "method": "GET",
-        "path": "/processes/:id/stream",
-        "handler": "processStream",
-        "stream": true
-      }
+      { "method": "GET",     "path": "/projects",                        "handler": "listProjects" },
+      { "method": "POST",    "path": "/projects",                        "handler": "createProject" },
+      { "method": "PUT",     "path": "/projects/:id",                    "handler": "updateProject" },
+      { "method": "DELETE",  "path": "/projects/:id",                    "handler": "deleteProject" },
+      { "method": "GET",     "path": "/projects/:id/package",            "handler": "packageInfo" },
+      { "method": "POST",    "path": "/projects/:id/installed-versions", "handler": "installedVersions" },
+      { "method": "GET",     "path": "/projects/:id/outdated",           "handler": "outdated" },
+      { "method": "POST",    "path": "/projects/:id/run",                "handler": "runScript" },
+      { "method": "POST",    "path": "/projects/:id/update",             "handler": "updatePackage" },
+      { "method": "GET",     "path": "/processes",                       "handler": "listProcesses" },
+      { "method": "DELETE",  "path": "/processes/:id",                   "handler": "stopProcess" },
+      { "method": "POST",    "path": "/processes/:id/restart",           "handler": "restartProcess" },
+      { "method": "DELETE",  "path": "/processes/:id/dismiss",           "handler": "dismissProcess" },
+      { "method": "GET",     "path": "/processes/:id/logs",              "handler": "processLogs" },
+      { "method": "GET",     "path": "/processes/:id/stream",            "handler": "processStream", "stream": true }
     ]
   },
   "frontend": {

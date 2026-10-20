@@ -20,7 +20,7 @@
     <div class="header-actions">
       <button class="notif-btn" id="notifBtn" onclick="Shell.toggleNotifications()" title="Attiva notifiche desktop">🔔</button>
       <button class="btn btn-ghost" onclick="Shell.exportConfig()" title="Esporta config.json">↓ Export</button>
-      <button class="btn btn-ghost" onclick="Shell.openImport()" title="Importa configurazione">↑ Import</button>
+      <label class="btn btn-ghost" style="cursor:pointer" title="Importa config.json">↑ Import<input type="file" accept=".json" style="display:none" onchange="Shell.importConfig(this)"></label>
       <button class="btn btn-ghost" onclick="Shell.refresh()" title="Aggiorna">↻</button>
     </div>
   </div>

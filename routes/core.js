@@ -41,41 +41,5 @@ module.exports = function coreRoutes(extensions) {
     }
   });
 
-  // ---- Export/import forniti dalle estensioni (setting.json → transfer) ----
-
-  router.get('/transfers', (req, res) => {
-    res.json(extensions.list()
-      .filter(e => e.state !== 'disabled' && e.transfer.length)
-      .flatMap(e => e.transfer.map(t => ({ ...t, code: e.code, extension: e.name }))));
-  });
-
-  // Il backend restituisce una stringa (o un oggetto, salvato come JSON)
-  router.get('/transfers/:code/:id/export', async (req, res, next) => {
-    const t = extensions.transfer(req.params.code, req.params.id, 'export');
-    if (!t) return res.status(404).json({ error: 'Export non disponibile' });
-    try {
-      const out = await t.fn();
-      const text = typeof out === 'string' ? out : JSON.stringify(out, null, 2);
-      const filename = t.entry.filename || `devdock-${req.params.code}-${req.params.id}.${typeof out === 'string' ? 'txt' : 'json'}`;
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.setHeader('Content-Type', typeof out === 'string' ? 'text/plain; charset=utf-8' : 'application/json');
-      res.send(text);
-    } catch (e) { next(e); }
-  });
-
-  // Il contenuto del file arriva come testo: { content }; il backend restituisce un messaggio
-  router.post('/transfers/:code/:id/import', async (req, res, next) => {
-    const t = extensions.transfer(req.params.code, req.params.id, 'import');
-    if (!t) return res.status(404).json({ error: 'Import non disponibile' });
-    const content = req.body?.content;
-    if (typeof content !== 'string') return res.status(400).json({ error: 'Contenuto del file mancante' });
-    try {
-      res.json({ ok: true, message: (await t.fn(content)) || 'Import completato' });
-    } catch (e) {
-      if (e instanceof ConfigError) return res.status(400).json({ error: e.message });
-      next(e);
-    }
-  });
-
   return router;
 };

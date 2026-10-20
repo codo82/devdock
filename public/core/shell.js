@@ -260,109 +260,83 @@ window.Shell = (() => {
     btn.title = notificationsEnabled ? 'Notifiche attive — clicca per disattivare' : 'Attiva notifiche desktop';
   }
 
-  // ---- export / import di config.json per sezioni ----
-  const ownerName = owner => owner === 'core' ? 'DevDock' : (extList.find(e => e.code === owner)?.name || owner);
+  // ---- export / import: caselle dichiarate dalle estensioni (setting.json → export) ----
 
-  async function exportConfig() {
-    let sections = [], transfers = [];
-    try {
-      [sections, transfers] = await Promise.all([
-        apiClient('/api/core').get('/config/sections'),
-        apiClient('/api/core').get('/transfers'),
-      ]);
-    } catch (e) { toast(e.message, 'error'); return; }
-    const byOwner = new Map();
-    for (const s of sections) byOwner.set(s.owner, [...(byOwner.get(s.owner) || []), s.key]);
-    const others = transfers.filter(t => t.canExport);
+  // [{ ext, item }] nell'ordine delle estensioni; item = { id, label, description, sections }
+  const exportItems = () => extList
+    .filter(e => e.state !== 'disabled')
+    .flatMap(e => (e.export || []).map(item => ({ ext: e, item })));
+
+  const checkboxList = (entries, detail) => entries.map(({ ext, item }) => `
+    <label class="export-item">
+      <input type="checkbox" value="${esc(item.sections.join(','))}" checked>
+      <div>
+        <div class="export-name">${esc(item.label)} <span class="export-keys">· ${esc(ext.icon ? ext.icon + ' ' : '')}${esc(ext.name)}</span></div>
+        <div class="export-keys">${esc(detail(item))}</div>
+      </div>
+    </label>`).join('');
+
+  const checkedKeys = () => [...new Set([...document.querySelectorAll('.export-list input[type=checkbox]:checked')].flatMap(b => b.value.split(',')))];
+
+  function exportConfig() {
+    const entries = exportItems();
+    if (!entries.length) { toast('Nessuna estensione ha dati da esportare', 'info'); return; }
     openModal('Esporta configurazione', `
       <div class="export-list">
-        <p class="export-hint">Configurazione DevDock (.json) — scegli le sezioni:</p>
-        ${[...byOwner].map(([owner, keys]) => `
-          <label class="export-item">
-            <input type="checkbox" value="${esc(keys.join(','))}" checked>
-            <div><div class="export-name">${esc(ownerName(owner))}</div><div class="export-keys">${esc(keys.join(', '))}</div></div>
-          </label>`).join('')}
-        ${others.length ? `<p class="export-hint">Altri formati delle estensioni:</p>
-          ${others.map(t => `
-            <div class="export-item">
-              <div class="transfer-info"><div class="export-name">${esc(t.label)} <span class="export-keys">· ${esc(t.extension)}</span></div><div class="export-keys">${esc(t.description)}</div></div>
-              <button class="btn btn-ghost btn-sm" onclick="Shell.exportTransfer(${js(t.code)},${js(t.id)})">↓ Scarica</button>
-            </div>`).join('')}` : ''}
+        <p class="export-hint">Scegli cosa includere nel file:</p>
+        ${checkboxList(entries, item => item.description || item.sections.join(', '))}
       </div>`,
       `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
-       <button class="btn btn-primary" onclick="Shell.doExport()">↓ Esporta configurazione</button>`);
+       <button class="btn btn-primary" onclick="Shell.doExport()">↓ Esporta</button>`);
   }
 
   function doExport() {
-    const boxes = [...document.querySelectorAll('.export-list input[type=checkbox]')];
-    const keys = boxes.filter(b => b.checked).flatMap(b => b.value.split(','));
-    if (!keys.length) { toast('Seleziona almeno una sezione', 'error'); return; }
+    const keys = checkedKeys();
+    if (!keys.length) { toast('Seleziona almeno una voce', 'error'); return; }
+    const all = !document.querySelector('.export-list input[type=checkbox]:not(:checked)');
     closeModal();
-    const all = keys.length === boxes.flatMap(b => b.value.split(',')).length;
-    window.location.href = all ? '/api/core/config/export?name=all'
-      : `/api/core/config/export?name=partial&sections=${encodeURIComponent(keys.join(','))}`;
+    window.location.href = `/api/core/config/export?name=${all ? 'all' : 'partial'}&sections=${encodeURIComponent(keys.join(','))}`;
   }
 
-  function exportTransfer(code, id) {
-    closeModal();
-    window.location.href = `/api/core/transfers/${encodeURIComponent(code)}/${encodeURIComponent(id)}/export`;
-  }
+  // Import: il file viene letto nel browser, poi si scelgono le estensioni da importare e la modalità
+  let pendingImport = null;
 
-  // ---- import: configurazione DevDock o formati delle estensioni ----
-  let pendingImport = null; // null = config.json, altrimenti { code, id }
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.hidden = true;
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files[0];
-    fileInput.value = '';
-    if (file) (pendingImport ? importTransfer(pendingImport, file) : importConfig(file));
-  });
-  document.body.appendChild(fileInput);
-
-  async function openImport() {
-    let transfers = [];
-    try { transfers = (await apiClient('/api/core').get('/transfers')).filter(t => t.canImport); } catch {}
-    if (!transfers.length) return pickImport(null); // solo config.json: niente scelta da fare
-    openModal('Importa', `
-      <div class="export-list">
-        <div class="export-item">
-          <div class="transfer-info"><div class="export-name">Configurazione DevDock</div><div class="export-keys">File .json esportato da DevDock</div></div>
-          <button class="btn btn-ghost btn-sm" onclick="Shell.pickImport()">↑ Scegli file</button>
-        </div>
-        ${transfers.map(t => `
-          <div class="export-item">
-            <div class="transfer-info"><div class="export-name">${esc(t.label)} <span class="export-keys">· ${esc(t.extension)}</span></div><div class="export-keys">${esc(t.description)}</div></div>
-            <button class="btn btn-ghost btn-sm" onclick="Shell.pickImport(${js(t.code)},${js(t.id)})">↑ Scegli file</button>
-          </div>`).join('')}
-      </div>`, '<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>');
-  }
-
-  function pickImport(code, id) {
-    closeModal();
-    pendingImport = code ? { code, id } : null;
-    fileInput.accept = code ? '' : '.json';
-    fileInput.click();
-  }
-
-  async function importTransfer({ code, id }, file) {
+  async function importConfig(input) {
+    const file = input.files[0];
+    input.value = '';
+    if (!file) return;
     try {
-      const r = await apiClient('/api/core').post(`/transfers/${encodeURIComponent(code)}/${encodeURIComponent(id)}/import`, { content: await file.text() });
-      toast(r.message, 'success');
-      refresh();
+      const cfg = JSON.parse(await file.text());
+      // Caselle dichiarate dalle estensioni di cui il file contiene i dati
+      const entries = exportItems().filter(({ item }) => item.sections.some(k => cfg[k] !== undefined));
+      if (!entries.length) { toast('Il file non contiene dati delle estensioni installate', 'error'); return; }
+      pendingImport = cfg;
+      const count = k => Array.isArray(cfg[k]) ? ` (${cfg[k].length})` : '';
+      openModal('Importa configurazione', `
+        <div class="export-list">
+          <p class="export-hint">${esc(file.name)} — scegli cosa importare:</p>
+          ${checkboxList(entries, item => item.sections.filter(k => cfg[k] !== undefined).map(k => k + count(k)).join(', '))}
+          <p class="export-hint">Modalità:</p>
+          <label class="export-item"><input type="radio" name="importMode" value="merge" checked>
+            <div><div class="export-name">Unisci</div><div class="export-keys">aggiunge gli elementi nuovi, quelli esistenti restano invariati</div></div></label>
+          <label class="export-item"><input type="radio" name="importMode" value="replace">
+            <div><div class="export-name">Sostituisci</div><div class="export-keys">i dati delle voci selezionate prendono il posto di quelli attuali</div></div></label>
+        </div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
+         <button class="btn btn-primary" onclick="Shell.doImport()">↑ Importa</button>`);
     } catch (e) { toast('Errore import: ' + e.message, 'error'); }
   }
 
-  async function importConfig(file) {
+  async function doImport() {
+    const keys = checkedKeys();
+    if (!keys.length) { toast('Seleziona almeno una voce', 'error'); return; }
+    const mode = document.querySelector('input[name="importMode"]:checked')?.value || 'merge';
+    const config = Object.fromEntries(keys.filter(k => pendingImport[k] !== undefined).map(k => [k, pendingImport[k]]));
     try {
-      const cfg = JSON.parse(await file.text());
-      const sections = await apiClient('/api/core').get('/config/sections');
-      const found = sections.filter(s => cfg[s.key] !== undefined)
-        .map(s => `${s.key}${Array.isArray(cfg[s.key]) ? ` (${cfg[s.key].length})` : ''}`);
-      if (!found.length) { toast('File non valido: nessuna sezione riconosciuta', 'error'); return; }
-      const mode = confirm(`Sezioni trovate: ${found.join(', ')}.\n\nOK = Sostituisci queste sezioni\nAnnulla = Merge (aggiungi i nuovi)\n\nLe sezioni assenti dal file non vengono toccate.`) ? 'replace' : 'merge';
-      await apiClient('/api/core').post('/config/import', { config: cfg, mode });
-      toast(`Import completato (${mode === 'replace' ? 'sostituzione' : 'merge'})`, 'success');
+      await apiClient('/api/core').post('/config/import', { config, mode });
+      closeModal();
+      pendingImport = null;
+      toast(`Import completato (${mode === 'replace' ? 'sostituzione' : 'unione'})`, 'success');
       refresh();
     } catch (e) { toast('Errore import: ' + e.message, 'error'); }
   }
@@ -416,5 +390,5 @@ window.Shell = (() => {
       '<div class="empty-state"><div class="icon">🧩</div><p>Nessuna estensione disponibile</p></div>';
   })();
 
-  return { has, activate, open, refresh, toggleNotifications, exportConfig, doExport, exportTransfer, openImport, pickImport };
+  return { has, activate, open, refresh, toggleNotifications, exportConfig, doExport, importConfig, doImport };
 })();

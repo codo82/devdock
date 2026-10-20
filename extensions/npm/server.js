@@ -277,32 +277,6 @@ module.exports = function createNpm(ctx) {
       },
     },
 
-    // Export/import dichiarati in setting.json → transfer
-    transfer: {
-      // Una cartella per riga (righe vuote e "#" ignorate): ogni cartella esistente
-      // non ancora presente diventa un progetto con id e nome dal nome della cartella
-      importFolders(content) {
-        const list = getProjects();
-        const ids = new Set(list.map(p => p.id));
-        const paths = new Set(list.map(p => p.path));
-        const added = [], skipped = [];
-        for (const raw of content.split(/\r?\n/)) {
-          const dir = raw.trim();
-          if (!dir || dir.startsWith('#')) continue;
-          if (!path.isAbsolute(dir) || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) { skipped.push(`${dir} (cartella non trovata)`); continue; }
-          if (paths.has(dir)) { skipped.push(`${dir} (già presente)`); continue; }
-          const base = path.basename(dir).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 56) || 'progetto';
-          let id = base;
-          for (let n = 2; ids.has(id); n++) id = `${base}-${n}`;
-          const label = readPackage({ path: dir })?.name || path.basename(dir);
-          list.push({ id, label: String(label).slice(0, 200), path: dir });
-          ids.add(id); paths.add(dir); added.push(id);
-        }
-        if (added.length) saveProjects(list);
-        return `${added.length} progetti aggiunti${skipped.length ? `, ${skipped.length} saltati: ${skipped.join('; ')}` : ''}`;
-      },
-    },
-
     shutdown() {
       for (const pd of processes.values()) killGroup(pd);
     },

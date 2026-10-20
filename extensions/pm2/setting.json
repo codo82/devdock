@@ -16,22 +16,9 @@
   "backend": {
     "module": "server.js",
     "routes": [
-      {
-        "method": "GET",
-        "path": "/list",
-        "handler": "list"
-      },
-      {
-        "method": "POST",
-        "path": "/action",
-        "handler": "action"
-      },
-      {
-        "method": "GET",
-        "path": "/logs",
-        "handler": "logs",
-        "stream": true
-      }
+      { "method": "GET",   "path": "/list",   "handler": "list" },
+      { "method": "POST",  "path": "/action", "handler": "action" },
+      { "method": "GET",   "path": "/logs",   "handler": "logs", "stream": true }
     ]
   },
   "frontend": {

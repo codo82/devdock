@@ -279,23 +279,6 @@ module.exports = function createTunnels(ctx) {
       },
     },
 
-    // Export/import dichiarati in setting.json → transfer
-    transfer: {
-      // Uno script con i comandi ssh equivalenti ai tunnel configurati
-      exportSshCommands() {
-        const byKey = new Map(servers().map(s => [s.key, s]));
-        const line = s => `ssh -N -L 127.0.0.1:${s.port}:${s.remote} ${s.alias}   # ${String(s.label).replace(/[\r\n]/g, ' ')}`;
-        const grouped = new Set();
-        const blocks = groups().map(g => {
-          g.servers.forEach(k => grouped.add(k));
-          return [`# ${String(g.label).replace(/[\r\n]/g, ' ')}`, ...g.servers.map(k => byKey.get(k)).filter(Boolean).map(line)].join('\n');
-        });
-        const loose = servers().filter(s => !grouped.has(s.key));
-        if (loose.length) blocks.push(['# Senza gruppo', ...loose.map(line)].join('\n'));
-        return `#!/bin/sh\n# Tunnel SSH esportati da DevDock il ${new Date().toISOString().slice(0, 10)}\n# Ogni riga apre un tunnel in primo piano: eseguile in terminali separati.\n\n${blocks.join('\n\n')}\n`;
-      },
-    },
-
     shutdown: stopAllTunnels,
   };
 };
