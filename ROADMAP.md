@@ -114,6 +114,8 @@ Built as an extension on the M3 architecture.
 - [ ] **M5.4** UI: editor with minimal syntax highlighting (CodeMirror 6 from CDN with SRI, or a light custom highlighter), run with Ctrl/Cmd+Enter
 - [ ] **M5.5** Results in a table (sortable columns, highlighted NULLs, row count/time), messages for queries without a result set
 - [ ] **M5.6** Per-session query history (in memory / `sessionStorage`)
+- [ ] **M5.8** Schema browser in the sidebar: databases → tables (with row estimate) → columns, indexes and foreign keys; click on a table → `SELECT * … LIMIT` in the editor
+- [ ] **M5.9** Table creation: designer with name, columns (name, type with length/precision, NULL, default, auto increment, comment), primary key, indexes (unique too), foreign keys, engine and charset/collation. Shows the generated `CREATE TABLE` (identifiers quoted with backticks, nothing concatenated from unvalidated input) before running it; disabled on read-only connections
 - [ ] **M5.7** Later: PostgreSQL, since it appears among the configured server types
 
 ## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
