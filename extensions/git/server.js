@@ -24,7 +24,7 @@ module.exports = function createGit(ctx) {
 
   // ---- Validazione delle azioni git ----
 
-  const GIT_ACTIONS = new Set(['commit', 'pull', 'push', 'push_force', 'pull_push', 'merge', 'fetch', 'checkout', 'checkout_new', 'stash', 'stash_pop']);
+  const GIT_ACTIONS = new Set(['commit', 'pull', 'push', 'push_force', 'pull_push', 'merge', 'merge_abort', 'merge_continue', 'fetch', 'checkout', 'checkout_new', 'stash', 'stash_pop']);
   const BRANCH_ACTIONS = new Set(['push', 'push_force', 'pull_push', 'merge', 'checkout', 'checkout_new']); // branch obbligatorio
   const REMOTE_ACTIONS = new Set(['pull', 'push', 'push_force', 'pull_push']);              // remote usato
 
@@ -89,12 +89,28 @@ module.exports = function createGit(ctx) {
     push:       ({ remote, branch }) => [{ args: ['fetch', remote], optional: true }, { args: ['push', remote, branch] }],
     push_force: ({ remote, branch }) => [{ args: ['push', '--force-with-lease', remote, branch] }],
     pull_push:  ({ remote, branch }) => [{ args: ['pull', remote, branch] }, { args: ['push', remote, branch] }],
-    merge:      ({ branch }) => [{ args: ['merge', branch] }],
+    merge:      ({ branch, mode }) => [{ args: ['merge', ...(mode === 'no-ff' ? ['--no-ff'] : mode === 'squash' ? ['--squash'] : []), branch] }],
+    merge_abort: () => [{ args: ['merge', '--abort'] }],
     fetch:      () => [{ args: ['fetch', '--all', '--prune'] }],
     checkout:   ({ branch }) => [{ args: ['checkout', branch, '--'] }],
     stash:      () => [{ args: ['stash'] }],
     stash_pop:  () => [{ args: ['stash', 'pop'] }],
   };
+
+  // ---- merge ----
+
+  const CONFLICT_XY = new Set(['UU', 'AA', 'DD', 'AU', 'UA', 'DU', 'UD']);
+  const mergeInProgress = async cwd =>
+    (await gitExec(cwd, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { allowFail: true })).code === 0;
+
+  // File in conflitto che contengono ancora i marcatori <<<<<<< / >>>>>>>
+  async function unresolvedConflicts(cwd) {
+    const names = (await getGitStatus(cwd)).files.filter(f => CONFLICT_XY.has(f.xy)).map(f => f.name);
+    return names.filter(name => {
+      try { return /^(<{7}|>{7})( |$)/m.test(fs.readFileSync(path.join(cwd, name), 'utf8')); }
+      catch { return false; } // cancellato: si risolve con l'add
+    });
+  }
 
   // ---- cambio e creazione di branch: controlli prima di eseguire ----
 
@@ -195,7 +211,11 @@ module.exports = function createGit(ctx) {
 
           const stashCount = stashR.out.trim().split('\n').filter(Boolean).length;
 
-          res.json({ branch, ahead, behind, files, stashCount });
+          // Merge in corso e file in conflitto (entrambi modificati, aggiunti o cancellati da un lato)
+          const merging = await mergeInProgress(repo.path);
+          const conflicts = files.filter(f => CONFLICT_XY.has(f.xy)).map(f => f.name);
+
+          res.json({ branch, ahead, behind, files, stashCount, merging, conflicts });
         } catch (e) {
           res.status(500).json({ error: e.message });
         }
@@ -288,6 +308,31 @@ module.exports = function createGit(ctx) {
         res.json({ current: current.out.trim() || null, detached: !current.out.trim(), local, remote });
       },
 
+      // Anteprima del merge di un branch nel corrente: commit in arrivo, file, fast-forward
+      async mergePreview(req, res) {
+        const repo = getGitRepos().find(r => r.id === req.params.id);
+        if (!repo) return res.status(404).json({ error: 'Repo non trovato' });
+        const branch = String(req.query.branch || '');
+        if (!isValidBranchName(branch) || (await gitExec(repo.path, ['rev-parse', '--verify', '--quiet', `${branch}^{commit}`], { allowFail: true })).code !== 0) {
+          return res.status(400).json({ error: `Branch non valido: ${branch}` });
+        }
+        const SEP = '\x1f';
+        const [log, diff, ff, upToDate] = await Promise.all([
+          gitExec(repo.path, ['log', `--format=%h${SEP}%s${SEP}%an${SEP}%ar`, '-200', `HEAD..${branch}`, '--'], { allowFail: true }),
+          gitExec(repo.path, ['diff', '--name-status', `HEAD...${branch}`, '--'], { allowFail: true }),
+          gitExec(repo.path, ['merge-base', '--is-ancestor', 'HEAD', branch], { allowFail: true }),
+          gitExec(repo.path, ['merge-base', '--is-ancestor', branch, 'HEAD'], { allowFail: true }),
+        ]);
+        res.json({
+          branch,
+          commits: log.out.split('\n').filter(Boolean).map(l => { const [hash, subject, author, relDate] = l.split(SEP); return { hash, subject, author, relDate }; }),
+          files: diff.out.split('\n').filter(Boolean).map(l => { const [status, ...rest] = l.split('\t'); return { status, name: rest.join(' → ') }; }),
+          fastForward: ff.code === 0,
+          upToDate: upToDate.code === 0,
+          merging: await mergeInProgress(repo.path),
+        });
+      },
+
       // Messaggio completo di un commit (subject + body)
       async commitMessage(req, res) {
         const repos = getGitRepos();
@@ -310,14 +355,28 @@ module.exports = function createGit(ctx) {
         const repo = getGitRepos().find(r => r.id === req.params.id);
         if (!repo) return res.status(404).json({ error: 'Repo non trovato' });
 
-        const { action, message, branch, remote = 'origin', files = [], startPoint, stash } = req.body;
+        const { action, message, branch, remote = 'origin', files = [], startPoint, stash, mode } = req.body;
+        if (action === 'merge' && mode != null && !['ff', 'no-ff', 'squash'].includes(mode)) return res.status(400).json({ error: 'Modalità di merge non valida' });
 
         // Validazione prima di aprire lo stream SSE, così l'errore arriva come JSON 400
         const invalid = await validateGitAction(repo.path, { action, branch, remote, message });
         if (invalid) return res.status(400).json({ error: invalid });
 
-        // Cambio/creazione di branch: modifiche non committate, branch esistente o mancante
+        // Merge: niente merge sopra un altro in corso; per concluderlo i conflitti vanno risolti
         let switchSteps = null;
+        if (action === 'merge' && await mergeInProgress(repo.path)) {
+          return res.status(409).json({ code: 'merging', error: 'C\'è già un merge in corso: concludilo o annullalo' });
+        }
+        if (action === 'merge_abort' && !await mergeInProgress(repo.path)) return res.status(409).json({ error: 'Nessun merge in corso' });
+        if (action === 'merge_continue') {
+          if (!await mergeInProgress(repo.path)) return res.status(409).json({ error: 'Nessun merge in corso' });
+          const left = await unresolvedConflicts(repo.path);
+          if (left.length) return res.status(409).json({ code: 'conflicts', files: left, error: `Conflitti ancora da risolvere in ${left.length} file` });
+          const toAdd = (await getGitStatus(repo.path)).files.filter(f => CONFLICT_XY.has(f.xy)).map(f => f.name);
+          switchSteps = [...(toAdd.length ? [{ args: ['add', '-A', '--', ...toAdd] }] : []), { args: ['commit', '--no-edit'] }];
+        }
+
+        // Cambio/creazione di branch: modifiche non committate, branch esistente o mancante
         if (action === 'checkout' || action === 'checkout_new') {
           const prepared = await prepareSwitch(repo.path, { action, branch, startPoint, stash: stash === true });
           if (!prepared.steps) return res.status(prepared.status).json(prepared.body);
@@ -345,7 +404,7 @@ module.exports = function createGit(ctx) {
               { args: ['commit', '-m', message || 'Update'] },
             ];
           } else {
-            steps = switchSteps || ACTION_STEPS[action]({ remote, branch });
+            steps = switchSteps || ACTION_STEPS[action]({ remote, branch, mode });
           }
           send('exit', await runSteps(repo.path, steps, send));
         } finally {

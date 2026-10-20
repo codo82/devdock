@@ -191,3 +191,47 @@ test('cambio e creazione di branch con i controlli preliminari', async () => {
   git(repo, 'checkout', '-q', '--', 'p1');
   git(repo, 'checkout', '-q', 'main');
 });
+
+test('merge: anteprima, opzioni, conflitti, annulla e concludi', async () => {
+  git(repo, 'checkout', '-q', 'main');
+  // due branch che toccano lo stesso file
+  git(repo, 'checkout', '-q', '-b', 'm-a'); fs.writeFileSync(path.join(repo, 'conflitto.txt'), 'versione A\n'); git(repo, 'add', 'conflitto.txt'); git(repo, 'commit', '-qm', 'A');
+  git(repo, 'checkout', '-q', 'main');
+  git(repo, 'checkout', '-q', '-b', 'm-b'); fs.writeFileSync(path.join(repo, 'conflitto.txt'), 'versione B\n'); git(repo, 'add', 'conflitto.txt'); git(repo, 'commit', '-qm', 'B');
+  git(repo, 'checkout', '-q', 'main');
+
+  let p = (await srv.request('GET', '/api/ext/git/repos/r/merge-preview?branch=m-a')).json;
+  assert.deepEqual(p.commits.map(c => c.subject), ['A']);
+  assert.deepEqual(p.files, [{ status: 'A', name: 'conflitto.txt' }]);
+  assert.equal(p.fastForward, true);
+  assert.equal((await srv.request('GET', '/api/ext/git/repos/r/merge-preview?branch=--all')).status, 400);
+
+  // merge senza fast-forward
+  let r = await action({ action: 'merge', branch: 'm-a', mode: 'no-ff' });
+  assert.equal(exitOf(r), 0, r.text);
+  assert.match(git(repo, 'log', '-1', '--format=%s'), /^Merge branch 'm-a'/);
+  assert.equal((await action({ action: 'merge', branch: 'm-a', mode: '--hack' })).status, 400);
+
+  // conflitto
+  r = await action({ action: 'merge', branch: 'm-b' });
+  assert.notEqual(exitOf(r), 0);
+  let st = (await srv.request('GET', '/api/ext/git/repos/r/status')).json;
+  assert.equal(st.merging, true);
+  assert.deepEqual(st.conflicts, ['conflitto.txt']);
+  assert.equal((await action({ action: 'merge', branch: 'm-a' })).json.code, 'merging');
+  r = await action({ action: 'merge_continue' });
+  assert.equal(r.status, 409);
+  assert.deepEqual(r.json.files, ['conflitto.txt']);
+
+  // annulla, poi di nuovo e risolvi
+  assert.equal(exitOf(await action({ action: 'merge_abort' })), 0);
+  assert.equal((await srv.request('GET', '/api/ext/git/repos/r/status')).json.merging, false);
+  await action({ action: 'merge', branch: 'm-b' });
+  fs.writeFileSync(path.join(repo, 'conflitto.txt'), 'versione A e B\n');
+  r = await action({ action: 'merge_continue' });
+  assert.equal(exitOf(r), 0, r.text);
+  st = (await srv.request('GET', '/api/ext/git/repos/r/status')).json;
+  assert.equal(st.merging, false);
+  assert.equal(fs.readFileSync(path.join(repo, 'conflitto.txt'), 'utf8'), 'versione A e B\n');
+  assert.equal((await action({ action: 'merge_abort' })).status, 409);
+});

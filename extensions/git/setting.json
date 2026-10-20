@@ -19,6 +19,7 @@
       { "method": "GET",   "path": "/repos",                  "handler": "listRepos" },
       { "method": "GET",   "path": "/repos/:id/status",       "handler": "status" },
       { "method": "GET",   "path": "/repos/:id/branches",     "handler": "branches" },
+      { "method": "GET",   "path": "/repos/:id/merge-preview", "handler": "mergePreview" },
       { "method": "GET",   "path": "/repos/:id/log",          "handler": "log" },
       { "method": "GET",   "path": "/repos/:id/commit/:hash", "handler": "commitMessage" },
       { "method": "POST",  "path": "/repos/:id/action",       "handler": "action", "stream": true }
