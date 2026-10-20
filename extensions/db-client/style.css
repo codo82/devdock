@@ -68,3 +68,15 @@
 .db-tree-err{color:var(--danger);white-space:normal}
 .db-active{font-size:12px;font-family:var(--font);padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db-structure h4{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:12px 16px 6px}
+
+/* anteprima dati */
+.db-grid-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--border)}
+.db-grid-title{font-family:var(--font);font-size:12px;color:var(--ext-color)}
+.db-grid-search{width:220px;padding:4px 8px;font-size:12px}
+.db-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:var(--font);padding:2px 4px 2px 8px;border-radius:10px;border:1px solid color-mix(in srgb,var(--ext-color) 40%,transparent);background:color-mix(in srgb,var(--ext-color) 10%,transparent)}
+.db-chip button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px}
+.db-chip button:hover{color:var(--danger)}
+.db-pager{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.db-page-size{min-width:0;width:70px}
+.db-table th[data-grid="sort"]{cursor:pointer;user-select:none}
+.db-table th[data-grid="sort"]:hover{color:var(--text)}

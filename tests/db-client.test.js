@@ -283,3 +283,46 @@ test('schema: tabelle e struttura di una tabella', async t => {
     await mysqlDb.stop();
   }
 });
+
+test('anteprima dati: pagine, ricerca, filtri, ordinamento con parametri', async t => {
+  const mysqlDb = await startMysql();
+  if (!mysqlDb) return t.skip('mysqld non installato');
+  const s = await startServer();
+  try {
+    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    await api('POST', '/vault/init', { password: 'master-password-db' });
+    await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass' });
+    // 60 righe in più (INSERT confermato)
+    const values = Array.from({ length: 60 }, (_, i) => `('Cliente ${String(i).padStart(2, '0')}', ${i % 2 ? 'NULL' : "'pari'"})`).join(',');
+    const ins = `INSERT INTO clienti (nome, note) VALUES ${values}`;
+    const first = await api('POST', '/connections/c/query', { sql: ins, database: 'app' });
+    await api('POST', '/connections/c/query', { sql: ins, database: 'app', confirm: first.json.token });
+    const rows = body => api('POST', '/connections/c/databases/app/tables/clienti/rows', body);
+
+    let r = await rows({ pageSize: 25, page: 2 });
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.json.total, 63);
+    assert.equal(r.json.rows.length, 25);
+    assert.equal(r.json.rows[0][0], 26);
+    assert.deepEqual(r.json.primaryKey, ['id']);
+
+    r = await rows({ search: 'storico' });
+    assert.deepEqual(r.json.rows, [[2, 'Bianchi', 'cliente storico']]);
+    // i caratteri jolly cercati sono letterali
+    assert.equal((await rows({ search: '%' })).json.total, 0);
+
+    r = await rows({ filters: [{ column: 'note', op: 'null' }, { column: 'nome', op: 'starts', value: 'Cliente 1' }], sort: { column: 'id', dir: 'desc' } });
+    assert.deepEqual(r.json.rows.map(x => x[1]), ['Cliente 19', 'Cliente 17', 'Cliente 15', 'Cliente 13', 'Cliente 11']);
+
+    // valori e nomi non entrano mai come SQL
+    r = await rows({ filters: [{ column: 'nome', op: 'eq', value: "x' OR '1'='1" }] });
+    assert.equal(r.json.total, 0);
+    assert.equal((await rows({ filters: [{ column: 'nome; DROP TABLE clienti', op: 'eq', value: 1 }] })).status, 400);
+    assert.equal((await rows({ filters: [{ column: 'nome', op: 'OR 1=1', value: 1 }] })).status, 400);
+    assert.equal((await rows({ sort: { column: 'id`; DROP TABLE x; --' } })).status, 400);
+    assert.equal((await rows({ pageSize: 999999 })).json.pageSize, 50);
+  } finally {
+    await s.stop();
+    await mysqlDb.stop();
+  }
+});

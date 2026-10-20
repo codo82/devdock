@@ -178,12 +178,96 @@ export default {
       run();
     }
 
+    // ---- anteprima dati (griglia paginata con ricerca, filtri e ordinamento) ----
+    const FILTER_LABELS = { eq: '=', ne: '≠', contains: 'contiene', starts: 'inizia con', lt: '<', gt: '>', null: 'è NULL', notnull: 'non è NULL' };
+    let grid = null; // { connId, db, table, page, pageSize, search, filters, sort, data }
+
+    function openGrid(c, db, table) {
+      grid = { connId: c.id, db, table, page: 1, pageSize: 50, search: '', filters: [], sort: null, data: null };
+      loadGrid();
+    }
+
+    async function loadGrid() {
+      if (!grid) return;
+      const g = grid;
+      const c = connections.find(x => x.id === g.connId);
+      try {
+        g.data = await ctx.api.post(tableUrl(c, g.db, g.table) + '/rows',
+          { page: g.page, pageSize: g.pageSize, search: g.search, filters: g.filters, sort: g.sort });
+        if (grid === g) renderGrid();
+      } catch (e) { if (grid === g) renderError(e.message); }
+    }
+
+    function renderGrid() {
+      const { data, sort } = grid;
+      const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
+      const el = $(ctx.root, 'results');
+      const hadFocus = document.activeElement?.dataset?.grid === 'search';
+      el.innerHTML = `
+        <div class="db-grid-bar">
+          <strong class="db-grid-title">${esc(grid.db)}.${esc(grid.table)}</strong>
+          <input class="form-input db-grid-search" data-grid="search" placeholder="Cerca in tutte le colonne…" value="${esc(grid.search)}">
+          <button class="btn btn-ghost btn-sm" data-grid="add-filter">+ Filtro</button>
+          ${grid.filters.map((f, i) => `<span class="db-chip">${esc(f.column)} ${esc(FILTER_LABELS[f.op])}${f.op === 'null' || f.op === 'notnull' ? '' : ` <b>${esc(f.value)}</b>`}<button data-grid="remove-filter" data-i="${i}" title="Rimuovi">✕</button></span>`).join('')}
+          <div class="db-pager">
+            <button class="btn btn-ghost btn-sm" data-grid="page" data-p="1" ${grid.page <= 1 ? 'disabled' : ''}>«</button>
+            <button class="btn btn-ghost btn-sm" data-grid="page" data-p="${grid.page - 1}" ${grid.page <= 1 ? 'disabled' : ''}>‹</button>
+            <span>Pagina ${esc(grid.page)} di ${esc(pages)} · ${esc(data.total)} righe</span>
+            <button class="btn btn-ghost btn-sm" data-grid="page" data-p="${grid.page + 1}" ${grid.page >= pages ? 'disabled' : ''}>›</button>
+            <button class="btn btn-ghost btn-sm" data-grid="page" data-p="${pages}" ${grid.page >= pages ? 'disabled' : ''}>»</button>
+            <select class="form-input db-select db-page-size" data-grid="page-size">${data.pageSizes.map(n => `<option ${n === data.pageSize ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div class="db-table-wrap"><table class="data-table db-table">
+          <thead><tr>${data.columns.map(col => `<th data-grid="sort" data-col="${esc(col.name)}" title="${esc(col.type)}${col.key === 'PRI' ? ' · chiave primaria' : ''}">${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)}${sort?.column === col.name ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
+          <tbody>${data.rows.map(row => `<tr>${row.map(v => v === null ? '<td class="db-null">NULL</td>' : `<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`).join('')
+            || `<tr><td class="db-muted" colspan="${data.columns.length}">Nessuna riga</td></tr>`}</tbody>
+        </table></div>`;
+      if (hadFocus) { const i = el.querySelector('[data-grid="search"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+    }
+
+    function addFilter() {
+      const cols = grid.data.columns;
+      openModal('Aggiungi filtro', `
+        <div class="form-grid">
+          <div class="form-row"><label>Colonna</label><select class="form-input" id="f_flt_col">${cols.map(c => `<option>${esc(c.name)}</option>`).join('')}</select></div>
+          <div class="form-row"><label>Condizione</label><select class="form-input" id="f_flt_op" onchange="document.getElementById('f_flt_val_row').hidden=['null','notnull'].includes(this.value)">
+            ${Object.entries(FILTER_LABELS).map(([op, l]) => `<option value="${op}">${esc(l)}</option>`).join('')}</select></div>
+        </div>
+        <div class="form-row" id="f_flt_val_row"><label>Valore</label><input class="form-input" id="f_flt_val"></div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button><button class="btn btn-primary" onclick="Ext['db-client'].applyFilter()">Applica</button>`);
+    }
+
+    let searchTimer = null;
+    $(ctx.root, 'results').addEventListener('input', e => {
+      if (e.target.dataset.grid !== 'search') return;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => { grid.search = e.target.value; grid.page = 1; loadGrid(); }, 300);
+    });
+    $(ctx.root, 'results').addEventListener('change', e => {
+      if (e.target.dataset.grid === 'page-size') { grid.pageSize = Number(e.target.value); grid.page = 1; loadGrid(); }
+    });
+    $(ctx.root, 'results').addEventListener('click', e => {
+      const t = e.target.closest('[data-grid]');
+      if (!t || !grid) return;
+      const a = t.dataset.grid;
+      if (a === 'page') { grid.page = Number(t.dataset.p); loadGrid(); }
+      else if (a === 'sort') {
+        const col = t.dataset.col;
+        grid.sort = grid.sort?.column !== col ? { column: col, dir: 'asc' } : grid.sort.dir === 'asc' ? { column: col, dir: 'desc' } : null;
+        grid.page = 1;
+        loadGrid();
+      } else if (a === 'add-filter') addFilter();
+      else if (a === 'remove-filter') { grid.filters.splice(Number(t.dataset.i), 1); grid.page = 1; loadGrid(); }
+    });
+
     function tableMenu(ev, c, db, name) {
       const t = (cache.get(nodeKey('d', c.id, db)) || []).find?.(x => x.name === name);
       const full = `${quoteId(db)}.${quoteId(name)}`;
       const ro = c.readOnly;
       ctx.ui.contextMenu(ev.clientX, ev.clientY, [
-        { icon: '▶', label: 'Prime 100 righe', action: () => runSql(`SELECT * FROM ${full} LIMIT 100;`) },
+        { icon: '▤', label: 'Apri dati', action: () => openGrid(c, db, name) },
+        { icon: '▶', label: 'Prime 100 righe nell\'editor', action: () => runSql(`SELECT * FROM ${full} LIMIT 100;`) },
         { icon: '#', label: 'Conta righe', action: () => runSql(`SELECT COUNT(*) AS righe FROM ${full};`) },
         { icon: '▦', label: 'Struttura', action: () => showStructure(c, db, name) },
         { icon: '⌘', label: t?.view ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE', action: () => runSql(`SHOW CREATE ${t?.view ? 'VIEW' : 'TABLE'} ${full};`) },
@@ -201,6 +285,7 @@ export default {
     }
 
     async function showStructure(c, db, name) {
+      grid = null;
       const el = $(ctx.root, 'results');
       el.innerHTML = '<div class="db-muted db-pad">Caricamento struttura…</div>';
       try {
@@ -324,6 +409,7 @@ export default {
         ...(typeof confirmToken === 'object' ? { confirm: confirmToken.token } : {}),
       };
       running = true;
+      grid = null;
       $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">Esecuzione...</div>';
       try {
         const res = await fetch(ctx.api.url(`/connections/${encodeURIComponent(c.id)}/query`), {
@@ -456,6 +542,13 @@ export default {
     const actions = {
       lock, saveVault,
       run: () => run(),
+      applyFilter() {
+        const op = document.getElementById('f_flt_op').value;
+        grid.filters.push({ column: document.getElementById('f_flt_col').value, op, value: document.getElementById('f_flt_val').value });
+        grid.page = 1;
+        closeModal();
+        loadGrid();
+      },
       confirmRun() {
         const data = pendingConfirm;
         pendingConfirm = null;

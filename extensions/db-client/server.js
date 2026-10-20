@@ -16,6 +16,21 @@ const QUERY_TIMEOUT_MS = 30000;
 const DEFAULT_ROW_LIMIT = 1000;
 const MAX_ROW_LIMIT = 10000;
 
+const PAGE_SIZES = [25, 50, 100, 250, 500];
+// Operatori dei filtri dell'anteprima: SQL con il valore come parametro
+const FILTER_OPS = {
+  eq:       { sql: '= ?' },
+  ne:       { sql: '<> ?' },
+  contains: { sql: 'LIKE ?', like: v => `%${v}%` },
+  starts:   { sql: 'LIKE ?', like: v => `${v}%` },
+  lt:       { sql: '< ?' },
+  gt:       { sql: '> ?' },
+  null:     { sql: 'IS NULL', noValue: true },
+  notnull:  { sql: 'IS NOT NULL', noValue: true },
+};
+const escapeLike = v => String(v).replace(/[\\%_]/g, m => '\\' + m);
+const quoteId = name => '`' + String(name).replace(/`/g, '``') + '`';
+
 // Nome del tipo MySQL dal codice numerico del protocollo
 const TYPE_NAMES = Object.fromEntries(Object.entries(mysqlCb.Types).map(([name, code]) => [code, name]));
 
@@ -358,6 +373,58 @@ module.exports = function createDbClient(ctx) {
           });
         } catch (e) {
           res.status(e.status || 502).json({ error: e.message });
+        }
+      },
+
+      // Anteprima dei dati di una tabella: pagina, ricerca, filtri, ordinamento.
+      // Colonne e operatori sono verificati, i valori passano come parametri.
+      async rows(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const { db, table } = req.params;
+        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) return res.status(400).json({ error: 'Nome non valido' });
+        const pageSize = PAGE_SIZES.includes(Number(req.body.pageSize)) ? Number(req.body.pageSize) : 50;
+        const page = Math.max(1, parseInt(req.body.page) || 1);
+        try {
+          const q = (await poolFor(conn)).promise();
+          const [columns] = await q.query(
+            `SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, DATA_TYPE AS dataType, IS_NULLABLE = 'YES' AS nullable,
+                    COLUMN_KEY AS \`key\`, COLUMN_DEFAULT AS \`default\`, EXTRA AS extra
+               FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]);
+          if (!columns.length) return res.status(404).json({ error: 'Tabella non trovata' });
+          const names = new Set(columns.map(c => c.name));
+
+          const where = [], params = [];
+          const search = typeof req.body.search === 'string' ? req.body.search.trim() : '';
+          if (search) {
+            where.push('(' + columns.map(c => `CAST(${quoteId(c.name)} AS CHAR) LIKE ?`).join(' OR ') + ')');
+            columns.forEach(() => params.push(`%${escapeLike(search)}%`));
+          }
+          for (const f of Array.isArray(req.body.filters) ? req.body.filters : []) {
+            const op = FILTER_OPS[f?.op];
+            if (!op || !names.has(f.column)) return res.status(400).json({ error: `Filtro non valido: ${f?.column} ${f?.op}` });
+            where.push(`${quoteId(f.column)} ${op.sql}`);
+            if (!op.noValue) params.push(op.like ? op.like(escapeLike(f.value ?? '')) : f.value ?? '');
+          }
+          const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+          let orderSql = '';
+          const sort = req.body.sort;
+          if (sort?.column) {
+            if (!names.has(sort.column)) return res.status(400).json({ error: `Colonna sconosciuta: ${sort.column}` });
+            orderSql = ` ORDER BY ${quoteId(sort.column)} ${sort.dir === 'desc' ? 'DESC' : 'ASC'}`;
+          }
+          const from = `${quoteId(db)}.${quoteId(table)}`;
+          const [[{ total }]] = await q.query(`SELECT COUNT(*) AS total FROM ${from}${whereSql}`, params);
+          const sql = `SELECT * FROM ${from}${whereSql}${orderSql} LIMIT ? OFFSET ?`;
+          const [rows] = await q.query({ sql, rowsAsArray: true }, [...params, pageSize, (page - 1) * pageSize]);
+          res.json({
+            columns: columns.map(c => ({ ...c, nullable: !!Number(c.nullable) })),
+            primaryKey: columns.filter(c => c.key === 'PRI').map(c => c.name),
+            rows: rows.map(r => r.map(cell)),
+            total: Number(total), page, pageSize, pageSizes: PAGE_SIZES,
+          });
+        } catch (e) {
+          res.status(e.status || 400).json({ error: e.message, code: e.code || null });
         }
       },
 
