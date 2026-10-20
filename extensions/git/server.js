@@ -24,8 +24,8 @@ module.exports = function createGit(ctx) {
 
   // ---- Validazione delle azioni git ----
 
-  const GIT_ACTIONS = new Set(['commit', 'pull', 'push', 'push_force', 'pull_push', 'merge', 'fetch', 'checkout', 'stash', 'stash_pop']);
-  const BRANCH_ACTIONS = new Set(['push', 'push_force', 'pull_push', 'merge', 'checkout']); // branch obbligatorio
+  const GIT_ACTIONS = new Set(['commit', 'pull', 'push', 'push_force', 'pull_push', 'merge', 'fetch', 'checkout', 'checkout_new', 'stash', 'stash_pop']);
+  const BRANCH_ACTIONS = new Set(['push', 'push_force', 'pull_push', 'merge', 'checkout', 'checkout_new']); // branch obbligatorio
   const REMOTE_ACTIONS = new Set(['pull', 'push', 'push_force', 'pull_push']);              // remote usato
 
   async function getGitRemotes(cwd) {
@@ -95,6 +95,52 @@ module.exports = function createGit(ctx) {
     stash:      () => [{ args: ['stash'] }],
     stash_pop:  () => [{ args: ['stash', 'pop'] }],
   };
+
+  // ---- cambio e creazione di branch: controlli prima di eseguire ----
+
+  const refExists = async (cwd, ref) => (await gitExec(cwd, ['show-ref', '--verify', '--quiet', ref], { allowFail: true })).code === 0;
+
+  // Modifiche ai file tracciati (i file non tracciati seguono il cambio di branch)
+  const trackedChanges = async cwd => (await getGitStatus(cwd)).files.filter(f => f.xy !== '??').map(f => f.name);
+
+  // Passi per checkout / checkout_new, oppure { status, body } da restituire subito
+  async function prepareSwitch(cwd, { action, branch, startPoint, stash }) {
+    let steps, target = branch, needsCleanTree = true;
+    if (action === 'checkout_new') {
+      if (await refExists(cwd, `refs/heads/${branch}`)) {
+        return { status: 409, body: { code: 'exists', error: `Il branch "${branch}" esiste già` } };
+      }
+      if (startPoint != null && startPoint !== '') {
+        if (typeof startPoint !== 'string' || startPoint.startsWith('-')
+            || (await gitExec(cwd, ['rev-parse', '--verify', '--quiet', `${startPoint}^{commit}`], { allowFail: true })).code !== 0) {
+          return { status: 400, body: { error: `Punto di partenza non valido: ${startPoint}` } };
+        }
+        steps = [{ args: ['checkout', '-b', branch, startPoint] }];
+      } else {
+        steps = [{ args: ['checkout', '-b', branch] }];
+        needsCleanTree = false; // dal commit attuale: le modifiche restano dove sono
+      }
+    } else if (await refExists(cwd, `refs/heads/${branch}`)) {
+      steps = [{ args: ['checkout', branch, '--'] }];
+    } else if (await refExists(cwd, `refs/remotes/${branch}`)) {
+      // branch remoto (es. origin/feature): copia locale che lo segue, se non c'è già
+      target = branch.slice(branch.indexOf('/') + 1);
+      steps = await refExists(cwd, `refs/heads/${target}`)
+        ? [{ args: ['checkout', target, '--'] }]
+        : [{ args: ['checkout', '--track', branch] }];
+    } else {
+      return { status: 404, body: { code: 'not_found', error: `Branch inesistente: ${branch}` } };
+    }
+
+    if (needsCleanTree) {
+      const dirty = await trackedChanges(cwd);
+      if (dirty.length && !stash) {
+        return { status: 409, body: { code: 'dirty', files: dirty, error: `Ci sono ${dirty.length} file modificati non committati` } };
+      }
+      if (dirty.length) steps.unshift({ args: ['stash', 'push', '-m', `devdock: prima di passare a ${target}`] });
+    }
+    return { steps };
+  }
 
   // Esegue un comando git mostrando "$ git …" e l'output; risolve con l'exit code
   function runStep(cwd, args, send) {
@@ -264,11 +310,19 @@ module.exports = function createGit(ctx) {
         const repo = getGitRepos().find(r => r.id === req.params.id);
         if (!repo) return res.status(404).json({ error: 'Repo non trovato' });
 
-        const { action, message, branch, remote = 'origin', files = [] } = req.body;
+        const { action, message, branch, remote = 'origin', files = [], startPoint, stash } = req.body;
 
         // Validazione prima di aprire lo stream SSE, così l'errore arriva come JSON 400
         const invalid = await validateGitAction(repo.path, { action, branch, remote, message });
         if (invalid) return res.status(400).json({ error: invalid });
+
+        // Cambio/creazione di branch: modifiche non committate, branch esistente o mancante
+        let switchSteps = null;
+        if (action === 'checkout' || action === 'checkout_new') {
+          const prepared = await prepareSwitch(repo.path, { action, branch, startPoint, stash: stash === true });
+          if (!prepared.steps) return res.status(prepared.status).json(prepared.body);
+          switchSteps = prepared.steps;
+        }
 
         // Una sola operazione git alla volta per repo: due push concorrenti si
         // contendono l'aggiornamento dei ref ("cannot lock ref ... but expected ...").
@@ -291,7 +345,7 @@ module.exports = function createGit(ctx) {
               { args: ['commit', '-m', message || 'Update'] },
             ];
           } else {
-            steps = ACTION_STEPS[action]({ remote, branch });
+            steps = switchSteps || ACTION_STEPS[action]({ remote, branch });
           }
           send('exit', await runSteps(repo.path, steps, send));
         } finally {

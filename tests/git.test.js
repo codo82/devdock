@@ -148,3 +148,46 @@ test('branch: locali con upstream e stato, remoti con copia locale', async () =>
   assert.deepEqual([remote.remote, remote.branch, remote.hasLocal], ['origin', 'main', true]);
   assert.ok(!r.json.remote.some(b => b.name.endsWith('/HEAD')));
 });
+
+test('cambio e creazione di branch con i controlli preliminari', async () => {
+  git(repo, 'checkout', '-q', 'main');
+  // branch remoto senza copia locale
+  git(repo, 'push', '-q', 'origin', 'main:solo-remoto');
+  git(repo, 'fetch', '-q', 'origin');
+
+  // checkout di un branch remoto → copia locale che lo segue
+  let r = await action({ action: 'checkout', branch: 'origin/solo-remoto' });
+  assert.equal(exitOf(r), 0, r.text);
+  assert.match(r.text, /checkout --track origin\/solo-remoto/);
+  assert.equal(git(repo, 'branch', '--show-current').trim(), 'solo-remoto');
+  assert.equal(git(repo, 'rev-parse', '--abbrev-ref', 'solo-remoto@{upstream}').trim(), 'origin/solo-remoto');
+
+  // inesistente
+  r = await action({ action: 'checkout', branch: 'non-esiste' });
+  assert.equal(r.status, 404);
+
+  // modifiche non committate: 409 con i file, poi stash e cambio
+  fs.writeFileSync(path.join(repo, 'p1'), 'modificato');
+  r = await action({ action: 'checkout', branch: 'main' });
+  assert.equal(r.status, 409);
+  assert.deepEqual([r.json.code, r.json.files], ['dirty', ['p1']]);
+  r = await action({ action: 'checkout', branch: 'main', stash: true });
+  assert.equal(exitOf(r), 0, r.text);
+  assert.equal(git(repo, 'branch', '--show-current').trim(), 'main');
+  assert.match(git(repo, 'stash', 'list'), /devdock: prima di passare a main/);
+  git(repo, 'stash', 'drop', '-q');
+
+  // nuovo branch: esistente → 409; punto di partenza non valido → 400; ok
+  assert.equal((await action({ action: 'checkout_new', branch: 'main' })).json.code, 'exists');
+  assert.equal((await action({ action: 'checkout_new', branch: 'x1', startPoint: '--orphan' })).status, 400);
+  assert.equal((await action({ action: 'checkout_new', branch: 'x1', startPoint: 'inesistente' })).status, 400);
+  r = await action({ action: 'checkout_new', branch: 'feature/nuova', startPoint: 'origin/main' });
+  assert.equal(exitOf(r), 0, r.text);
+  assert.equal(git(repo, 'branch', '--show-current').trim(), 'feature/nuova');
+  // nuovo branch dal commit attuale: le modifiche non committate non bloccano
+  fs.writeFileSync(path.join(repo, 'p1'), 'ancora');
+  r = await action({ action: 'checkout_new', branch: 'con-modifiche' });
+  assert.equal(exitOf(r), 0, r.text);
+  git(repo, 'checkout', '-q', '--', 'p1');
+  git(repo, 'checkout', '-q', 'main');
+});
