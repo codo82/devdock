@@ -28,6 +28,19 @@ const FILTER_OPS = {
   null:     { sql: 'IS NULL', noValue: true },
   notnull:  { sql: 'IS NOT NULL', noValue: true },
 };
+// Formati di export
+const EXPORT_FORMATS = {
+  csv:  { type: 'text/csv; charset=utf-8' },
+  json: { type: 'application/json; charset=utf-8' },
+  sql:  { type: 'application/sql; charset=utf-8' },
+};
+// CSV RFC 4180: virgolette se servono; la stringa vuota è "" (il campo vuoto è NULL)
+const csvField = v => {
+  const str = String(v);
+  return str === '' || /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+};
+// Binari in esadecimale nei file (senza troncamento), il resto invariato
+const exportValue = v => Buffer.isBuffer(v) ? `0x${v.toString('hex')}` : v;
 const escapeLike = v => String(v).replace(/[\\%_]/g, m => '\\' + m);
 const quoteId = name => '`' + String(name).replace(/`/g, '``') + '`';
 
@@ -183,6 +196,97 @@ module.exports = function createDbClient(ctx) {
     if (conn.readOnly) pool.on('connection', c => c.query('SET SESSION TRANSACTION READ ONLY'));
     pools.set(k, { pool, signature });
     return pool;
+  }
+
+  // Parti comuni di anteprima ed export di una tabella: colonne verificate, WHERE con
+  // parametri (ricerca su tutte le colonne + filtri), ORDER BY su una colonna esistente
+  async function tableQuery(q, db, table, { search, filters, sort } = {}) {
+    if (!DB_NAME_RE.test(db || '') || !DB_NAME_RE.test(table || '')) throw fail('Nome non valido');
+    const [cols] = await q.query(
+      `SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, DATA_TYPE AS dataType, IS_NULLABLE = 'YES' AS nullable,
+              COLUMN_KEY AS \`key\`, COLUMN_DEFAULT AS \`default\`, EXTRA AS extra
+         FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]);
+    if (!cols.length) throw fail('Tabella non trovata', 404);
+    const columns = cols.map(c => ({ ...c, nullable: !!Number(c.nullable) }));
+    const names = new Set(columns.map(c => c.name));
+    const where = [], params = [];
+    const text = typeof search === 'string' ? search.trim() : '';
+    if (text) {
+      where.push('(' + columns.map(c => `CAST(${quoteId(c.name)} AS CHAR) LIKE ?`).join(' OR ') + ')');
+      columns.forEach(() => params.push(`%${escapeLike(text)}%`));
+    }
+    for (const f of Array.isArray(filters) ? filters : []) {
+      const op = FILTER_OPS[f?.op];
+      if (!op || !names.has(f.column)) throw fail(`Filtro non valido: ${f?.column} ${f?.op}`);
+      where.push(`${quoteId(f.column)} ${op.sql}`);
+      if (!op.noValue) params.push(op.like ? op.like(escapeLike(f.value ?? '')) : f.value ?? '');
+    }
+    let orderSql = '';
+    if (sort?.column) {
+      if (!names.has(sort.column)) throw fail(`Colonna sconosciuta: ${sort.column}`);
+      orderSql = ` ORDER BY ${quoteId(sort.column)} ${sort.dir === 'desc' ? 'DESC' : 'ASC'}`;
+    }
+    return { columns, from: `${quoteId(db)}.${quoteId(table)}`, whereSql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params, orderSql };
+  }
+
+  // ---- export ----
+
+  const pendingExports = new Map(); // id → { connId, format, spec, filename, expires }
+
+  // Scrive su res rispettando il backpressure (attende 'drain' se il buffer è pieno)
+  const writeOut = (res, text) => res.write(text) ? null : new Promise(r => res.once('drain', r));
+
+  function streamExport(pool, job, res) {
+    return new Promise((resolve, reject) => {
+      pool.getConnection(async (err, connection) => {
+        if (err) return reject(err);
+        const { format, spec } = job;
+        let header = '';
+        if (spec.withCreate) {
+          try {
+            const [[row]] = await connection.promise().query(`SHOW CREATE TABLE ${quoteId(spec.db)}.${quoteId(spec.table)}`);
+            header = `-- Struttura\nDROP TABLE IF EXISTS ${quoteId(spec.table)};\n${row['Create Table']};\n\n`;
+          } catch (e) { connection.release(); return reject(e); }
+        }
+        res.setHeader('Content-Type', EXPORT_FORMATS[format].type);
+        res.setHeader('Content-Disposition', `attachment; filename="${job.filename}"`);
+        res.write(format === 'sql' ? `-- Export DevDock ${new Date().toISOString()}\n${header}` : '');
+
+        let fields = null, count = 0, batch = [];
+        const flushSql = () => {
+          if (!batch.length) return null;
+          const cols = fields.map(f => quoteId(f.name)).join(', ');
+          const text = `INSERT INTO ${quoteId(spec.table)} (${cols}) VALUES\n${batch.join(',\n')};\n`;
+          batch = [];
+          return writeOut(res, text);
+        };
+        const q = connection.query({ sql: spec.sql, values: spec.params, rowsAsArray: true });
+        const stream = q.stream({ highWaterMark: 100 });
+        stream.on('fields', f => {
+          fields = f;
+          if (format === 'csv') res.write(f.map(x => csvField(x.name)).join(',') + '\r\n');
+          if (format === 'json') res.write('[');
+        });
+        stream.on('data', async row => {
+          const values = format === 'sql' ? row : row.map(exportValue); // in SQL i binari diventano X'..' con escape()
+          let wait = null;
+          if (format === 'csv') wait = writeOut(res, values.map(v => v === null ? '' : csvField(v)).join(',') + '\r\n');
+          else if (format === 'json') wait = writeOut(res, (count ? ',\n' : '\n') + JSON.stringify(Object.fromEntries(fields.map((f, i) => [f.name, values[i]]))));
+          else { batch.push('(' + values.map(v => mysqlCb.escape(v)).join(', ') + ')'); if (batch.length >= 100) wait = flushSql(); }
+          count++;
+          if (wait) { stream.pause(); await wait; stream.resume(); }
+        });
+        stream.on('error', e => { connection.destroy(); res.destroy(e); reject(e); });
+        stream.on('end', async () => {
+          if (format === 'json') res.write(count ? '\n]\n' : ']\n');
+          if (format === 'sql') { await flushSql(); res.write(`-- ${count} righe\n`); }
+          connection.release();
+          res.end();
+          resolve(count);
+        });
+        res.on('close', () => { if (!res.writableEnded) { connection.destroy(); } }); // download interrotto
+      });
+    });
   }
 
   // Token di conferma legato a connessione, database e testo esatto dell'istruzione
@@ -382,49 +486,71 @@ module.exports = function createDbClient(ctx) {
         const conn = findConnection(req.params.id);
         if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
         const { db, table } = req.params;
-        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) return res.status(400).json({ error: 'Nome non valido' });
         const pageSize = PAGE_SIZES.includes(Number(req.body.pageSize)) ? Number(req.body.pageSize) : 50;
         const page = Math.max(1, parseInt(req.body.page) || 1);
         try {
           const q = (await poolFor(conn)).promise();
-          const [columns] = await q.query(
-            `SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, DATA_TYPE AS dataType, IS_NULLABLE = 'YES' AS nullable,
-                    COLUMN_KEY AS \`key\`, COLUMN_DEFAULT AS \`default\`, EXTRA AS extra
-               FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]);
-          if (!columns.length) return res.status(404).json({ error: 'Tabella non trovata' });
-          const names = new Set(columns.map(c => c.name));
-
-          const where = [], params = [];
-          const search = typeof req.body.search === 'string' ? req.body.search.trim() : '';
-          if (search) {
-            where.push('(' + columns.map(c => `CAST(${quoteId(c.name)} AS CHAR) LIKE ?`).join(' OR ') + ')');
-            columns.forEach(() => params.push(`%${escapeLike(search)}%`));
-          }
-          for (const f of Array.isArray(req.body.filters) ? req.body.filters : []) {
-            const op = FILTER_OPS[f?.op];
-            if (!op || !names.has(f.column)) return res.status(400).json({ error: `Filtro non valido: ${f?.column} ${f?.op}` });
-            where.push(`${quoteId(f.column)} ${op.sql}`);
-            if (!op.noValue) params.push(op.like ? op.like(escapeLike(f.value ?? '')) : f.value ?? '');
-          }
-          const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
-          let orderSql = '';
-          const sort = req.body.sort;
-          if (sort?.column) {
-            if (!names.has(sort.column)) return res.status(400).json({ error: `Colonna sconosciuta: ${sort.column}` });
-            orderSql = ` ORDER BY ${quoteId(sort.column)} ${sort.dir === 'desc' ? 'DESC' : 'ASC'}`;
-          }
-          const from = `${quoteId(db)}.${quoteId(table)}`;
-          const [[{ total }]] = await q.query(`SELECT COUNT(*) AS total FROM ${from}${whereSql}`, params);
-          const sql = `SELECT * FROM ${from}${whereSql}${orderSql} LIMIT ? OFFSET ?`;
-          const [rows] = await q.query({ sql, rowsAsArray: true }, [...params, pageSize, (page - 1) * pageSize]);
+          const t = await tableQuery(q, db, table, req.body);
+          const [[{ total }]] = await q.query(`SELECT COUNT(*) AS total FROM ${t.from}${t.whereSql}`, t.params);
+          const [rows] = await q.query({ sql: `SELECT * FROM ${t.from}${t.whereSql}${t.orderSql} LIMIT ? OFFSET ?`, rowsAsArray: true },
+            [...t.params, pageSize, (page - 1) * pageSize]);
           res.json({
-            columns: columns.map(c => ({ ...c, nullable: !!Number(c.nullable) })),
-            primaryKey: columns.filter(c => c.key === 'PRI').map(c => c.name),
+            columns: t.columns,
+            primaryKey: t.columns.filter(c => c.key === 'PRI').map(c => c.name),
             rows: rows.map(r => r.map(cell)),
             total: Number(total), page, pageSize, pageSizes: PAGE_SIZES,
           });
         } catch (e) {
           res.status(e.status || 400).json({ error: e.message, code: e.code || null });
+        }
+      },
+
+      // Export (passo 1): valida sorgente e formato e restituisce un id usa e getta
+      async createExport(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const { format, source } = req.body;
+        if (!EXPORT_FORMATS[format]) return res.status(400).json({ error: 'Formato non valido (csv, json, sql)' });
+        try {
+          let spec, name;
+          if (source?.type === 'table') {
+            const q = (await poolFor(conn)).promise();
+            const t = await tableQuery(q, source.db, source.table, source);
+            spec = { sql: `SELECT * FROM ${t.from}${t.whereSql}${t.orderSql}`, params: t.params, database: null,
+                     table: source.table, db: source.db, withCreate: format === 'sql' && source.withCreate !== false };
+            name = source.table;
+          } else if (source?.type === 'query') {
+            const c = classify(source.sql);
+            if (c.kind !== 'read') return res.status(400).json({ error: 'Si possono esportare solo letture (SELECT, SHOW, …)' });
+            const database = source.database || conn.database || null;
+            if (database && !DB_NAME_RE.test(database)) return res.status(400).json({ error: 'Nome database non valido' });
+            spec = { sql: source.sql, params: [], database, table: 'risultato', db: null, withCreate: false };
+            name = 'query';
+          } else {
+            return res.status(400).json({ error: 'Sorgente non valida' });
+          }
+          const id = crypto.randomUUID();
+          const filename = `${String(name).replace(/[^A-Za-z0-9_.-]+/g, '_')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.${format}`;
+          pendingExports.set(id, { connId: conn.id, format, spec, filename, expires: Date.now() + 60000 });
+          res.json({ id, filename });
+        } catch (e) {
+          res.status(e.status || 400).json({ error: e.message });
+        }
+      },
+
+      // Export (passo 2): il file viene generato riga per riga dal flusso di MySQL
+      async downloadExport(req, res) {
+        const job = pendingExports.get(req.params.exportId);
+        pendingExports.delete(req.params.exportId);
+        if (!job || job.expires < Date.now()) return res.status(404).json({ error: 'Export scaduto: riprova' });
+        const conn = findConnection(job.connId);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        try {
+          const pool = await poolFor(conn, job.spec.database);
+          await streamExport(pool, job, res);
+        } catch (e) {
+          if (!res.headersSent) res.status(e.status || 400).json({ error: e.message });
+          else res.destroy(e);
         }
       },
 

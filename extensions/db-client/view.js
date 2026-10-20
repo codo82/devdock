@@ -218,6 +218,7 @@ export default {
           <input class="form-input db-grid-search" data-grid="search" placeholder="Cerca in tutte le colonne…" value="${esc(grid.search)}">
           <button class="btn btn-ghost btn-sm" data-grid="add-filter">+ Filtro</button>
           ${canInsert ? '<button class="btn btn-ghost btn-sm" data-grid="insert-dialog">+ Riga</button>' : ''}
+          <button class="btn btn-ghost btn-sm" data-grid="export">⤓ Esporta</button>
           ${!data.primaryKey.length ? '<span class="db-badge db-badge-warn" title="Senza chiave primaria le righe non si possono identificare">senza chiave primaria: modifica non disponibile</span>' : ''}
           ${grid.filters.map((f, i) => `<span class="db-chip">${esc(f.column)} ${esc(FILTER_LABELS[f.op])}${f.op === 'null' || f.op === 'notnull' ? '' : ` <b>${esc(f.value)}</b>`}<button data-grid="remove-filter" data-i="${i}" title="Rimuovi">✕</button></span>`).join('')}
           <div class="db-pager">
@@ -240,6 +241,39 @@ export default {
               ${editable ? '' : '<td><button class="btn btn-ghost btn-sm" data-grid="insert-inline">＋ Inserisci</button></td>'}</tr>` : ''}</tbody>
         </table></div>`;
       if (hadFocus) { const i = el.querySelector('[data-grid="search"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+    }
+
+    // ---- export (il server genera il file in streaming; qui si avvia solo il download) ----
+    async function startExport(c, format, source) {
+      try {
+        const r = await ctx.api.post(`/connections/${encodeURIComponent(c.id)}/exports`, { format, source });
+        window.location.href = ctx.api.url(`/connections/${encodeURIComponent(c.id)}/exports/${encodeURIComponent(r.id)}`);
+        toast(`Export ${format.toUpperCase()}: ${r.filename}`, 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    const FORMATS = [['csv', 'CSV'], ['json', 'JSON'], ['sql', 'SQL (INSERT + CREATE TABLE)']];
+    function exportMenu(anchor, items) {
+      const r = anchor.getBoundingClientRect();
+      ctx.ui.contextMenu(r.left, r.bottom + 4, items);
+    }
+
+    function exportTableMenu(anchor, c, db, table, withFilters) {
+      const filtered = withFilters && (grid.search || grid.filters.length);
+      const src = all => ({ type: 'table', db, table, ...(all ? {} : { search: grid.search, filters: grid.filters, sort: grid.sort }) });
+      exportMenu(anchor, [
+        ...FORMATS.map(([f, label]) => ({ icon: '⤓', label: `${label}${filtered ? ' — righe filtrate' : ''}`, action: () => startExport(c, f, src(!withFilters)) })),
+        ...(filtered ? ['separator', ...FORMATS.map(([f, label]) => ({ icon: '⤓', label: `${label} — tutta la tabella`, action: () => startExport(c, f, src(true)) }))] : []),
+      ]);
+    }
+
+    function exportQuery(anchor) {
+      const c = active();
+      const sql = statement();
+      if (!c || !sql) { toast('Scrivi una SELECT nell\'editor', 'error'); return; }
+      exportMenu(anchor, FORMATS.map(([f, label]) => ({
+        icon: '⤓', label, action: () => startExport(c, f, { type: 'query', sql, database: activeDb.get(c.id) || null }),
+      })));
     }
 
     // ---- scrittura delle righe: sempre tramite conferma dell'SQL generato ----
@@ -348,6 +382,7 @@ export default {
         loadGrid();
       } else if (a === 'add-filter') addFilter();
       else if (a === 'insert-dialog') rowDialog(null);
+      else if (a === 'export') exportTableMenu(t, connections.find(x => x.id === grid.connId), grid.db, grid.table, true);
       else if (a === 'edit-dialog') rowDialog(Number(t.dataset.r));
       else if (a === 'delete-row') saveRow('delete', keyOf(grid.data.rows[Number(t.dataset.r)]));
       else if (a === 'insert-inline') {
@@ -367,6 +402,7 @@ export default {
         { icon: '▶', label: 'Prime 100 righe nell\'editor', action: () => runSql(`SELECT * FROM ${full} LIMIT 100;`) },
         { icon: '#', label: 'Conta righe', action: () => runSql(`SELECT COUNT(*) AS righe FROM ${full};`) },
         { icon: '▦', label: 'Struttura', action: () => showStructure(c, db, name) },
+        ...FORMATS.map(([f, label]) => ({ icon: '⤓', label: `Esporta ${label}`, action: () => startExport(c, f, { type: 'table', db, table: name }) })),
         { icon: '⌘', label: t?.view ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE', action: () => runSql(`SHOW CREATE ${t?.view ? 'VIEW' : 'TABLE'} ${full};`) },
         'separator',
         { icon: '↳', label: 'Inserisci il nome nell\'editor', action: () => {
@@ -715,6 +751,7 @@ export default {
       const a = e.target.closest('[data-action]')?.dataset.action;
       if (a === 'vault-reset') resetVault();
       else if (a === 'run') run();
+      else if (a === 'export-query') exportQuery(e.target.closest('[data-action]'));
     });
     // Albero: freccia apre/chiude; clic sulla connessione la seleziona, sul database lo rende
     // attivo, sulla tabella apre il menu contestuale (anche con il tasto destro)

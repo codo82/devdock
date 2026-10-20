@@ -378,3 +378,59 @@ test('righe: insert, update e delete generati dal server e solo dopo conferma', 
     await mysqlDb.stop();
   }
 });
+
+test('export CSV, JSON e SQL di tabelle (con filtri) e di SELECT', async t => {
+  const mysqlDb = await startMysql();
+  if (!mysqlDb) return t.skip('mysqld non installato');
+  const s = await startServer();
+  try {
+    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    await api('POST', '/vault/init', { password: 'master-password-db' });
+    await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass', database: 'app' });
+    // un valore con virgolette, virgola e a capo
+    let r = await api('POST', '/connections/c/query', { sql: `UPDATE clienti SET note = 'una "nota", su\ndue righe' WHERE id = 1` });
+    await api('POST', '/connections/c/query', { sql: `UPDATE clienti SET note = 'una "nota", su\ndue righe' WHERE id = 1`, confirm: r.json.token });
+
+    const download = async body => {
+      const created = await api('POST', '/connections/c/exports', body);
+      assert.equal(created.status, 200, created.text);
+      const file = await api('GET', `/connections/c/exports/${created.json.id}`);
+      assert.equal(file.status, 200);
+      // usa e getta
+      assert.equal((await api('GET', `/connections/c/exports/${created.json.id}`)).status, 404);
+      return { ...file, filename: created.json.filename };
+    };
+
+    let f = await download({ format: 'csv', source: { type: 'table', db: 'app', table: 'clienti', sort: { column: 'id' } } });
+    assert.match(f.headers['content-disposition'], /clienti-.*\.csv/);
+    assert.equal(f.text, 'id,nome,note\r\n1,Rossi,"una ""nota"", su\ndue righe"\r\n2,Bianchi,cliente storico\r\n3,Verdi,""\r\n');
+
+    f = await download({ format: 'json', source: { type: 'table', db: 'app', table: 'clienti', filters: [{ column: 'nome', op: 'starts', value: 'B' }] } });
+    assert.deepEqual(JSON.parse(f.text), [{ id: 2, nome: 'Bianchi', note: 'cliente storico' }]);
+
+    f = await download({ format: 'sql', source: { type: 'table', db: 'app', table: 'clienti', search: 'Verdi' } });
+    assert.match(f.text, /CREATE TABLE `clienti`/);
+    assert.match(f.text, /INSERT INTO `clienti` \(`id`, `nome`, `note`\) VALUES\n\(3, 'Verdi', ''\);/);
+
+    // l'SQL esportato si reimporta: tabella ricreata con gli stessi dati
+    const full = await download({ format: 'sql', source: { type: 'table', db: 'app', table: 'clienti' } });
+    const mysql = require('mysql2/promise');
+    const root = await mysql.createConnection({ host: '127.0.0.1', port: mysqlDb.port, user: 'root', multipleStatements: true });
+    await root.query('CREATE DATABASE copia; USE copia;' + full.text);
+    const [rows] = await root.query('SELECT note FROM copia.clienti WHERE id = 1');
+    assert.equal(rows[0].note, 'una "nota", su\ndue righe');
+    await root.end();
+
+    f = await download({ format: 'json', source: { type: 'query', sql: 'SELECT nome, LENGTH(nome) AS l FROM clienti WHERE id < 3 ORDER BY id' } });
+    assert.deepEqual(JSON.parse(f.text), [{ nome: 'Rossi', l: '5' }, { nome: 'Bianchi', l: '7' }]);
+
+    // solo letture
+    r = await api('POST', '/connections/c/exports', { format: 'csv', source: { type: 'query', sql: 'DELETE FROM clienti' } });
+    assert.equal(r.status, 400);
+    assert.equal((await api('POST', '/connections/c/exports', { format: 'xml', source: { type: 'table', db: 'app', table: 'clienti' } })).status, 400);
+    assert.equal((await api('POST', '/connections/c/exports', { format: 'csv', source: { type: 'table', db: 'app', table: 'nope' } })).status, 404);
+  } finally {
+    await s.stop();
+    await mysqlDb.stop();
+  }
+});

@@ -29,6 +29,8 @@
       { "method": "GET",    "path": "/connections/:id/databases/:db/tables/:table", "handler": "tableInfo" },
       { "method": "POST",   "path": "/connections/:id/databases/:db/tables/:table/rows", "handler": "rows" },
       { "method": "POST",   "path": "/connections/:id/databases/:db/tables/:table/row", "handler": "row" },
+      { "method": "POST",   "path": "/connections/:id/exports",  "handler": "createExport" },
+      { "method": "GET",    "path": "/connections/:id/exports/:exportId", "handler": "downloadExport" },
       { "method": "POST",   "path": "/connections/:id/query",  "handler": "query" },
       { "method": "GET",    "path": "/vault",                 "handler": "vaultStatus" },
       { "method": "POST",   "path": "/vault/init",            "handler": "vaultInit" },
