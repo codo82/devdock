@@ -92,8 +92,16 @@ test('confronto tra schemi: ordine delle operazioni e rinomine ambigue', () => {
   // con la rinomina scelta dall'utente
   const renamed = ops.diff(from, to, { 'ordini.nuovo': 'vecchio' });
   assert.deepEqual(renamed.ambiguous, []);
-  assert.ok(renamed.ops.some(o => o.op === 'rename_column' && o.from === 'vecchio' && o.to === 'nuovo'));
+  assert.ok(renamed.ops.some(o => o.op === 'modify_column' && o.name === 'vecchio' && o.column.name === 'nuovo'));
   assert.ok(!renamed.ops.some(o => o.op === 'drop_column'));
+  // spostamento di una colonna: MODIFY … AFTER, in un ALTER separato dalle aggiunte
+  const moved = ops.diff({ tables: { t: { columns: [col('a'), col('b'), col('c')] } } }, { tables: { t: { columns: [col('a'), col('c'), col('b')] } } });
+  assert.deepEqual(moved.ops.map(o => [o.op, o.name, o.after]), [['modify_column', 'b', 'c']]);
+  const sql = ops.statements('app', ops.diff(
+    { tables: { t: { columns: [col('a'), col('b')] } } },
+    { tables: { t: { columns: [col('z'), col('a'), col('nuova')] } } }, { 't.z': 'b' }).ops);
+  assert.equal(sql.length, 3, sql.join('\n'));
+  assert.match(sql[0], /CHANGE COLUMN `b` `z`/);
   // stesso schema: nessuna operazione
   assert.deepEqual(ops.diff(to, to).ops, []);
   // tabelle nuove con chiavi esterne tra loro: prima quella riferita

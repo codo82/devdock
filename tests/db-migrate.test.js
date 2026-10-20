@@ -106,6 +106,24 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     assert.match(fs.readFileSync(path.join(dir, '006_ordini_add_flag.sql'), 'utf8'), /ALTER TABLE ordini ADD COLUMN flag TINYINT NOT NULL DEFAULT 0;\n$/);
     assert.equal((await migrate({ operations: [{ op: 'raw', sql: 'DELETE FROM ordini' }] })).json.code, 'db-client.raw_not_schema');
 
+    // 6b. designer su una tabella esistente: struttura invariata = nessuna operazione;
+    // rinomina e spostamento di una colonna calcolati dal server sulla struttura reale
+    let current = (await api('GET', '/connections/c/databases/app/tables/ordini/definition')).json.definition;
+    r = await migrate({ design: { table: 'ordini', definition: current } });
+    assert.equal(r.json.code, 'db-client.ddl_no_operations');
+    const edited = structuredClone(current);
+    const note = edited.columns.find(c => c.name === 'note');
+    note.name = 'annotazioni';
+    edited.columns = [edited.columns[0], note, ...edited.columns.slice(1).filter(c => c !== note)];
+    r = await migrate({ design: { table: 'ordini', definition: edited, renames: { annotazioni: 'note' } } });
+    assert.equal(r.status, 428, r.text);
+    assert.equal(r.json.migration.file, '007_ordini_alter.sql');
+    assert.match(r.json.sql, /CHANGE COLUMN `note` `annotazioni`/);
+    r = await migrate({ design: { table: 'ordini', definition: edited, renames: { annotazioni: 'note' } }, confirm: r.json.token });
+    assert.equal(r.status, 200, r.text);
+    current = (await api('GET', '/connections/c/databases/app/tables/ordini/definition')).json.definition;
+    assert.deepEqual(current.columns.map(c => c.name).slice(0, 2), ['id', 'annotazioni']);
+
     // 7. senza repository collegato: solo DDL, nessun file
     await api('DELETE', '/connections/c/migrations');
     const plain = [{ op: 'drop_index', table: 'ordini', name: 'ix_stato' }];
@@ -113,7 +131,7 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     assert.equal(r.json.migration, null);
     r = await migrate({ operations: plain, confirm: r.json.token });
     assert.deepEqual([r.status, r.json.file], [200, null]);
-    assert.equal(fs.readdirSync(dir).filter(f => f.endsWith('.sql')).length, 6);
+    assert.equal(fs.readdirSync(dir).filter(f => f.endsWith('.sql')).length, 7);
   } finally {
     await s.stop();
     await mysqlDb.stop();

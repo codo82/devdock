@@ -817,15 +817,27 @@ module.exports = function createDbClient(ctx) {
         const { db } = req.params;
         if (!DB_NAME_RE.test(db)) throw ctx.error(400, 'database_invalid');
         if (conn.readOnly) throw ctx.error(403, 'read_only');
-        const { operations, migration = {}, confirm, acknowledgeWarnings } = req.body;
-        checkRaw(operations);
-        const statements = ddlCall(() => schemaOps.statements(db, operations));
-        const sql = statements.join(';\n\n');
+        const { migration = {}, confirm, acknowledgeWarnings, design } = req.body;
         const folder = linkedFolder(conn);
         const save = !!folder && migration.save !== false;
 
         try {
           const q = (await poolFor(conn, db)).promise();
+          // Designer di una tabella esistente: operazioni dal confronto tra la struttura
+          // attuale (letta ora dal DB) e quella modificata; renames { nuovo: vecchio }
+          let operations = req.body.operations;
+          if (design) {
+            const t = design.table;
+            if (!DB_NAME_RE.test(t || '')) throw ctx.error(400, 'name_invalid');
+            const current = (await introspect(q, db, [t])).tables[t];
+            if (!current) throw ctx.error(404, 'table_not_found', { table: t });
+            const renames = Object.fromEntries(Object.entries(design.renames || {}).map(([to, from]) => [`${t}.${to}`, String(from)]));
+            operations = schemaOps.diff({ tables: { [t]: current } }, { tables: { [t]: design.definition || {} } }, renames).ops;
+            if (design.newName && design.newName !== t) operations.push({ op: 'rename_table', table: t, to: String(design.newName) });
+          }
+          checkRaw(operations);
+          const statements = ddlCall(() => schemaOps.statements(db, operations));
+          const sql = statements.join(';\n\n');
           const tables = [...new Set(operations.map(o => o.table).filter(Boolean))];
           const before = await introspect(q, db, tables);
           const warnings = schemaOps.destructive(operations, before);
@@ -843,7 +855,7 @@ module.exports = function createDbClient(ctx) {
           if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
             const preview = save ? await fileFor() : null;
             return res.status(428).json({
-              needsConfirmation: true, token, verb: 'DDL', database: db, sql, statements, warnings,
+              needsConfirmation: true, token, verb: 'DDL', database: db, sql, statements, warnings, operations,
               linked: !!folder, proposal: { table, operation },
               migration: preview && {
                 file: preview.name, dir: folder.dir, repo: folder.repo.label, content: content(preview.name),
