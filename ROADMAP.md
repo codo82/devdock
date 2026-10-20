@@ -137,7 +137,7 @@ Built as an extension on the M3 architecture.
 
 # Future developments
 
-Planned after the current milestones, independent of the work in progress. Not ordered yet.
+Planned after the current milestones, independent of the work in progress. Order: M6 → M7 → M8.
 
 ## DB client — PostgreSQL
 
@@ -209,7 +209,7 @@ Goal: link a DB connection to a project repository so that **every structural ch
 
 ## M8 — MCP server
 
-Goal: expose DevDock to AI agents (Claude Code, Claude Desktop, any MCP client) through a **Model Context Protocol server**, so an agent can query the extensions: tunnel and PM2 status, Git state, npm scripts, API specs, DB schema. As with the UI, every capability comes from an extension: the core only hosts the server and aggregates what the extensions declare.
+Goal: expose DevDock to AI agents (Claude Code, Claude Desktop, any MCP client) through a **Model Context Protocol server**, so an agent can query the extensions: tunnel and PM2 status, Git state, npm scripts, API specs, DB schema. As with the UI, every capability comes from an extension: the core only hosts the server and aggregates what the extensions declare. Done **after M6 and M7**: it reuses the M6 structured error codes and the M7 migration pipeline.
 
 **Server**
 - [ ] **M8.1** MCP endpoint served by DevDock itself over **Streamable HTTP** at `/mcp` (same process, same port, same services as the UI), built on the official `@modelcontextprotocol/sdk`. A stdio bridge (`npx devdock-mcp`) forwards to the running instance for clients that only support stdio, with a clear error when DevDock is not running
@@ -254,4 +254,4 @@ Goal: expose DevDock to AI agents (Claude Code, Claude Desktop, any MCP client) 
 | M4 Branch switch | S | inside the Git extension |
 | M6 i18n | M | language-agnostic: languages discovered from catalogs; core first, then extensions one at a time; structured API errors |
 | M7 DB migrations | L | after M5; diff engine and plain-SQL generator first, framework formats one at a time |
-| M8 MCP server | L | core server + contract first, then read-only tools per extension, write tools opt-in |
+| M8 MCP server | L | after M6 and M7; core server + contract first, then read-only tools per extension, write tools opt-in |
