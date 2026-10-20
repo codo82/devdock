@@ -232,6 +232,47 @@ First version (agreed scope): **read-only** tools for every extension, plus runn
 - [ ] **M8.13** stdio bridge (`npx devdock-mcp`) for clients that only support stdio; MCP resources and `list_changed` notifications
 - [ ] **M8.14** Swagger tools (needs specs stored on the server, today they are only loaded in the browser)
 
+## M9 — Ports in use — new extension `ports`
+
+Goal: answer "who is using port 3000?" and free it. Minimal version; nothing beyond this list.
+
+- [ ] **M9.1** Backend: listening TCP ports of the machine with PID, process name, command line and owner user (`lsof` on macOS/Linux, `ss` as fallback on Linux, `netstat -ano` + `tasklist` on Windows); the core `lib/ports.js` is extended rather than duplicated
+- [ ] **M9.2** Each port linked to what DevDock knows: npm process started by DevDock (project and script), PM2 process, SSH tunnel (only when those extensions are active)
+- [ ] **M9.3** UI: table of ports with search by port, process or project; refresh button
+- [ ] **M9.4** Stop the process that holds a port: only processes of the current user, after a confirmation that shows PID and command; `SIGTERM`, then optionally a forced stop. Processes started by DevDock are stopped through their extension (npm process group, PM2, tunnel) so its state stays consistent
+- [ ] **M9.5** MCP tool `ports_list` (read-only)
+- [ ] **M9.6** Tests (a test server listening on a free port is found and stopped), README, CHANGELOG
+
+## M10 — Environment files — new extension `env`
+
+Goal: see at a glance which variables a project's `.env` is missing compared with `.env.example`. Minimal version: read-only.
+
+- [ ] **M10.1** Backend: for each npm project, the `.env*` files in the project folder (`.env`, `.env.local`, `.env.development`, `.env.example`, …), parsed with the dotenv syntax (comments, quotes, `export`)
+- [ ] **M10.2** Comparison with the template (`.env.example` or `.env.sample`): keys missing from each file, keys not in the template, empty values
+- [ ] **M10.3** UI: per project, the files side by side with the keys and the differences highlighted; values masked by default and shown one at a time on click. Values never go into the DevDock config or its exports
+- [ ] **M10.4** MCP tool `env_check`: files and keys with the differences, **without values**
+- [ ] **M10.5** Tests (fixtures with missing and extra keys, parser edge cases), README, CHANGELOG
+
+## M11 — HTTP client — new extension `http-client`
+
+Goal: send requests to the local APIs of a project and keep the useful ones. Minimal version.
+
+- [ ] **M11.1** Requests (method, URL, headers, query, JSON or text body) saved in collections per npm project, in its own config section, with an Export/Import checkbox
+- [ ] **M11.2** Sending through the DevDock backend (no CORS limits), with timeout and response size limit; response shown with status, time, size, headers and body (JSON formatted)
+- [ ] **M11.3** Variables per project (`{{baseUrl}}`, `{{token}}`) used in URL, headers and body; variables marked as secret are encrypted with the master password vault of the DB client (optional dependency: without it secrets can't be saved)
+- [ ] **M11.4** Import of the operations of an OpenAPI file (YAML/JSON) as requests of a collection
+- [ ] **M11.5** Tests (local test server: methods, headers, body, timeout, variables, secrets never in clear in `config.json`), README, CHANGELOG
+
+
+## M12 — Tab order — core
+
+Goal: let the user put the extension tabs in the order they prefer. It is part of the shell, so it lives in the core.
+
+- [ ] **M12.1** Drag and drop of the tabs in the section bar (mouse and keyboard: with a tab focused, Alt+←/→ moves it); the order of the manifests (`order`) stays the default
+- [ ] **M12.2** The chosen order is saved in a core section of `config.json` (`layout.tabs`: list of extension codes) through a core API; extensions not in the list (newly added) go after the others in manifest order, removed ones are ignored
+- [ ] **M12.3** "Restore default order" (context menu on the section bar)
+- [ ] **M12.4** Tests (API, validation of the list, unknown codes ignored), README, CHANGELOG
+
 ---
 
 ## Suggested order and size
@@ -248,3 +289,7 @@ First version (agreed scope): **read-only** tools for every extension, plus runn
 | M6 i18n | M | language-agnostic: languages discovered from catalogs; core first, then extensions one at a time; structured API errors |
 | M7 DB migrations | L | after M5; diff engine and plain-SQL generator first, framework formats one at a time |
 | M8 MCP server | L | after M6 and M7; core server + contract first, then read-only tools per extension, write tools opt-in |
+| M9 Ports in use | S | `lib/ports.js` extended; Windows through `netstat` |
+| M10 Environment files | S | read-only; values never stored or sent to agents |
+| M11 HTTP client | M | secrets through the DB client vault (optional dependency) |
+| M12 Tab order | S | core; drag and drop, saved in `config.json` |
