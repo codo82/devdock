@@ -109,3 +109,23 @@ test('checkout di un branch esistente', async () => {
   r = await action({ action: 'checkout', branch: 'main' });
   assert.equal(exitOf(r), 0);
 });
+
+test('push: un fetch fallito non blocca il push (passo opzionale)', async () => {
+  commitFile(repo, 'dopo-fetch');
+  // l'URL di fetch punta a un repo inesistente; i due pushurl restano validi
+  git(repo, 'remote', 'set-url', 'origin', path.join(base, 'non-esiste.git'));
+  try {
+    const r = await action({ action: 'push', remote: 'origin', branch: 'main' });
+    assert.equal(exitOf(r), 0);
+    assert.match(r.text, /fetch non riuscito, si prosegue/);
+    assert.equal(git(base, '--git-dir=A.git', 'rev-parse', 'main').trim(), git(repo, 'rev-parse', 'main').trim());
+  } finally {
+    git(repo, 'remote', 'set-url', 'origin', path.join(base, 'A.git'));
+  }
+});
+
+test('pull_push si ferma se il pull fallisce', async () => {
+  const r = await action({ action: 'pull_push', remote: 'origin', branch: 'ramo-inesistente' });
+  assert.notEqual(exitOf(r), 0);
+  assert.doesNotMatch(r.text, /\$ git push/);
+});
