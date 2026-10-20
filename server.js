@@ -19,14 +19,11 @@ const extensions = loadExtensions(EXTENSIONS_DIR, {
     config:   require('./lib/config'),
     system:   require('./lib/system'),
     ports:    require('./lib/ports'),
-    git:      require('./lib/git'),
   },
 });
 app.use('/api/ext', extensions.router);
 app.use('/ext', frontendRouter(extensions));
 app.use('/api/core', require('./routes/core')(extensions));
-
-app.use('/api', require('./routes/git'));
 
 // Errori non gestiti nelle route: le validazioni della config diventano 400 JSON
 app.use((err, req, res, next) => {

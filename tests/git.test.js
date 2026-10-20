@@ -20,11 +20,11 @@ before(async () => {
 });
 after(() => srv.stop());
 
-const action = body => srv.request('POST', '/api/git/repos/r/action', { body });
+const action = body => srv.request('POST', '/api/ext/git/repos/r/action', { body });
 const exitOf = r => r.events.find(e => e.type === 'exit')?.data;
 
 test('repo ricavato dai progetti', async () => {
-  const r = await srv.request('GET', '/api/git/repos');
+  const r = await srv.request('GET', '/api/ext/git/repos');
   assert.deepEqual(r.json.map(x => x.id), ['r']);
 });
 
@@ -44,9 +44,9 @@ test('validazione di azione, branch, remote', async () => {
 });
 
 test('hash del commit validato', async () => {
-  assert.equal((await srv.request('GET', '/api/git/repos/r/commit/--output=x')).status, 400);
+  assert.equal((await srv.request('GET', '/api/ext/git/repos/r/commit/--output=x')).status, 400);
   const hash = git(repo, 'rev-parse', '--short', 'HEAD').trim();
-  const r = await srv.request('GET', `/api/git/repos/r/commit/${hash}`);
+  const r = await srv.request('GET', `/api/ext/git/repos/r/commit/${hash}`);
   assert.equal(r.json.body, 'init');
 });
 
@@ -54,7 +54,7 @@ test('status con nomi file speciali e commit selettivo', async () => {
   fs.writeFileSync(path.join(repo, 'file con spazi.txt'), 'a');
   fs.writeFileSync(path.join(repo, "a');x=1;('.txt"), 'b');
   fs.writeFileSync(path.join(repo, 'resta.txt'), 'c');
-  const status = await srv.request('GET', '/api/git/repos/r/status');
+  const status = await srv.request('GET', '/api/ext/git/repos/r/status');
   const names = status.json.files.map(f => f.name).sort();
   assert.deepEqual(names, ["a');x=1;('.txt", 'file con spazi.txt', 'resta.txt']);
 
@@ -93,7 +93,7 @@ test('azioni concorrenti sullo stesso repo: una sola alla volta (backlog #1)', a
 
 test('log con mappa dei ref e branch locali', async () => {
   git(repo, 'branch', 'feature/x');
-  const r = await srv.request('GET', '/api/git/repos/r/log?limit=50');
+  const r = await srv.request('GET', '/api/ext/git/repos/r/log?limit=50');
   assert.ok(r.json.entries.length >= 5);
   assert.ok(r.json.localBranches.includes('feature/x'));
   assert.ok(r.json.localBranches.includes('main'));

@@ -13,12 +13,8 @@
     --sans:     -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 
     /* Section accent colors */
-    --c-tunnel: #388bfd;
-    --c-npm:    #f0883e;
-    --c-pm2:    #bc8cff;
 
     /* Section accent colors */
-    --c-git:    #3fb950;
 
     /* Active section accent (overridden per section) */
     --accent: #388bfd;
@@ -42,10 +38,8 @@
   .section-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;height:40px;background:none;border:none;border-right:1px solid var(--border);border-bottom:3px solid transparent;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--sans);color:var(--muted);transition:background .15s,color .15s,border-color .15s;position:relative}
   .section-tab:last-child{border-right:none}
   .section-tab:hover{background:var(--surface2);color:var(--text)}
-  .section-tab.active-git     {color:var(--c-git);     border-bottom-color:var(--c-git);     background:color-mix(in srgb,var(--c-git)     6%,transparent)}
   .section-tab-icon{font-size:16px}
   .section-tab-badge{font-family:var(--font);font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);transition:background .15s,color .15s,border-color .15s}
-  .section-tab.active-git     .section-tab-badge{color:var(--c-git);     border-color:color-mix(in srgb,var(--c-git)     60%,transparent);background:color-mix(in srgb,var(--c-git)     12%,transparent)}
 
   /* ================================================================
      PILLS (header)
@@ -69,8 +63,6 @@
   .sidebar-head-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
 
   /* Colorazione accent per sezione */
-  .sidebar[data-section="git"]    .sidebar-head-title{color:var(--c-git)}
-  .sidebar[data-section="settings"] .sidebar-head-title{color:var(--muted)}
 
   .sidebar-body{overflow-y:auto;flex:1;padding:4px 0}
 
@@ -80,12 +72,9 @@
   .sb-item.active{background:var(--surface2);color:var(--text)}
 
   /* Border colorato per sezione attiva */
-  .sidebar[data-section="git"]    .sb-item.active{border-left-color:var(--c-git);   color:var(--c-git)}
-  .sidebar[data-section="settings"].sb-item.active{border-left-color:var(--muted);  color:var(--text)}
 
   .sb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
   .sb-count{margin-left:auto;font-size:10px;font-family:var(--font);padding:1px 6px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted)}
-  .sb-icon{font-size:15px;flex-shrink:0}
 
   /* NPM project list items */
 
@@ -116,69 +105,17 @@
   .tool-notice .btn{margin-left:auto}
 
   /* ---- GIT AREA ---- */
-  .git-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
-  .git-repo-header{padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .git-repo-header h3{font-size:14px;font-weight:600;color:var(--c-git);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .git-branch-badge{font-family:var(--font);font-size:11px;padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--c-git) 12%,transparent);border:1px solid color-mix(in srgb,var(--c-git) 40%,transparent);color:var(--c-git);white-space:nowrap}
-  .git-sync-badge{font-family:var(--font);font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap}
-  .git-sync-ahead {background:color-mix(in srgb,var(--c-git) 12%,transparent);color:var(--c-git);border:1px solid color-mix(in srgb,var(--c-git) 40%,transparent)}
-  .git-sync-behind{background:color-mix(in srgb,var(--warning) 12%,transparent);color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 40%,transparent)}
 
-  .git-body{flex:1;overflow:hidden;display:grid;grid-template-columns:300px 1fr;grid-template-rows:1fr;gap:0;min-height:0}
-  .git-status-col{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-height:0}
-  .git-log-col{display:flex;flex-direction:column;overflow:hidden;min-height:0}
 
-  .git-col-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
-  .git-col-header h4{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
 
   /* File status */
-  .git-file-list{overflow-y:auto;flex:1;min-height:0;padding:4px 0;overflow-x:hidden}
-  .git-file{display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:12px;font-family:var(--font);cursor:pointer;transition:background .15s;border-left:2px solid transparent}
-  .git-file:hover{background:var(--surface2)}
-  .git-file.selected{background:var(--surface2);border-left-color:var(--c-git)}
-  .git-file-xy{width:22px;font-size:11px;font-weight:700;flex-shrink:0;text-align:center}
-  .git-file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
-  .xy-M{color:var(--warning)}
-  .xy-A{color:var(--success)}
-  .xy-D{color:var(--danger)}
-  .xy-R{color:var(--c-pm2)}
-  .xy-untracked{color:#7d8590}
 
   /* Commit form */
-  .git-commit-area{border-top:1px solid var(--border);padding:10px 12px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;background:var(--surface2)}
-  .git-commit-msg{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:12px;padding:6px 10px;outline:none;resize:none;width:100%;transition:border-color .15s}
-  .git-commit-msg:focus{border-color:var(--c-git)}
-  .git-commit-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 
   /* Git log / tree */
-  .git-log-wrap{overflow:auto;flex:1;padding:0;min-height:0}
-  .git-log-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
-  .git-log-table col.col-graph{width:var(--graph-w,60px)}
-  .git-log-table col.col-hash{width:58px}
-  .git-log-table col.col-msg{width:auto}
-  .git-log-table col.col-author{width:110px}
-  .git-log-table col.col-date{width:80px}
-  .git-log-table td{padding:0 6px;border-bottom:1px solid color-mix(in srgb,var(--border) 30%,transparent);vertical-align:middle;white-space:nowrap;overflow:hidden;height:26px}
-  .git-log-table tr:hover td{background:var(--surface2)}
-  .git-log-row.git-row-active td{background:color-mix(in srgb,var(--c-git) 8%,transparent)}
   @keyframes slideUp{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
-  .git-graph-cell{padding:0!important;line-height:0;vertical-align:middle}
-  .git-hash{font-family:var(--font);font-size:10px;color:var(--c-npm);white-space:nowrap;cursor:pointer;opacity:.85}
-  .git-hash:hover{opacity:1;text-decoration:underline}
-  .git-subject{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:100%}
-  .git-author{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .git-date{color:var(--muted);font-size:11px;white-space:nowrap;text-align:right}
-  .git-ref{display:inline-block;font-family:var(--font);font-size:10px;padding:1px 6px;border-radius:4px;margin-right:3px;white-space:nowrap}
-  .git-ref-head{background:color-mix(in srgb,var(--c-git) 15%,transparent);color:var(--c-git);border:1px solid color-mix(in srgb,var(--c-git) 40%,transparent)}
-  .git-ref-remote{background:color-mix(in srgb,var(--warning) 12%,transparent);color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 30%,transparent)}
-  .git-ref-tag{background:color-mix(in srgb,var(--c-pm2) 12%,transparent);color:var(--c-pm2);border:1px solid color-mix(in srgb,var(--c-pm2) 30%,transparent)}
-  .git-ref-local{background:color-mix(in srgb,var(--success) 12%,transparent);color:var(--success);border:1px solid color-mix(in srgb,var(--success) 30%,transparent)}
 
   /* Git action toolbar */
-  .git-action-bar{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;background:var(--surface)}
-  .git-action-bar .remote-input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--muted);font-family:var(--font);font-size:11px;padding:4px 8px;outline:none;width:90px}
-  .btn-git{background:var(--c-git);color:#fff;border-color:var(--c-git)}
-  .btn-git:hover:not(:disabled){opacity:.85}
 
   /* ---- SETTINGS AREA ---- */
 

@@ -1,0 +1,47 @@
+<div class="empty-state" data-role="empty"><div class="icon">🌿</div><p>Seleziona un repository dalla sidebar</p></div>
+<div class="git-area" data-role="repo" hidden>
+  <div class="git-repo-header" data-role="header"></div>
+  <div class="git-action-bar">
+    <input class="remote-input" data-role="remote" value="origin" placeholder="remote" title="Remote">
+    <button class="btn btn-git btn-sm" data-git="pull" title="git pull">⬇ Pull</button>
+    <button class="btn btn-ghost btn-sm" data-git="push" title="git push">⬆ Push</button>
+    <button class="btn btn-ghost btn-sm" data-git="pull_push" title="git pull + push">⬇⬆ Pull &amp; Push</button>
+    <button class="btn btn-ghost btn-sm" data-git="fetch" title="git fetch --all --prune">🔄 Fetch</button>
+    <button class="btn btn-ghost btn-sm" data-action="merge" title="git merge">⑃ Merge</button>
+    <button class="btn btn-ghost btn-sm" data-git="stash" title="git stash">📦 Stash</button>
+    <button class="btn btn-ghost btn-sm" data-git="stash_pop" title="git stash pop">📤 Pop</button>
+    <div class="git-bar-end">
+      <button class="btn btn-ghost btn-sm" data-action="reload">↻ Ricarica</button>
+    </div>
+  </div>
+  <div class="git-body">
+    <div class="git-status-col">
+      <div class="git-col-header">
+        <h4>Modifiche</h4>
+        <button class="btn btn-ghost btn-sm" data-action="toggle-all" data-role="toggle-all" title="Seleziona/deseleziona tutti">☐ All</button>
+      </div>
+      <div class="git-file-list" data-role="files"></div>
+      <div class="git-commit-area">
+        <textarea class="git-commit-msg" data-role="message" rows="2" placeholder="Messaggio di commit..."></textarea>
+        <div class="git-commit-actions">
+          <button class="btn btn-git btn-sm" data-action="commit">✓ Commit</button>
+          <button class="btn btn-ghost btn-sm" data-action="commit-push">✓ Commit &amp; Push</button>
+        </div>
+      </div>
+    </div>
+    <div class="git-log-col">
+      <div class="git-col-header">
+        <h4>Git Log</h4>
+        <select class="remote-input git-log-limit" data-role="limit">
+          <option value="30">30</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="500">500</option>
+          <option value="1000">1000</option>
+        </select>
+      </div>
+      <div class="git-legend" data-role="legend" hidden></div>
+      <div class="git-log-wrap" data-role="log"></div>
+    </div>
+  </div>
+</div>

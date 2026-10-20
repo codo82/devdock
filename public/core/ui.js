@@ -5,7 +5,7 @@ window.UI = (() => {
     return String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  // Argomento stringa per un handler inline (onclick="App.fn(${js(x)})"): esc() da solo
+  // Argomento stringa per un handler inline (onclick="Ext.code.fn(${js(x)})"): esc() da solo
   // non basta, il browser decodifica &#39; in ' prima di eseguire il JS
   function js(v) {
     return esc(JSON.stringify(String(v ?? '')));

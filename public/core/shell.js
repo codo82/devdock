@@ -1,6 +1,6 @@
 // Shell delle estensioni: tab e pulsanti nell'header, pannelli, caricamento lazy di
 // view.html / style.css / view.js e contesto (ctx) passato ai moduli frontend.
-// Contratto in docs/EXTENSIONS.md.
+// Contratto in docs/EXTENSIONS.md. Navigazione, header e avvio dell'app.
 window.Shell = (() => {
   const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice } = window.UI;
 
@@ -30,11 +30,10 @@ window.Shell = (() => {
     await Promise.all([...exts.values()].filter(e => e.meta.frontend.preload).map(e => load(e).catch(() => {})));
   }
 
-  // Prima sezione in ordine di tab (core ed estensioni): quella aperta all'avvio
+  // Prima estensione in ordine di tab: quella aperta all'avvio
   function firstSection() {
     const first = document.querySelector('.section-nav .section-tab');
-    if (!first) return null;
-    return first.id.startsWith('ext-tab-') ? first.id.slice(8) : first.dataset.section || null;
+    return first ? first.id.replace(/^ext-tab-/, '') : null;
   }
 
   function warningMark(meta) {
@@ -314,7 +313,6 @@ window.Shell = (() => {
     for (const e of exts.values()) {
       if (e.module && e.ctx) { try { e.module.refresh?.(e.ctx); } catch (err) { console.error(err); } }
     }
-    window.App?.refresh?.();
   }
 
   // ---- navigazione ----
@@ -331,7 +329,6 @@ window.Shell = (() => {
       try { prev.module?.hide?.(prev.ctx); } catch (e) { console.error(e); }
     }
     active = code;
-    document.getElementById('sidebarContent').style.display = code ? 'none' : '';
     // Estensione senza sidebar.html: il pannello occupa tutta la larghezza
     document.querySelector('.app').classList.toggle('no-sidebar', !!code && !exts.get(code).meta.frontend.sidebar);
     if (!code) return;
@@ -346,10 +343,19 @@ window.Shell = (() => {
     } catch { /* errore già mostrato nel pannello */ }
   }
 
-  // Apertura da tab, pulsanti o altre estensioni: passa dalla navigazione del core
+  // Apertura da tab, pulsanti nell'header o altre estensioni
   function open(code) {
-    window.App?.goSection ? window.App.goSection(code) : activate(code);
+    if (exts.has(code)) activate(code);
   }
 
-  return { init, has, activate, open, firstSection, refresh, toggleNotifications, exportConfig, doExport, importConfig };
+  // Avvio: estensioni, poi la prima sezione
+  (async () => {
+    await init();
+    const first = firstSection();
+    if (first) activate(first);
+    else document.querySelector('main.main').innerHTML =
+      '<div class="empty-state"><div class="icon">🧩</div><p>Nessuna estensione disponibile</p></div>';
+  })();
+
+  return { has, activate, open, refresh, toggleNotifications, exportConfig, doExport, importConfig };
 })();
