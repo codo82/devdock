@@ -1,6 +1,16 @@
 # DevDock extensions
 
-Every feature of DevDock (SSH tunnels, npm, PM2, Git, Swagger, DB client, …) is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage, shared services and the UI shell.
+Every feature of DevDock is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, a few shared services and the UI shell (navigation, header, dialogs).
+
+## Existing extensions
+
+| Code | Position | Order | Owns in `config.json` | Dependencies | Export / import formats | Preload |
+|---|---|---|---|---|---|---|
+| `tunnels` | tab | 10 | `groups`, `servers` | — | export `ssh-commands` | yes |
+| `pm2` | header | 10 | — | `npm` (optional) | — | no |
+| `npm` | tab | 20 | `projects` | — | import `folders` | yes |
+| `git` | tab | 30 | — | `npm` (required) | — | no |
+| `swagger` | tab | 40 | — | — | — | no |
 
 ## Folder layout
 
@@ -8,15 +18,15 @@ Every feature of DevDock (SSH tunnels, npm, PM2, Git, Swagger, DB client, …) i
 extensions/
   git/
     setting.json     manifest (required)
-    server.js        backend: route handlers, services for other extensions
+    server.js        backend: route handlers, services for other extensions, config rules
     view.html        markup of the panel
-    sidebar.html     markup of the sidebar (optional)
+    sidebar.html     markup of the sidebar (optional: without it the panel is full width)
     view.js          frontend logic (ES module)
     style.css        styles (optional)
     package.json     own npm dependencies (optional, npm workspace)
 ```
 
-Only `setting.json` is mandatory: an extension can be frontend-only (Swagger) or backend-only (a service used by other extensions).
+Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) or backend-only (a service used by other extensions).
 
 ## `setting.json`
 
@@ -25,7 +35,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (Swagger) or
   "name": "Git",
   "code": "git",
   "version": "1.0.0",
-  "description": "Status, commit, graph and remote operations for the project repositories",
+  "description": "Status, commit, grafo dei commit e operazioni remote per i repository dei progetti npm",
   "color": "#3fb950",
   "icon": "🌿",
   "position": "tab",
@@ -33,13 +43,12 @@ Only `setting.json` is mandatory: an extension can be frontend-only (Swagger) or
   "dependencies": [
     { "code": "npm", "required": true }
   ],
-  "config": ["git"],
   "backend": {
     "module": "server.js",
     "routes": [
-      { "method": "GET",  "path": "/repos",                    "handler": "listRepos" },
-      { "method": "GET",  "path": "/repos/:id/status",         "handler": "status" },
-      { "method": "POST", "path": "/repos/:id/action",         "handler": "runAction", "stream": true }
+      { "method": "GET",  "path": "/repos",            "handler": "listRepos" },
+      { "method": "GET",  "path": "/repos/:id/status", "handler": "status" },
+      { "method": "POST", "path": "/repos/:id/action", "handler": "action", "stream": true }
     ]
   },
   "frontend": {
@@ -54,20 +63,30 @@ Only `setting.json` is mandatory: an extension can be frontend-only (Swagger) or
 | Field | Required | Meaning |
 |---|---|---|
 | `name` | yes | Label shown in the UI |
-| `code` | yes | Unique id, `[a-z0-9-]`; used in URLs (`/api/ext/<code>`, `/ext/<code>`) and in `dependencies` |
+| `code` | yes | Unique id, `[a-z0-9-]`, equal to the folder name; used in URLs (`/api/ext/<code>`, `/ext/<code>`), in `dependencies` and as `window.Ext.<code>` |
 | `version` | no | Extension version (SemVer) |
-| `description` | no | One line, shown in the extensions list |
-| `color` | yes | Accent colour (`#rrggbb`) for tab, badges and pills |
+| `description` | no | One line |
+| `color` | yes | Accent colour (`#rrggbb`) for tab, badges, pills and `--ext-color` |
 | `icon` | no | Emoji or short text for the tab / header button |
 | `position` | yes | `"tab"`: entry in the section bar with its own panel · `"header"`: button in the header bar that opens its panel |
-| `order` | no | Sort order of tabs (shared with the core sections) and header buttons (default 100). The first tab opens at startup |
-| `dependencies` | no | `required: true` → the extension is not loaded if the dependency is missing or failed · `required: false` → it loads, but shows a warning icon and must cope with the dependency being absent |
+| `order` | no | Sort order among tabs and among header buttons (default 100). The first tab opens at startup |
+| `dependencies` | no | `required: true` → the extension is not loaded if the dependency is missing or disabled · `required: false` → it loads with a warning icon and must cope with the dependency being absent |
 | `config` | no | Top-level keys of `config.json` owned by the extension (see *Configuration*) |
 | `backend.module` | no | Backend file, relative to the extension folder |
-| `backend.routes` | no | Routes mounted under `/api/ext/<code>`; each one names a handler exported by the module |
+| `backend.routes` | no | Routes mounted under `/api/ext/<code>`; each one names a handler of the backend |
 | `transfer` | no | Extra export/import formats offered in the header dialogs (see *Export and import formats*) |
-| `frontend.html` / `sidebar` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served. Without `sidebar` the panel takes the full width |
+| `frontend.html` / `sidebar` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served (never `server.js` or `setting.json`) |
 | `frontend.preload` | no | `true`: the module is mounted at startup (hidden) instead of on first open — for extensions that keep header pills, badges or notifications up to date in the background |
+
+### Loading and states
+
+At startup the loader reads every `extensions/*/setting.json` and gives each extension a state, shown by `GET /api/core/extensions`:
+
+- `ok` — loaded
+- `warning` — loaded, but an optional dependency is missing (`warnings` lists it)
+- `disabled` — not loaded; `error` says why: invalid manifest, missing required dependency, dependency cycle, config key already owned by another extension, backend that throws or lacks a handler named in the manifest
+
+Backends are created in dependency order (topological sort) and shut down in reverse order when the server stops. A disabled extension never takes the others down; those that require it are disabled too.
 
 ### Routes
 
@@ -75,66 +94,69 @@ Routes are declared in the manifest, not registered by code, so the whole API su
 
 - `method`: `GET`, `POST`, `PUT`, `DELETE`
 - `path`: Express path relative to `/api/ext/<code>`, e.g. `/repos/:id/action`
-- `handler`: name of a function returned by the backend module (see below); the loader refuses to start an extension whose manifest names a handler that does not exist, and warns about handlers that no route uses
-- `stream: true`: the handler answers with Server-Sent Events (documentation only; the handler still opens the stream through `ctx.sse(res)`)
+- `handler`: name of a function in the backend's `handlers`; the loader refuses an extension whose manifest names a handler that does not exist, and warns about handlers that no route uses
+- `stream: true`: the handler answers with Server-Sent Events (documentation only; the handler opens the stream with `ctx.sse(res)`)
 
-Every route goes through the core security middleware (Host/Origin checks, JSON content type) and the core error handler.
+Every route goes through the core security middleware (Host and Origin checks, JSON content type, body up to 5 MB) and the core error handler: errors thrown by handlers, also asynchronous ones, become a JSON 500 (a 400 for a `ConfigError`).
 
 ## Backend module
+
+`server.js` exports a function that receives `ctx` and returns the extension instance:
 
 ```js
 // extensions/git/server.js
 module.exports = function createGit(ctx) {
-  const npm = ctx.require('npm');            // services of a dependency
+  const npm = ctx.require('npm');                 // services of a dependency
 
   return {
-    handlers: {
+    handlers: {                                    // named in setting.json → backend.routes
       listRepos(req, res) { res.json(repos()); },
-      async status(req, res) { /* … */ },
-      async runAction(req, res) {
-        const send = ctx.sse(res);           // opens the SSE stream
+      async action(req, res) {
+        const send = ctx.sse(res);                 // opens the SSE stream
         send('stdout', '$ git fetch\n');
+        send('exit', 0);
+        send.end();
       },
     },
-    services: { repos },                     // available to extensions that depend on this one
-    config: {                                // rules for the config keys declared in setting.json
-      git: { empty: {}, validate(value, cfg) { /* throw to reject */ } },
-    },
-    shutdown() { /* stop timers, child processes */ },
+    services: { repos },                           // for extensions that depend on this one
+    config: {},                                    // rules for the keys in setting.json → config
+    transfer: {},                                  // functions named in setting.json → transfer
+    shutdown() { /* stop timers and child processes */ },
   };
 
   function repos() { /* uses npm.getProjects() */ }
 };
 ```
 
+Only `handlers` is needed when the manifest declares routes; everything else is optional.
+
 `ctx` contains:
 
 | Member | Purpose |
 |---|---|
 | `ctx.code`, `ctx.dir` | Extension code and folder |
-| `ctx.config.get(key)` / `ctx.config.set(key, value)` | Read/write one of the `config` keys declared in the manifest (validated and saved atomically by the core) |
-| `ctx.require(code)` | `services` of a dependency (`null` for a missing optional dependency) |
-| `ctx.sse(res)` | Opens an SSE response and returns `send(type, data)` |
-| `ctx.lib` | Shared core services: validators, git runner, tracked processes, system tools |
-| `ctx.log(...)` | Console log prefixed with the extension code |
-
-Backends are created in dependency order (topological sort; cycles are an error) and shut down in reverse order when the server stops.
+| `ctx.config.get(key)` / `ctx.config.set(key, value)` | Read/write a key declared in `setting.json → config`; every write is validated and saved atomically. Other keys throw |
+| `ctx.require(code)` | `services` of a dependency declared in the manifest (`null` if an optional dependency is missing) |
+| `ctx.sse(res)` | Opens an SSE response; returns `send(type, data)`, with `send.end()` to close it |
+| `ctx.lib.validate` | `KEY_RE`, `COLOR_RE`, `REMOTE_RE`, `ALIAS_RE`, `NPM_NAME_RE`, `PM2_TARGET_RE`, `isPort`, `isText`, `isValidBranchName`, `isValidCommitHash` |
+| `ctx.lib.config` | `ConfigError` (throw it to reject input with a 400) and `pick(obj, fields)` |
+| `ctx.lib.system` | `hasCommand(cmd)`, `getTools()` (installed external tools) |
+| `ctx.lib.ports` | `getPortsForPgid(pid)`: TCP ports listened on by a process group |
+| `ctx.log.info/warn/error(...)` | Console log prefixed with `[ext:<code>]` |
 
 ## Configuration
 
-`config.json` keeps its top-level keys (`groups`, `servers`, `projects`, …). Each key is a **section** with exactly one owner: the core or the extension that lists it in `setting.json → config`. Two extensions cannot claim the same key; an extension can take over a core section (it then inherits the core rules unless it provides its own).
-
-The backend describes each of its sections in `instance.config[key]`:
+`config.json` keeps its top-level keys (`groups`, `servers`, `projects`, …). Each key is a **section** owned by exactly one extension, the one that lists it in `setting.json → config`; two extensions cannot claim the same key. The backend describes each of its sections in `instance.config[key]`:
 
 | Field | Purpose |
 |---|---|
 | `empty` | Default value, written when the key is missing |
-| `validate(value, cfg)` | Called before every save and import; throwing rejects the write with a 400 |
+| `validate(value, cfg)` | Called before every save and import; throwing rejects the write with a 400 (`cfg` is the whole config, for references between sections) |
 | `normalize(value)` | Applied to imported data (e.g. keep only known fields) |
 | `idField` | For lists: field that identifies an item in a *merge* import |
 | `merge(current, incoming)` | Custom *merge* import (default: lists add the items with a new `idField`, objects add the new keys) |
 
-Writes are atomic (temporary file + rename). Export and import work per section: `GET /api/core/config/export?sections=a,b`, `POST /api/core/config/import` with `{ config, mode: "replace" | "merge" }`; sections missing from the file are left untouched, unknown keys are ignored and reported.
+Writes are atomic (temporary file + rename). The header **Export** dialog lists the sections grouped by owner; **Import** applies only the sections present in the file (*replace* overwrites them, *merge* adds the new items) and leaves the others untouched. Keys without an owner are ignored and reported.
 
 ## Export and import formats
 
@@ -148,28 +170,28 @@ Besides the `config.json` sections, an extension can offer its own formats in th
 ]
 ```
 
-`export` and `import` name functions in the backend's `instance.transfer` (the loader refuses an extension whose manifest names a missing one):
+Each entry has `export`, `import` or both, naming functions in the backend's `instance.transfer` (the loader refuses an extension whose manifest names a missing one):
 
 ```js
 transfer: {
-  exportSshCommands() { return '#!/bin/sh\n…'; },          // string → text file; object → JSON file
-  importFolders(content) { /* … */ return '2 progetti aggiunti'; }, // file content as text → message for the user
+  exportSshCommands() { return '#!/bin/sh\n…'; },                   // string → text file; object → JSON file
+  importFolders(content) { /* … */ return '2 progetti aggiunti'; },  // file content as text → message for the user
 },
 ```
 
-The core exposes them as `GET /api/core/transfers`, `GET /api/core/transfers/<code>/<id>/export` (download, named after `filename` or `devdock-<code>-<id>.txt|json`) and `POST /api/core/transfers/<code>/<id>/import` with `{ content }`. A `ConfigError` thrown by an import becomes a 400 with its message.
+The download is named after `filename`, or `devdock-<code>-<id>.txt|json`. A `ConfigError` thrown by an import becomes a 400 with its message.
 
 ## Frontend module
 
-The shell loads an extension's panel the first time it is opened: it injects `view.html` into the panel and `sidebar.html` into the sidebar, adds `style.css`, then `import()`s `view.js` and calls `mount`. The panel keeps its DOM when the user switches to another section.
+The shell loads an extension's panel the first time it is opened (or at startup with `preload`): it injects `view.html` into the panel and `sidebar.html` into the sidebar, adds `style.css`, then `import()`s `view.js` and calls `mount`. The panel keeps its DOM when the user switches to another section.
 
 Static markup (titles, buttons, containers) lives in the HTML files; `view.js` only fills the dynamic parts, finding them by `data-role`, and wires static buttons through `data-action` attributes:
 
 ```html
-<!-- sidebar.html -->
+<!-- extensions/git/sidebar.html -->
 <div class="sidebar-head">
   <span class="sidebar-head-title">Repository</span>
-  <button class="btn btn-ghost btn-sm" data-action="refresh">↻</button>
+  <button class="btn btn-ghost btn-sm" data-action="reload-repos">↻</button>
 </div>
 <div class="sidebar-body" data-role="repos"></div>
 ```
@@ -179,8 +201,10 @@ Static markup (titles, buttons, containers) lives in the HTML files; `view.js` o
 export default {
   async mount(ctx) {
     const list = ctx.sidebar.querySelector('[data-role="repos"]');
-    const repos = await ctx.api.get('/repos'); // → GET /api/ext/git/repos
-    ctx.expose({ selectRepo });                // window.Ext.git.selectRepo(...) for inline handlers
+    const repos = await ctx.api.get('/repos');          // → GET /api/ext/git/repos
+    list.innerHTML = repos.map(r =>
+      `<button class="sb-item" onclick="Ext.git.select(${ctx.ui.js(r.id)})">${ctx.ui.esc(r.label)}</button>`).join('');
+    ctx.expose({ select(id) { /* … */ } });             // window.Ext.git.select(...)
     ctx.setBadge(repos.length);
   },
   show(ctx) {},    // panel became visible
@@ -193,36 +217,34 @@ export default {
 
 | Member | Purpose |
 |---|---|
-| `ctx.code`, `ctx.meta` | Extension code and the data from `/api/core/extensions` |
+| `ctx.code`, `ctx.meta` | Extension code and its data from `/api/core/extensions` |
 | `ctx.root` | Panel element (already contains `view.html`) |
-| `ctx.sidebar` | Sidebar element shown while the extension is active (already contains `sidebar.html`) |
+| `ctx.sidebar` | Sidebar element, shown while the extension is active (already contains `sidebar.html`) |
 | `ctx.api.get/post/put/del(path)` | JSON calls to `/api/ext/<code><path>`; errors become `Error` with the server message |
 | `ctx.api.stream(path, body, onEvent)` | POST answered with SSE (e.g. git actions); resolves with the `exit` code |
-| `ctx.api.events(path, onEvent)` | GET answered with SSE (`EventSource`); returns a function that closes it |
-| `ctx.core` | Same client for `/api/core` |
-| `ctx.ui` | `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'|'err'|'sys')`, `clear()`, `close()`) |
-| `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions |
+| `ctx.api.events(path, onEvent, onError)` | GET answered with SSE (`EventSource`); returns a function that closes it |
+| `ctx.core` | Same client for `/api/core` (e.g. `ctx.core.get('/system')`) |
+| `ctx.apiFor(code)` | Same client for another extension's API |
+| `ctx.hasExtension(code)` | Whether another extension is loaded (for features that rely on it) |
+| `ctx.ui` | `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`) |
+| `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions (e.g. `npm:projects-changed`) |
 | `ctx.expose(obj)` | Publishes functions as `window.Ext.<code>` for inline handlers |
-| `ctx.setBadge(value)` | Number or text on the tab (`null` hides it) |
-| `ctx.setPills(html)` | The extension's pills in the header bar (`''` removes them); `--ext-color` is available there too |
-| `ctx.open(code)`, `ctx.isActive()` | Navigate to another section; whether this panel is visible |
+| `ctx.setBadge(value)` | Number or text on the tab or header button (`null` hides it) |
+| `ctx.setPills(html)` | The extension's pills in the header bar (`''` removes them) |
+| `ctx.open(code)`, `ctx.isActive()` | Open a section; whether this panel is visible |
 
-Inline handlers in generated HTML call the functions exposed with `ctx.expose`, always escaping arguments with `ctx.ui.js(value)`; text goes through `ctx.ui.esc(value)`:
+Inline handlers call the functions published with `ctx.expose`, always escaping arguments with `ctx.ui.js(value)` and text with `ctx.ui.esc(value)` — values coming from repositories, `package.json` files or processes may contain quotes and markup.
 
-```js
-`<button onclick="Ext.git.selectRepo(${ctx.ui.js(repo.id)})">${ctx.ui.esc(repo.label)}</button>`
-```
+Inside the panel, the sidebar and the pills the CSS variable `--ext-color` holds the extension colour; the `hidden` attribute always hides an element; elements with `data-uptime="<ISO date>"` show an elapsed time that updates every second. Shared classes (`btn`, `sidebar-head`, `sb-item`, `empty-state`, `data-table`, `form-row`, `pill`, `tool-notice`, …) are defined in `public/core/shell.css`.
 
-Inside the panel the CSS variable `--ext-color` holds the extension colour, and the `hidden` attribute always hides an element. Elements with `data-uptime="<ISO date>"` show an elapsed time that updates every second.
-
-The header (notifications toggle, export/import of `config.json` by section, ↻) belongs to the core.
+The header (notifications, export/import, ↻) belongs to the core.
 
 ## Core API
 
 | Route | Purpose |
 |---|---|
-| `GET /api/core/extensions` | Loaded extensions with manifest data, state (`ok`, `warning`, `disabled`) and missing dependencies |
-| `GET /api/core/system` | Platform and external tools |
+| `GET /api/core/extensions` | Extensions with manifest data, state, warnings, error and transfer formats |
+| `GET /api/core/system` | Platform and external tools (`?refresh=1` checks again) |
 | `GET /api/core/config/sections` | Config sections and their owner |
 | `GET /api/core/config/export?sections=a,b&name=x` | Export (download), optionally limited to some sections |
 | `POST /api/core/config/import` | Import `{ config, mode }`, per section |
@@ -242,3 +264,12 @@ The root `package.json` declares `"workspaces": ["extensions/*"]`. An extension 
 ```
 
 A single `npm install` at the root installs everything into the shared `node_modules` (deduplicating common packages), and the backend uses the packages with a plain `require()`. Extensions without dependencies need no `package.json`.
+
+## Creating an extension
+
+1. Create `extensions/<code>/setting.json` with at least `name`, `code`, `color` and `position`.
+2. Backend (if needed): declare the routes in `backend.routes` and write `server.js` returning `handlers` with the same names; use `ctx.lib.validate` and `ConfigError` for input coming from the UI.
+3. Configuration (if needed): list the keys in `config` and describe them in `instance.config`.
+4. Frontend (if needed): `view.html`, optionally `sidebar.html` and `style.css`, and `view.js` with `mount(ctx)`.
+5. Restart the server: the log line `Estensioni: …` lists the loaded extensions, and `GET /api/core/extensions` explains why one is disabled.
+6. Add tests in `tests/` (see `tests/helpers.js`: `startServer()` runs DevDock on a free port with a temporary config).
