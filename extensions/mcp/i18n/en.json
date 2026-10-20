@@ -1,0 +1,27 @@
+{
+  "title": "MCP server",
+  "intro": "AI agents (Claude Code, Claude Desktop or any MCP client) can read the state of DevDock and start npm scripts. The server only answers on this computer and requires the token.",
+  "loading": "Loading...",
+  "endpoint": "Endpoint",
+  "token": "Token",
+  "show": "Show",
+  "hide": "Hide",
+  "copy": "Copy",
+  "regenerate": "Regenerate",
+  "tokenHint": "The token is stored next to config.json (.devdock-mcp-token) and is not exported. Regenerating it disconnects the clients configured with the old one.",
+  "claudeCode": "Claude Code",
+  "claudeDesktop": "Claude Desktop",
+  "claudeDesktopHint": "In claude_desktop_config.json (needs Node.js: mcp-remote connects the client to the HTTP server):",
+  "otherClients": "Other clients: Streamable HTTP transport to the endpoint above, with the header Authorization: Bearer <token>.",
+  "tools": {
+    "one": "{count} tool",
+    "other": "{count} tools"
+  },
+  "toolsHint": "Database tools only work while the vault is unlocked from this UI: the agent never receives nor enters the master password.",
+  "read": "read",
+  "write": "change",
+  "copied": "Copied",
+  "copyFailed": "Copy failed",
+  "confirmRegenerate": "Regenerate the token? Clients configured with the current one will stop working.",
+  "regenerated": "Token regenerated: update the clients' configuration"
+}

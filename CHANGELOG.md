@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-20 — M8 MCP server (first version)
+
+### Added
+- MCP server at `/mcp` (Streamable HTTP, official `@modelcontextprotocol/sdk`): AI agents such as Claude Code and Claude Desktop can read the state of DevDock.
+- Bearer token generated on first start in `.devdock-mcp-token` next to `config.json` (not exported, regenerable); browser requests rejected.
+- `mcp.tools` block in the extension manifest, with handlers in the backend (`instance.mcp`); tools named `<extension>_<tool>`, results as structured JSON, errors with the API error codes.
+- Tools: SSH tunnels (servers and status), PM2 (processes, logs), Git (repositories, status, log), npm (projects and scripts, processes and their output, **start and stop scripts**), database (connections without credentials, databases, tables, table structure, read-only queries in a `READ ONLY` transaction) — database tools only while the vault is unlocked from the UI.
+- 🤖 "MCP server" panel (extension `mcp`): endpoint, token, setup for Claude Code and Claude Desktop, list of the tools.
+
 ## [1.8.1] - 2026-10-20
 
 ### Removed

@@ -60,6 +60,19 @@ A connection can be linked to a **migrations folder in a repository** (📁 Migr
 - **Where changes come from**: the table designer (new tables and *Edit structure* on existing ones) and `CREATE` / `ALTER` / `RENAME` / `DROP` statements typed in the SQL editor (*Save as migration…* in the confirmation dialog). Before applying, a dialog shows the SQL and the migration file; table and operation in the file name are proposed and can be changed. If a statement fails, the file is removed (or reduced to the statements that did run). Data changes (`INSERT` / `UPDATE` / `DELETE`) never produce migrations.
 - Nothing is committed automatically: review and commit the files from the Git section.
 
+## MCP server
+
+DevDock is also an **MCP server**, so AI agents (Claude Code, Claude Desktop, any MCP client) can look at your development environment: tunnels, PM2 processes, Git repositories, npm projects and databases. Open the 🤖 panel in the header for the endpoint, the token and ready-to-copy setup:
+
+```bash
+claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"
+```
+
+- **What an agent can do**: read tunnels and their status, PM2 processes and logs, Git repositories (branch, ahead/behind, status, log), npm projects and scripts, the output of npm processes; **start and stop npm scripts**; on databases list connections (without credentials), databases, tables and table structures, and run read-only queries (row limit, run in a `READ ONLY` transaction). Nothing else changes state.
+- **Databases need the vault unlocked from the DevDock UI**: the master password never goes through the agent. When the vault is locked the tools answer with a clear error asking you to unlock it.
+- **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.devdock-mcp-token` next to `config.json` (not exported, regenerable from the panel). Requests coming from a browser are rejected.
+- Tool names are prefixed with the extension (`git_status`, `npm_run`, `db_client_query`); errors carry the same codes as the API.
+
 ## Configuration
 
 Everything is stored in `config.json` in the project folder. The file is created empty on first start and is excluded from git because it contains personal hosts and paths.
@@ -114,7 +127,7 @@ Local command-line clients (curl, scripts) that send no `Origin` header are allo
 ```
 server.js            entry point: security middleware, extension loader, core API, startup
 lib/                 core services: config by section, extension loader, security,
-                     validators, external tools, port detection, SSE
+                     validators, external tools, port detection, SSE, MCP server
 routes/core.js       core API (/api/core): extensions, system, config export/import
 public/              UI shell: index.html, core/shell.js (navigation, header, dialogs),
                      core/ui.js (shared helpers), core/i18n.js (translations and

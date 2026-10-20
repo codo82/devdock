@@ -12,6 +12,7 @@ Every feature of DevDock is an **extension**: a folder under `extensions/` that 
 | `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `npm`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | `npm` (required) | no |
 | `swagger` | tab | 40 | — | — | — | no |
+| `mcp` | header | 20 | — | — | — | no |
 
 Services offered to other extensions (`ctx.require(code)`): `npm` → `getProjects()`, `getProject(id)`, `readPackage(project)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
 
@@ -149,6 +150,42 @@ Only `handlers` is needed when the manifest declares routes; everything else is 
 | `ctx.lib.system` | `hasCommand(cmd)`, `getTools()` (installed external tools) |
 | `ctx.lib.ports` | `getPortsForPgid(pid)`: TCP ports listened on by a process group |
 | `ctx.log.info/warn/error(...)` | Console log prefixed with `[ext:<code>]` |
+
+### MCP tools
+
+An extension exposes tools to AI agents through the core MCP server (`/mcp`) by declaring them in `setting.json` and implementing them in `instance.mcp` of the backend:
+
+```json
+"mcp": {
+  "tools": [
+    { "name": "status", "handler": "status", "readOnly": true,
+      "description": "Status of a repository: branch, ahead/behind, changed files…",
+      "inputSchema": { "type": "object", "properties": { "repo": { "type": "string" } }, "required": ["repo"] } }
+  ]
+}
+```
+
+```js
+return {
+  mcp: {
+    async status({ repo }) {                       // arguments from the agent (validate them)
+      const r = getGitRepos().find(x => x.id === repo);
+      if (!r) throw ctx.error(404, 'repo_not_found'); // becomes an MCP tool error with the code
+      return { repo: r.id, ...await statusOf(r) };   // an object: sent as structured JSON and text
+    },
+  },
+};
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | `[a-z][a-z0-9_]*`; the tool is published as `<code>_<name>` (`-` in the code becomes `_`: `db_client_query`) |
+| `description` | What the tool does, in English, written for the agent |
+| `inputSchema` | JSON Schema of the arguments (`type: "object"`) |
+| `handler` | Function in `instance.mcp`; it receives the arguments, returns an object (or throws `ctx.error`) |
+| `readOnly` | `true` (default) for tools that only read; `false` for tools that change state (published with `readOnlyHint: false`) |
+
+Keep tools read-only unless the user asked otherwise, never return secrets (passwords, tokens, vault data), and limit long outputs with a parameter (`limit`, `lines`) and a `truncated` flag. A missing handler disables the extension like a missing route handler.
 
 ### Errors
 
@@ -304,6 +341,8 @@ Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i1
 | Route | Purpose |
 |---|---|
 | `GET /api/core/extensions` | Extensions with manifest data, state, warnings and error |
+| `GET /api/core/mcp` · `POST /api/core/mcp/token` | MCP endpoint URL, token and tools of the extensions · regenerate the token |
+| `/mcp` | MCP server (Streamable HTTP, bearer token, no browser requests) |
 | `GET /api/core/i18n/languages` | Source language and available languages: `{ source, languages: [{ tag, name, nativeName, dir, core, completeness }] }` (`core: false` = only some extension ships it; `completeness` = % of the source keys translated, core and extensions together) |
 | `GET /api/core/system` | Platform and external tools (`?refresh=1` checks again) |
 | `GET /api/core/config/sections` | Config sections and their owner |

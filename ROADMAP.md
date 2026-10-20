@@ -209,7 +209,7 @@ Migration format (decided): **one SQL file per migration, `NNN_<table>_<operatio
 - [x] **M7.14** Tests: operation model and statement recogniser on fixtures; diff engine on JSON fixtures (no DB needed); numbering (gaps, wider numbers, names out of format, upstream ahead); the generator on fixed operation lists with expected SQL; exclusive writes; rollback of the file when the DDL fails; an integration test against a disposable MySQL (skipped when `mysqld` is not installed): pipeline, introspection round trip, outside changes, baseline
 - [x] **M7.16** Docs: README section "DB migrations" (linking, file format, numbering)
 
-## M8 — MCP server
+## M8 — MCP server ✅ (1.9.0, first version)
 
 Goal: expose DevDock to AI agents (Claude Code, Claude Desktop, any MCP client) through a **Model Context Protocol server**, so an agent can query the extensions: tunnel and PM2 status, Git state, npm scripts, API specs, DB schema. As with the UI, every capability comes from an extension: the core only hosts the server and aggregates what the extensions declare. Done **after M6 and M7**: it reuses the M6 structured error codes and the M7 migration pipeline.
 
@@ -222,9 +222,9 @@ First version (agreed scope): **read-only** tools for every extension, plus runn
 - [x] **M8.5** Tools namespaced by extension code (`git_repo_status`, `db_client_query`); disabled extensions expose nothing
 - [x] **M8.6** Results as structured JSON plus text, long outputs limited by parameters and truncated with a flag; errors as MCP tool errors with the M6 error codes
 - [x] **M8.7** Tools: Tunnels (servers and active tunnels); PM2 (processes, log tail); Git (repos with branch and ahead/behind, status, log); npm (projects and scripts, running processes, output of a process; **run a script** and **stop a process**); DB client (connections without credentials, tables, structure of a table, read-only query with row limit run in a `READ ONLY` transaction) — only with the vault unlocked, otherwise a clear error
-- [ ] **M8.8** "MCP" panel: endpoint, token (show, copy, regenerate), ready-to-copy setup for Claude Code and Claude Desktop, list of the tools per extension
+- [x] **M8.8** "MCP" panel: endpoint, token (show, copy, regenerate), ready-to-copy setup for Claude Code and Claude Desktop, list of the tools per extension
 - [x] **M8.9** Tests with the SDK client: initialize, list and call tools, rejection without token or with a browser `Origin`, DB tools with the vault locked and unlocked, secrets never returned
-- [ ] **M8.10** Docs: README section "MCP server" and the `mcp` manifest block in `docs/EXTENSIONS.md`
+- [x] **M8.10** Docs: README section "MCP server" and the `mcp` manifest block in `docs/EXTENSIONS.md`
 
 **Later (not in the first version)**
 - [ ] **M8.11** Other state-changing tools (start/stop tunnels, PM2 restart, git pull/push, DDL through the migration pipeline), each enabled one by one in the UI
