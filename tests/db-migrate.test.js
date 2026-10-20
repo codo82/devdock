@@ -1,5 +1,5 @@
 // Pipeline delle migration con MySQL: designer/operazioni → file NNN_ nel repository →
-// DDL sul database → snapshot. Saltato se mysqld non è installato.
+// DDL sul database. Saltato se mysqld non è installato.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -9,7 +9,7 @@ const { startMysql } = require('./mysql');
 
 const col = (name, extra = {}) => ({ name, type: 'VARCHAR', length: 50, nullable: true, default: { kind: 'none' }, ...extra });
 
-test('migration: file nel repository, DDL, snapshot, errori e schema letto di nuovo', async t => {
+test('migration: file nel repository, DDL, errori e schema letto di nuovo', async t => {
   const mysqlDb = await startMysql();
   if (!mysqlDb) return t.skip('mysqld non installato');
   const repo = makeRepo(path.join(tmpDir(), 'repo'));
@@ -52,11 +52,8 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     assert.equal(r.status, 200, r.text);
     assert.equal(r.json.file, '002_ordini_create.sql');
     assert.ok(fs.readFileSync(path.join(dir, '002_ordini_create.sql'), 'utf8').includes('CREATE TABLE `app`.`ordini`'));
-    const snap = JSON.parse(fs.readFileSync(path.join(dir, '.devdock-schema.json'), 'utf8'));
-    assert.equal(snap.lastMigration, '002_ordini_create.sql');
-    assert.deepEqual(Object.keys(snap.tables), ['clienti', 'ordini']);
+    assert.ok(!fs.existsSync(path.join(dir, '.devdock-schema.json')), 'nessuno snapshot');
     assert.equal((await api('GET', '/connections/c/migrations')).json.nextPrefix, '003');
-    assert.equal((await api('GET', '/connections')).json.connections[0].migrations.applied, '002_ordini_create.sql');
 
     // 2. lo schema letto dal DB rigenera la stessa tabella (andata e ritorno del modello)
     const def = (await api('GET', '/connections/c/databases/app/tables/ordini/definition')).json.definition;
@@ -64,7 +61,6 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     assert.deepEqual(def.columns.find(c => c.name === 'creato').default, { kind: 'current_timestamp' });
     assert.deepEqual(def.columns.find(c => c.name === 'stato').default, { kind: 'value', value: 'nuovo' });
     assert.equal(def.foreignKeys[0].onDelete, 'CASCADE');
-    assert.deepEqual(snap.tables.ordini, def);
 
     // 3. modifica distruttiva: serve la conferma esplicita degli avvisi
     const alter = [
@@ -130,47 +126,6 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     r = await api('POST', '/connections/c/query', { sql: 'DELETE FROM ordini', database: 'app' });
     assert.equal(r.json.migration, null);
 
-    // 6d. modifiche fatte fuori da DevDock: lo stato le trova, la migration scrive solo il file
-    const status = () => api('GET', '/connections/c/databases/app/schema-status');
-    assert.equal((await status()).json.state, 'in_sync');
-    r = await api('POST', '/connections/c/query', { sql: 'ALTER TABLE ordini ADD COLUMN esterna INT', database: 'app' });
-    await api('POST', '/connections/c/query', { sql: 'ALTER TABLE ordini ADD COLUMN esterna INT', database: 'app', confirm: r.json.token });
-    r = await status();
-    assert.equal(r.json.state, 'changes');
-    assert.deepEqual(r.json.operations.map(o => o.op), ['add_column']);
-    assert.deepEqual(r.json.proposal, { table: 'ordini', operation: 'add_esterna' });
-    r = await api('POST', '/connections/c/databases/app/schema-capture', { preview: true });
-    assert.equal(r.json.file, '008_ordini_add_esterna.sql');
-    assert.match(r.json.content, /ADD COLUMN `esterna` INT NULL/);
-    r = await api('POST', '/connections/c/databases/app/schema-capture', {});
-    assert.equal(r.json.file, '008_ordini_add_esterna.sql');
-    assert.equal((await status()).json.state, 'in_sync');
-
-    // 6e. snapshot più avanti del DB (migration di un collega scaricate e non applicate)
-    const snapFile = path.join(dir, '.devdock-schema.json');
-    const original = fs.readFileSync(snapFile, 'utf8');
-    const ahead = JSON.parse(original);
-    ahead.lastMigration = '099_fatture_create.sql';
-    ahead.tables.fatture = { columns: [col('n')], primaryKey: [], indexes: [], foreignKeys: [] };
-    fs.writeFileSync(snapFile, JSON.stringify(ahead));
-    fs.writeFileSync(path.join(dir, '099_fatture_create.sql'), 'CREATE TABLE fatture (n VARCHAR(50));\n');
-    r = await status();
-    assert.equal(r.json.state, 'behind');
-    assert.deepEqual(r.json.pending, ['099_fatture_create.sql']);
-    fs.writeFileSync(snapFile, original);
-    fs.rmSync(path.join(dir, '099_fatture_create.sql'));
-
-    // 6f. baseline su una cartella nuova: snapshot e migration iniziale con tutto lo schema
-    fs.mkdirSync(path.join(repo, 'db/altro'));
-    await api('PUT', '/connections/c/migrations', { repo: 'app', dir: 'db/altro' });
-    assert.equal((await status()).json.state, 'no_snapshot');
-    r = await api('POST', '/connections/c/databases/app/schema-baseline', { withMigration: true });
-    assert.equal(r.json.file, '001_schema_baseline.sql');
-    const base = fs.readFileSync(path.join(repo, 'db/altro/001_schema_baseline.sql'), 'utf8');
-    assert.ok(base.indexOf('CREATE TABLE `app`.`clienti`') < base.indexOf('ADD CONSTRAINT `fk_cliente`'), 'chiavi esterne dopo le tabelle');
-    assert.equal((await status()).json.state, 'in_sync');
-    await api('PUT', '/connections/c/migrations', { repo: 'app', dir: 'db/migrations' });
-
     // 7. senza repository collegato: solo DDL, nessun file
     await api('DELETE', '/connections/c/migrations');
     const plain = [{ op: 'drop_index', table: 'ordini', name: 'ix_stato' }];
@@ -178,7 +133,7 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     assert.equal(r.json.migration, null);
     r = await migrate({ operations: plain, confirm: r.json.token });
     assert.deepEqual([r.status, r.json.file], [200, null]);
-    assert.equal(fs.readdirSync(dir).filter(f => f.endsWith('.sql')).length, 8);
+    assert.equal(fs.readdirSync(dir).filter(f => f.endsWith('.sql')).length, 7);
   } finally {
     await s.stop();
     await mysqlDb.stop();

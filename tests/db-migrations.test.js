@@ -44,7 +44,7 @@ test('cartelle: solo dentro il repository', () => {
   assert.throws(() => mig.createFolder(root, 'db', '..'), /folder_name_invalid/);
 });
 
-test('scrittura: mai sovrascrivere, contenuto con intestazione, snapshot ordinato', () => {
+test('scrittura: mai sovrascrivere, contenuto con intestazione', () => {
   const dir = tmpDir();
   mig.writeExclusive(dir, '001_a_create.sql', 'uno');
   assert.throws(() => mig.writeExclusive(dir, '001_a_create.sql', 'due'), /file_exists/);
@@ -52,9 +52,6 @@ test('scrittura: mai sovrascrivere, contenuto con intestazione, snapshot ordinat
   assert.deepEqual(fs.readdirSync(dir), ['001_a_create.sql'], 'nessun file temporaneo rimasto');
   const content = mig.migrationContent('002_a_alter.sql', { connection: 'Locale', database: 'app', date: new Date('2026-01-02T03:04:05Z') }, ['ALTER TABLE a ADD b INT', 'CREATE INDEX i ON a (b)']);
   assert.equal(content, '-- 002_a_alter.sql\n-- DevDock · Locale · app · 2026-01-02T03:04:05.000Z\n\nALTER TABLE a ADD b INT;\n\nCREATE INDEX i ON a (b);\n');
-  const snap = JSON.parse(mig.snapshotContent('app', '002_a_alter.sql', { tables: { z: {}, a: {} } }));
-  assert.deepEqual(Object.keys(snap.tables), ['a', 'z']);
-  assert.equal(snap.lastMigration, '002_a_alter.sql');
 });
 
 let srv, repo, base;
@@ -100,18 +97,13 @@ test('repository dall\'estensione Git e browser delle cartelle', async () => {
   assert.ok(fs.existsSync(path.join(repo, 'database/seeds')));
 });
 
-test('numerazione con il remoto: le migration non ancora scaricate spostano il prossimo numero', async () => {
-  let r = await api('GET', '/migrations/repos/app/scan?dir=database/migrations');
-  assert.equal(r.json.current, 1, 'senza fetch il remoto noto è fermo a 001');
+test('numerazione dai file della cartella (il branch remoto non conta)', async () => {
+  const r = await api('GET', '/migrations/repos/app/scan?dir=database/migrations');
+  assert.equal(r.json.current, 1, 'la 002 del collega è solo sul remoto');
   assert.equal(r.json.nextPrefix, '002');
-  r = await api('GET', '/migrations/repos/app/scan?dir=database/migrations&fetch=1');
-  assert.equal(r.json.upstream.ref, 'origin/main');
-  assert.deepEqual(r.json.upstream.missing.map(f => f.name), ['002_orders_create.sql']);
-  assert.equal(r.json.current, 2);
-  assert.equal(r.json.nextPrefix, '003');
+  assert.equal(r.json.upstream, undefined);
   // cartella vuota: si parte da 001
-  r = await api('GET', '/migrations/repos/app/scan?dir=database/seeds');
-  assert.equal(r.json.nextPrefix, '001');
+  assert.equal((await api('GET', '/migrations/repos/app/scan?dir=database/seeds')).json.nextPrefix, '001');
 });
 
 test('collegamento della connessione a repository e cartella', async () => {
@@ -122,7 +114,7 @@ test('collegamento della connessione a repository e cartella', async () => {
   r = await api('GET', '/connections/c1/migrations');
   assert.equal(r.json.linked, true);
   assert.equal(r.json.dir, 'database/migrations');
-  assert.equal(r.json.nextPrefix, '003');
+  assert.equal(r.json.nextPrefix, '002');
   const list = (await api('GET', '/connections')).json.connections;
   assert.deepEqual(list[0].migrations, { repo: 'app', dir: 'database/migrations' });
   assert.equal((await api('DELETE', '/connections/c1/migrations')).status, 200);

@@ -1,7 +1,7 @@
 // Modello delle modifiche di schema: un elenco di operazioni su tabelle, da cui si
 // generano sia l'SQL eseguito sul DB sia il contenuto del file di migration (stesso
-// testo). Usato dal designer, dalle istruzioni scritte nell'editor e dal confronto
-// tra lo snapshot del repository e lo schema reale.
+// testo). Usato dal designer (anche per calcolare le modifiche di una tabella
+// esistente) e dalle istruzioni scritte nell'editor.
 //
 // Operazioni (table = tabella su cui agiscono):
 //   create_table { definition }          drop_table {}            rename_table { to }
@@ -149,13 +149,13 @@ function proposeName(ops) {
   return { table: slug(table), operation: 'alter' };
 }
 
-// ---- confronto tra due schemi (snapshot → reale) ----
+// ---- confronto tra due schemi (struttura attuale → struttura modificata nel designer) ----
 // Schema: { tables: { <nome>: definizione come in ddl.createTableSql (senza name) } }
 
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // Forma canonica di una colonna: stessi campi e tipi qualunque sia la provenienza
-// (designer, snapshot, INFORMATION_SCHEMA), così il confronto vede solo modifiche vere
+// (designer o INFORMATION_SCHEMA), così il confronto vede solo modifiche vere
 function normalizeColumn(c) {
   const type = String(c.type || '').toUpperCase();
   const kind = ddl.TYPE_KINDS[type];

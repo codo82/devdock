@@ -360,10 +360,6 @@
   "mig.notLinked": "migration non collegate",
   "mig.repoMissing": "repository \"{repo}\" non più disponibile",
   "mig.next": "prossima {prefix}",
-  "mig.behindShort": {
-    "one": "{count} migration da scaricare",
-    "other": "{count} migration da scaricare"
-  },
   "mig.title": "Migration di {name}",
   "mig.unlink": "Scollega",
   "mig.link": "Collega questa cartella",
@@ -383,16 +379,8 @@
   "mig.last": "ultima: {name}",
   "mig.nextFile": "Prossimo numero: {prefix}, es.",
   "mig.example": "tabella_operazione",
-  "mig.behind": {
-    "one": "Il branch remoto {ref} ha {count} migration che non hai ancora scaricato: fai pull prima di crearne di nuove. Il prossimo numero ne tiene già conto.",
-    "other": "Il branch remoto {ref} ha {count} migration che non hai ancora scaricato: fai pull prima di crearne di nuove. Il prossimo numero ne tiene già conto."
-  },
-  "mig.upToDate": "Allineata con {ref}",
-  "mig.noUpstream": "Nessun branch remoto collegato: si contano solo i file locali.",
-  "mig.fetchFailed": "Aggiornamento dal remoto non riuscito: il controllo usa l'ultimo stato noto.",
   "mig.duplicates": "Numeri ripetuti: {numbers}",
   "mig.ignored": "File .sql fuori formato, ignorati: {files}",
-  "mig.fetch": "↻ Controlla il remoto (fetch)",
   "mig.linked": "Migration collegate a {dir}",
   "mig.confirmUnlink": "Scollegare la cartella delle migration? I file restano nel repository.",
   "mig.unlinked": "Migration scollegate",
@@ -443,54 +431,5 @@
   "migrate.done": "Modifica applicata (nessuna migration)",
   "confirm.runOnly": "Esegui soltanto",
   "confirm.saveMigration": "Salva come migration…",
-  "confirm.migrationHint": "È una modifica di schema e la connessione è collegata a una cartella di migration: puoi salvarla come migration (anteprima del file prima di applicarla) o eseguirla soltanto.",
-  "errors.renames_invalid": "Rinomine non valide",
-  "errors.not_linked": "Connessione non collegata a una cartella di migration",
-  "errors.no_snapshot": "Nessuno snapshot dello schema nel repository: fai prima la baseline",
-  "menu.schemaStatus": "Stato delle migration…",
-  "mig.statusTitle": "Stato delle migration del database attivo",
-  "schema.loading": "Confronto con lo snapshot…",
-  "schema.notLinked": "Connessione non collegata a una cartella di migration.",
-  "schema.title": "Migration di {db} · {dir}",
-  "schema.recheck": "Ricontrolla",
-  "schema.mismatch": "Lo snapshot è del database {db}, non di questo",
-  "schema.noSnapshot": {
-    "one": "Nessuno snapshot nel repository. La baseline prende lo schema attuale ({count} tabella) come punto di partenza.",
-    "other": "Nessuno snapshot nel repository. La baseline prende lo schema attuale ({count} tabelle) come punto di partenza."
-  },
-  "schema.baselineMigration": "Genera anche una migration iniziale con lo schema completo",
-  "schema.baseline": "Crea la baseline",
-  "schema.baselineDone": "Baseline creata",
-  "schema.baselineDoneFile": "Baseline creata con la migration {file}",
-  "schema.inSync": "Database allineato allo snapshot (ultima migration: {file})",
-  "schema.behind": {
-    "one": "Lo snapshot è più avanti di questo database: {count} migration da applicare (ultima applicata qui: {applied})",
-    "other": "Lo snapshot è più avanti di questo database: {count} migration da applicare (ultima applicata qui: {applied})"
-  },
-  "schema.behindHint": "Sono migration scaricate dal repository e non ancora eseguite su questo database. Applicale, poi ricontrolla: quando lo schema coincide con lo snapshot lo stato torna allineato.",
-  "schema.changes": {
-    "one": "{count} modifica nel database che non è in nessuna migration:",
-    "other": "{count} modifiche nel database che non sono in nessuna migration:"
-  },
-  "schema.ambiguous": "{table}.{column}: colonna nuova o rinominata?",
-  "schema.newColumn": "{column} è una colonna nuova (la vecchia viene eliminata)",
-  "schema.renameOf": "rinomina di {column}",
-  "schema.captureHint": "Il database ha già queste modifiche: viene scritto solo il file di migration e aggiornato lo snapshot.",
-  "schema.capture": "Genera la migration",
-  "schema.captureDone": "Migration {file} generata",
-  "ops.create_table": "crea la tabella {table}",
-  "ops.drop_table": "elimina la tabella {table}",
-  "ops.rename_table": "rinomina la tabella {table} in {to}",
-  "ops.add_column": "{table}: aggiunge la colonna {column}",
-  "ops.modify_column": "{table}: modifica la colonna {column}",
-  "ops.rename_column": "{table}: rinomina la colonna {from} in {to}",
-  "ops.drop_column": "{table}: elimina la colonna {column}",
-  "ops.add_index": "{table}: aggiunge l'indice {index}",
-  "ops.drop_index": "{table}: elimina l'indice {index}",
-  "ops.add_primary_key": "{table}: aggiunge la chiave primaria",
-  "ops.drop_primary_key": "{table}: toglie la chiave primaria",
-  "ops.add_fk": "{table}: aggiunge la chiave esterna {fk}",
-  "ops.drop_fk": "{table}: elimina la chiave esterna {fk}",
-  "ops.table_options": "{table}: cambia engine o commento",
-  "ops.raw": "istruzione SQL"
+  "confirm.migrationHint": "È una modifica di schema e la connessione è collegata a una cartella di migration: puoi salvarla come migration (anteprima del file prima di applicarla) o eseguirla soltanto."
 }

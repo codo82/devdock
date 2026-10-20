@@ -360,10 +360,6 @@
   "mig.notLinked": "migrations not linked",
   "mig.repoMissing": "repository \"{repo}\" no longer available",
   "mig.next": "next {prefix}",
-  "mig.behindShort": {
-    "one": "{count} migration to pull",
-    "other": "{count} migrations to pull"
-  },
   "mig.title": "Migrations of {name}",
   "mig.unlink": "Unlink",
   "mig.link": "Link this folder",
@@ -383,16 +379,8 @@
   "mig.last": "last: {name}",
   "mig.nextFile": "Next number: {prefix}, e.g.",
   "mig.example": "table_operation",
-  "mig.behind": {
-    "one": "The remote branch {ref} has {count} migration you haven't pulled yet: pull before creating new ones. The next number already accounts for it.",
-    "other": "The remote branch {ref} has {count} migrations you haven't pulled yet: pull before creating new ones. The next number already accounts for them."
-  },
-  "mig.upToDate": "In sync with {ref}",
-  "mig.noUpstream": "No remote branch tracked: only local files are counted.",
-  "mig.fetchFailed": "Updating from the remote failed: the check uses the last known state.",
   "mig.duplicates": "Repeated numbers: {numbers}",
   "mig.ignored": ".sql files not in the format, ignored: {files}",
-  "mig.fetch": "↻ Check the remote (fetch)",
   "mig.linked": "Migrations linked to {dir}",
   "mig.confirmUnlink": "Unlink the migrations folder? The files stay in the repository.",
   "mig.unlinked": "Migrations unlinked",
@@ -443,54 +431,5 @@
   "migrate.done": "Change applied (no migration)",
   "confirm.runOnly": "Run only",
   "confirm.saveMigration": "Save as migration…",
-  "confirm.migrationHint": "This is a schema change and the connection is linked to a migrations folder: you can save it as a migration (with a preview of the file before applying it) or just run it.",
-  "errors.renames_invalid": "Invalid renames",
-  "errors.not_linked": "Connection not linked to a migrations folder",
-  "errors.no_snapshot": "No schema snapshot in the repository: create the baseline first",
-  "menu.schemaStatus": "Migrations status…",
-  "mig.statusTitle": "Migrations status of the active database",
-  "schema.loading": "Comparing with the snapshot…",
-  "schema.notLinked": "Connection not linked to a migrations folder.",
-  "schema.title": "Migrations of {db} · {dir}",
-  "schema.recheck": "Check again",
-  "schema.mismatch": "The snapshot is of the database {db}, not of this one",
-  "schema.noSnapshot": {
-    "one": "No snapshot in the repository. The baseline takes the current schema ({count} table) as the starting point.",
-    "other": "No snapshot in the repository. The baseline takes the current schema ({count} tables) as the starting point."
-  },
-  "schema.baselineMigration": "Also generate an initial migration with the full schema",
-  "schema.baseline": "Create the baseline",
-  "schema.baselineDone": "Baseline created",
-  "schema.baselineDoneFile": "Baseline created with the migration {file}",
-  "schema.inSync": "Database in sync with the snapshot (last migration: {file})",
-  "schema.behind": {
-    "one": "The snapshot is ahead of this database: {count} migration to apply (last applied here: {applied})",
-    "other": "The snapshot is ahead of this database: {count} migrations to apply (last applied here: {applied})"
-  },
-  "schema.behindHint": "These are migrations pulled from the repository and not yet run on this database. Apply them, then check again: when the schema matches the snapshot the status goes back to in sync.",
-  "schema.changes": {
-    "one": "{count} change in the database that is in no migration:",
-    "other": "{count} changes in the database that are in no migration:"
-  },
-  "schema.ambiguous": "{table}.{column}: new or renamed column?",
-  "schema.newColumn": "{column} is a new column (the old one is dropped)",
-  "schema.renameOf": "rename of {column}",
-  "schema.captureHint": "The database already has these changes: only the migration file is written and the snapshot updated.",
-  "schema.capture": "Generate the migration",
-  "schema.captureDone": "Migration {file} generated",
-  "ops.create_table": "creates the table {table}",
-  "ops.drop_table": "drops the table {table}",
-  "ops.rename_table": "renames the table {table} to {to}",
-  "ops.add_column": "{table}: adds the column {column}",
-  "ops.modify_column": "{table}: changes the column {column}",
-  "ops.rename_column": "{table}: renames the column {from} to {to}",
-  "ops.drop_column": "{table}: drops the column {column}",
-  "ops.add_index": "{table}: adds the index {index}",
-  "ops.drop_index": "{table}: drops the index {index}",
-  "ops.add_primary_key": "{table}: adds the primary key",
-  "ops.drop_primary_key": "{table}: removes the primary key",
-  "ops.add_fk": "{table}: adds the foreign key {fk}",
-  "ops.drop_fk": "{table}: drops the foreign key {fk}",
-  "ops.table_options": "{table}: changes engine or comment",
-  "ops.raw": "SQL statement"
+  "confirm.migrationHint": "This is a schema change and the connection is linked to a migrations folder: you can save it as a migration (with a preview of the file before applying it) or just run it."
 }

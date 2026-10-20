@@ -13,7 +13,7 @@ Every feature of DevDock is an **extension**: a folder under `extensions/` that 
 | `git` | tab | 30 | — | — | `npm` (required) | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
-Services offered to other extensions (`ctx.require(code)`): `npm` → `getProjects()`, `getProject(id)`, `readPackage(project)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`; `git` → `repos()`, `upstreamOf(path)`, `filesAt(path, ref, dir)`, `fetch(path)`; `db-client` → `decryptPassword(connection)`.
+Services offered to other extensions (`ctx.require(code)`): `npm` → `getProjects()`, `getProject(id)`, `readPackage(project)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
 
 ## Folder layout
 

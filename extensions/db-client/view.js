@@ -187,7 +187,6 @@ export default {
 
     function openGrid(c, db, table) {
       designer = null;
-      schemaView = null;
       grid = { connId: c.id, db, table, page: 1, pageSize: 50, search: '', filters: [], sort: null, data: null };
       loadGrid();
     }
@@ -456,113 +455,6 @@ export default {
       renderDesigner();
     });
 
-    // ---- stato delle migration: snapshot del repository rispetto allo schema reale ----
-    let schemaView = null; // { connId, db, renames, data, preview }
-
-    const describeOp = op => {
-      const p = {
-        table: op.table, column: op.column?.name || op.name || op.to || '', from: op.name || op.from || '',
-        to: op.column?.name || op.to || '', index: op.index?.name || op.name || '', fk: op.fk?.name || op.name || '',
-      };
-      if (op.op === 'modify_column' && op.column?.name && op.column.name !== op.name) return t('ops.rename_column', p);
-      return t(`ops.${op.op}`, p);
-    };
-
-    // ambiguous: colonne ambigue già mostrate (restano selezionabili dopo la scelta)
-    async function openSchemaStatus(c, db, renames = {}, ambiguous = []) {
-      if (!db) { toast(t('designer.chooseDb'), 'error'); return; }
-      grid = null; designer = null;
-      schemaView = { connId: c.id, db, renames, data: null, preview: null, ambiguous };
-      $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('schema.loading'))}</div>`;
-      try {
-        const q = Object.keys(renames).length ? `?renames=${encodeURIComponent(JSON.stringify(renames))}` : '';
-        const data = await ctx.api.get(`/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/schema-status${q}`);
-        if (schemaView?.connId !== c.id) return;
-        schemaView.data = data;
-        if (data.ambiguous?.length) schemaView.ambiguous = data.ambiguous;
-        if (data.state === 'changes') {
-          schemaView.preview = await ctx.api.post(`/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/schema-capture`, { renames, preview: true, migration: data.proposal }).catch(() => null);
-        }
-        renderSchemaStatus();
-        loadMigStatus(c);
-      } catch (e) { renderError(e.message); }
-    }
-
-    function renderSchemaStatus() {
-      const v = schemaView;
-      if (!v?.data) return;
-      const d = v.data;
-      const el = $(ctx.root, 'results');
-      if (!d.linked) {
-        el.innerHTML = `<div class="db-schema"><p>${esc(t('schema.notLinked'))}</p>
-          <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].migrationsDialog(${js(v.connId)})">${esc(t('mig.button'))}</button></div>`;
-        return;
-      }
-      const head = `<div class="db-result-meta">${esc(t('schema.title', { db: v.db, dir: `${d.repo}/${d.dir}` }))}
-        <button class="btn btn-ghost btn-sm" data-schema="reload">↻ ${esc(t('schema.recheck'))}</button></div>
-        ${d.databaseMismatch ? `<div class="db-mig-warn">⚠ ${esc(t('schema.mismatch', { db: d.databaseMismatch }))}</div>` : ''}`;
-      let body = '';
-      if (d.state === 'no_snapshot') {
-        body = `<p>${esc(t('schema.noSnapshot', { count: d.tables }))}</p>
-          <label class="db-check"><input type="checkbox" id="f_baseline_mig" ${d.tables ? 'checked' : ''}> ${esc(t('schema.baselineMigration'))}</label>
-          <div class="db-dz-actions"><button class="btn btn-primary btn-sm" data-schema="baseline">${esc(t('schema.baseline'))}</button></div>`;
-      } else if (d.state === 'in_sync') {
-        body = `<div class="db-ok">✓ ${esc(t('schema.inSync', { file: d.snapshot.lastMigration || '—' }))}</div>`;
-      } else if (d.state === 'behind') {
-        body = `<div class="db-mig-warn">⚠ ${esc(t('schema.behind', { count: d.pending.length, applied: d.applied || '—' }))}</div>
-          <ul class="db-schema-list">${d.pending.map(f => `<li class="db-mono">${esc(f)}</li>`).join('')}</ul>
-          <p class="db-muted">${esc(t('schema.behindHint'))}</p>`;
-      } else {
-        const p = v.preview;
-        body = `<p>${esc(t('schema.changes', { count: d.operations.length }))}</p>
-          <ul class="db-schema-list">${d.operations.map(op => `<li>${esc(describeOp(op))}</li>`).join('')}</ul>
-          ${(v.ambiguous || []).map(a => `<div class="form-row db-schema-ambiguous"><label>${esc(t('schema.ambiguous', { table: a.table, column: a.column }))}</label>
-            <select class="form-input" data-schema-rename="${esc(`${a.table}.${a.column}`)}">
-              <option value="">${esc(t('schema.newColumn', { column: a.column }))}</option>
-              ${a.candidates.map(cand => `<option value="${esc(cand)}" ${v.renames[`${a.table}.${a.column}`] === cand ? 'selected' : ''}>${esc(t('schema.renameOf', { column: cand }))}</option>`).join('')}
-            </select></div>`).join('')}
-          ${d.warnings.length ? `<div class="db-mig-warn">⚠ ${d.warnings.map(w => esc(t(`migrate.warn.${w.key}`, w.params))).join(' · ')}</div>` : ''}
-          ${p ? `<div class="db-mg-fields">
-              <span class="db-mono">${esc(/^\d+/.exec(p.file)?.[0] || '')}_</span>
-              <input class="form-input" id="f_cap_table" value="${esc(d.proposal.table)}">
-              <span class="db-mono">_</span>
-              <input class="form-input" id="f_cap_op" value="${esc(d.proposal.operation)}">
-              <span class="db-mono">.sql</span></div>
-            <pre class="db-confirm-sql">${highlightSql(p.content, esc)}</pre>
-            <p class="db-muted">${esc(t('schema.captureHint'))}</p>
-            <div class="db-dz-actions"><button class="btn btn-primary btn-sm" data-schema="capture">${esc(t('schema.capture'))}</button></div>` : ''}`;
-      }
-      el.innerHTML = `<div class="db-schema">${head}${body}</div>`;
-    }
-
-    $(ctx.root, 'results').addEventListener('change', e => {
-      const key = e.target.dataset?.schemaRename;
-      if (!key || !schemaView) return;
-      const renames = { ...schemaView.renames };
-      if (e.target.value) renames[key] = e.target.value; else delete renames[key];
-      // tutte le ambiguità vanno decise: senza scelta resta "colonna nuova"
-      const c = connections.find(x => x.id === schemaView.connId);
-      openSchemaStatus(c, schemaView.db, renames, schemaView.ambiguous);
-    });
-    $(ctx.root, 'results').addEventListener('click', async e => {
-      const a = e.target.closest('[data-schema]')?.dataset.schema;
-      if (!a || !schemaView) return;
-      const c = connections.find(x => x.id === schemaView.connId);
-      const base = `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(schemaView.db)}`;
-      try {
-        if (a === 'reload') return openSchemaStatus(c, schemaView.db, schemaView.renames, schemaView.ambiguous);
-        if (a === 'baseline') {
-          const r = await ctx.api.post(`${base}/schema-baseline`, { withMigration: !!document.getElementById('f_baseline_mig')?.checked });
-          toast(r.file ? t('schema.baselineDoneFile', { file: r.file }) : t('schema.baselineDone'), 'success');
-        } else if (a === 'capture') {
-          const migration = { table: fileSlug(document.getElementById('f_cap_table')?.value), operation: fileSlug(document.getElementById('f_cap_op')?.value) };
-          const r = await ctx.api.post(`${base}/schema-capture`, { renames: schemaView.renames, migration });
-          toast(t('schema.captureDone', { file: r.file }), 'success');
-        }
-        openSchemaStatus(c, schemaView.db);
-      } catch (err) { toast(err.message, 'error'); }
-    });
-
     // ---- applicazione delle modifiche di schema: anteprima SQL + file di migration ----
     // body: { operations } o { design }. onDone(result) dopo l'applicazione riuscita.
     let pendingMigrate = null;
@@ -601,7 +493,6 @@ export default {
               <input class="form-input" id="f_mg_op" value="${esc(data.proposal.operation)}" oninput="Ext['db-client'].migRefresh()" title="${esc(t('migrate.operationField'))}">
               <span class="db-mono">.sql</span>
             </div>
-            ${m.behind.length ? `<div class="db-mig-warn">⚠ ${esc(t('mig.behind', { count: m.behind.length, ref: m.upstream || '' }))}</div>` : ''}
           </div>
           <div class="db-mg-file-name db-mono" data-role="mg-file">${esc(m.file)}</div>
           <pre class="db-confirm-sql" data-role="mg-content">${highlightSql(m.content, esc)}</pre>`
@@ -915,8 +806,8 @@ export default {
     // ---- migration: collegamento a repository e cartella, numerazione NNN_ ----
     const migStatus = new Map(); // id connessione → stato (GET /connections/:id/migrations)
 
-    async function loadMigStatus(c, fetch = false) {
-      try { migStatus.set(c.id, await ctx.api.get(`/connections/${encodeURIComponent(c.id)}/migrations${fetch ? '?fetch=1' : ''}`)); }
+    async function loadMigStatus(c) {
+      try { migStatus.set(c.id, await ctx.api.get(`/connections/${encodeURIComponent(c.id)}/migrations`)); }
       catch (e) { migStatus.set(c.id, { linked: false, error: e.message }); }
       if (active()?.id === c.id) renderMigBadge();
     }
@@ -929,9 +820,7 @@ export default {
       if (!st) { el.innerHTML = ''; loadMigStatus(c); return; }
       if (!st.linked) { el.innerHTML = `<span class="db-muted">${esc(t('mig.notLinked'))}</span>`; return; }
       if (st.repo?.missing) { el.innerHTML = `<span class="db-badge db-badge-warn">${esc(t('mig.repoMissing', { repo: st.repo.id }))}</span>`; return; }
-      const behind = st.upstream?.missing?.length;
-      el.innerHTML = `<button class="db-badge db-badge-btn" onclick="Ext['db-client'].schemaStatus()" title="${esc(t('mig.statusTitle'))}">📁 ${esc(st.repo.label)}/${esc(st.dir || '.')} · ${esc(t('mig.next', { prefix: st.nextPrefix }))}</button>`
-        + (behind ? ` <span class="db-badge db-badge-warn">${esc(t('mig.behindShort', { count: behind }))}</span>` : '');
+      el.innerHTML = `<span class="db-badge" title="${esc(`${st.repo.label} / ${st.dir || '.'}`)}">📁 ${esc(st.repo.label)}/${esc(st.dir || '.')} · ${esc(t('mig.next', { prefix: st.nextPrefix }))}</span>`;
     }
 
     // Stato del dialog: connessione, repository e cartella in esame
@@ -953,14 +842,14 @@ export default {
     }
 
     // Cartelle e numerazione della cartella corrente, poi il disegno del dialog
-    async function migLoad(fetch = false) {
+    async function migLoad() {
       const d = migDlg;
       if (!d) return;
       if (d.repo) {
         const base = `/migrations/repos/${encodeURIComponent(d.repo)}`;
         const q = `?dir=${encodeURIComponent(d.dir)}`;
         try {
-          [d.folders, d.scan] = await Promise.all([ctx.api.get(`${base}/folders${q}`), ctx.api.get(`${base}/scan${q}${fetch ? '&fetch=1' : ''}`)]);
+          [d.folders, d.scan] = await Promise.all([ctx.api.get(`${base}/folders${q}`), ctx.api.get(`${base}/scan${q}`)]);
           d.error = null;
         } catch (e) { d.error = e.message; d.folders = null; d.scan = null; }
       }
@@ -981,7 +870,6 @@ export default {
       const crumbs = [`<button class="db-mig-crumb" onclick="Ext['db-client'].migNav('')">${esc(d.repos.repos.find(r => r.id === d.repo)?.label || d.repo)}</button>`,
         ...parts.map((p, i) => `<button class="db-mig-crumb" onclick="Ext['db-client'].migNav(${js(parts.slice(0, i + 1).join('/'))})">${esc(p)}</button>`)].join('<span class="db-muted">/</span>');
       const sc = d.scan;
-      const up = sc?.upstream;
       el.innerHTML = `
         <div class="form-row"><label>${esc(t('mig.repo'))}</label>
           <select class="form-input" onchange="Ext['db-client'].migRepo(this.value)">${d.repos.repos.map(r =>
@@ -1004,14 +892,8 @@ export default {
           <div><strong>${esc(t('mig.selected', { dir: d.dir || '.' }))}</strong></div>
           <div>${esc(t('mig.found', { count: sc.files.length }))}${sc.files.length ? ` · ${esc(t('mig.last', { name: sc.files[sc.files.length - 1].name }))}` : ''}</div>
           <div>${esc(t('mig.nextFile', { prefix: sc.nextPrefix }))} <code>${esc(sc.nextPrefix)}_${esc(t('mig.example'))}.sql</code></div>
-          ${up ? (up.missing.length
-              ? `<div class="db-mig-warn">⚠ ${esc(t('mig.behind', { count: up.missing.length, ref: up.ref }))}<ul>${up.missing.map(f => `<li>${esc(f.name)}</li>`).join('')}</ul></div>`
-              : `<div class="db-muted">✓ ${esc(t('mig.upToDate', { ref: up.ref }))}</div>`)
-            : `<div class="db-muted">${esc(t('mig.noUpstream'))}</div>`}
-          ${up?.fetched === false ? `<div class="db-mig-warn">⚠ ${esc(t('mig.fetchFailed'))}</div>` : ''}
           ${sc.duplicates.length ? `<div class="db-mig-warn">⚠ ${esc(t('mig.duplicates', { numbers: sc.duplicates.map(n => String(n)).join(', ') }))}</div>` : ''}
           ${sc.ignored.length ? `<div class="db-muted">${esc(t('mig.ignored', { files: sc.ignored.join(', ') }))}</div>` : ''}
-          ${up ? `<button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].migFetch()">${esc(t('mig.fetch'))}</button>` : ''}
         </div>` : ''}`;
     }
 
@@ -1020,10 +902,8 @@ export default {
       migRefresh: () => migRefresh(),
       migApply: () => migApply(),
       migCancel() { pendingMigrate = null; },
-      schemaStatus() { const c = active(); if (c) openSchemaStatus(c, activeDb.get(c.id)); },
       migRepo(id) { migDlg.repo = id; migDlg.dir = ''; migLoad(); },
       migNav(dir) { migDlg.dir = dir; migLoad(); },
-      migFetch() { migLoad(true); },
       async migNewFolder() {
         const name = (document.getElementById('f_mig_folder')?.value || '').trim();
         if (!name) return;
@@ -1492,7 +1372,6 @@ export default {
       const db = dbRow.dataset.db;
       ctx.ui.contextMenu(e.clientX, e.clientY, [
         { icon: '＋', label: t('menu.newTable'), disabled: c.readOnly, action: () => { setActiveDb(c, db); openDesigner(c, db); } },
-        { icon: '📁', label: t('menu.schemaStatus'), action: () => { setActiveDb(c, db); openSchemaStatus(c, db); } },
         { icon: '↻', label: t('menu.refreshTables'), action: () => { cache.delete(nodeKey('d', c.id, db)); open.add(nodeKey('d', c.id, db)); loadTables(c, db); } },
       ]);
     });
@@ -1528,7 +1407,6 @@ export default {
       renderConnections();
       renderWorkspace();
       renderMigDialog();
-      if (schemaView?.data && !grid && !designer) renderSchemaStatus();
       if (designer) renderDesigner();
       else if (grid?.data) renderGrid();
       else if (lastResult) renderResult(lastResult, true);

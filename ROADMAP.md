@@ -142,7 +142,7 @@ Planned after the current milestones, independent of the work in progress. Order
 ## DB client — PostgreSQL
 
 - [ ] **M5.7** PostgreSQL support in the `db-client` extension (it appears among the configured server types): driver, classification of statements, schema browser, data browser and export
-- [ ] **M7.15** Migrations: shadow-database mode (apply all repository migrations to a temporary DB and introspect it) as an alternative reference state; PostgreSQL migrations once M5.7 is done
+- [ ] **M7.15** Migrations for PostgreSQL once M5.7 is done
 
 ## M6 — Internationalization (i18n) ✅ (1.7.0)
 
@@ -184,7 +184,7 @@ Migration format (decided): **one SQL file per migration, `NNN_<table>_<operatio
 
 **Linking**
 - [x] **M7.1** Linking a connection: the user **selects the repository** (the Git extension's repositories; the npm projects when Git is not active) **and the folder** inside it, through a folder browser that lists the repository's subfolders (hidden folders and `node_modules` excluded) and can create a new one. Stored as a per-connection `migrations` block: `{ "repo": "<repo id>", "dir": "database/migrations" }`; `dir` is relative to the repository root and validated (no `..`, no absolute paths, no symlinks leaving the repository)
-- [x] **M7.2** Numbering: the current number is the highest `NNN` among the files matching `^\d+_.*\.sql$` in the folder; when the repository has an upstream branch, its tree (`git ls-tree`, after a `fetch` on request) is checked too, and a warning says when it has higher numbers that are not pulled yet (teammates' migrations). The linking dialog shows the files found and the next number; an empty folder starts at `001`. Files whose names don't follow the format are listed and ignored
+- [x] **M7.2** Numbering: the current number is the highest `NNN` among the files matching `^\d+_.*\.sql$` in the folder (the remote branch is not checked: removed in 1.8.1). The linking dialog shows the files found and the next number; an empty folder starts at `001`. Files whose names don't follow the format are listed and ignored
 
 **Table designer**
 - [x] **M7.3** UI to **create a table** (the M5.9 designer, extended): name, columns (name, type with length/precision, nullable, default, auto-increment, unsigned, comment), primary key, indexes (unique, composite), foreign keys (referenced table/column, on delete/update), engine, charset/collation
@@ -196,10 +196,10 @@ Migration format (decided): **one SQL file per migration, `NNN_<table>_<operatio
 - [x] **M7.7** SQL editor: `CREATE TABLE` / `ALTER TABLE` / `RENAME TABLE` / `CREATE|DROP INDEX` statements typed by hand are recognised and, on a linked connection, the UI offers "Run and save as migration" (default) or "Run only". The statement is saved verbatim in the migration file (it is exactly what runs on the DB); a light recogniser derives table and operation for the file name (`ADD COLUMN x` → `add_x`, `CREATE INDEX` → `add_index_<name>`, several clauses → `alter`), and the user can change them. The same preview as the designer (SQL and file side by side, destructive warnings) is shown before applying
 - [x] **M7.8** File name proposed from the operations: `<table>` is the table name, `<operation>` one of `create`, `alter`, `drop`, `rename` or a more precise slug when there is a single change (`add_status`, `drop_status`, `add_index_email`); editable, slug-validated (`[a-z0-9_]`). Several operations on the same table in one session can be grouped into a single migration
 
-**Changes made outside DevDock**
-- [x] **M7.9** Introspection of the live schema through read-only `INFORMATION_SCHEMA` queries into the same normalised model: tables, columns, primary keys, indexes, foreign keys, engine
-- [x] **M7.10** Reference state: a **schema snapshot** committed in the repository (`<dir>/.devdock-schema.json`), rewritten by every migration DevDock generates. A "Baseline" action takes the current schema as the starting point for projects with an existing DB (optionally generating an initial migration with the full schema)
-- [x] **M7.11** Diff engine (pure function `diff(snapshot, live) → operations`) with deterministic ordering (FKs dropped before and created after the tables they depend on). Ambiguous cases are resolved by the user, never guessed: a dropped column + an added one of a compatible type → "rename or drop + add?". The "Migrations" tab shows the status ("in sync" / "N changes not in a migration" / "snapshot newer than the DB", i.e. teammates' migrations pulled and not applied) and generates the missing migration on request
+**Schema introspection**
+- [x] **M7.9** Introspection of the live schema through read-only `INFORMATION_SCHEMA` queries into the same normalised model (tables, columns, primary keys, indexes, foreign keys, engine), used by the designer to edit existing tables
+- ~~**M7.10** Reference state: a **schema snapshot** committed in the repository (`<dir>/.devdock-schema.json`), rewritten by every migration DevDock generates. A "Baseline" action takes the current schema as the starting point for projects with an existing DB (optionally generating an initial migration with the full schema)~~ — removed in 1.8.1 (not needed: migrations are only the ones DevDock writes)
+- ~~**M7.11** Diff engine (pure function `diff(snapshot, live) → operations`) with deterministic ordering (FKs dropped before and created after the tables they depend on). Ambiguous cases are resolved by the user, never guessed: a dropped column + an added one of a compatible type → "rename or drop + add?". The "Migrations" tab shows the status ("in sync" / "N changes not in a migration" / "snapshot newer than the DB", i.e. teammates' migrations pulled and not applied) and generates the missing migration on request~~ — removed in 1.8.1 (not needed: migrations are only the ones DevDock writes)
 
 **Generators**
 - [x] **M7.12** SQL generator `(operations) → statements`, shared by the DDL executed on the DB and the migration file, so the two are always identical

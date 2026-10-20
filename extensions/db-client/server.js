@@ -64,7 +64,7 @@ module.exports = function createDbClient(ctx) {
   const { ApiError, errorBody } = ctx.lib.errors;
   const { KEY_RE, isPort, isText } = ctx.lib.validate;
   const tunnels = ctx.require('tunnels'); // opzionale: senza, niente connessioni via tunnel
-  const git = ctx.require('git');         // opzionale: repository e branch remoto per le migration
+  const git = ctx.require('git');         // opzionale: repository per le migration
   const npm = ctx.require('npm');         // opzionale: progetti come repository se git manca
 
   const vault = () => ctx.config.get('vault');
@@ -127,10 +127,9 @@ module.exports = function createDbClient(ctx) {
     if (c.readOnly != null && typeof c.readOnly !== 'boolean') throw bad('read_only');
     if (c.migrations != null) {
       const m = c.migrations;
-      // applied: ultima migration applicata da questa installazione (per "snapshot più nuovo del DB")
+      // "applied" veniva scritto dalla 1.8.0: accettato e ignorato
       if (typeof m !== 'object' || Array.isArray(m) || Object.keys(m).some(k => !['repo', 'dir', 'applied'].includes(k))
-          || !KEY_RE.test(m.repo || '') || !mig.isValidDir(m.dir)
-          || (m.applied != null && !mig.FILE_RE.test(m.applied))) throw bad('migrations');
+          || !KEY_RE.test(m.repo || '') || !mig.isValidDir(m.dir)) throw bad('migrations');
     }
   }
 
@@ -167,27 +166,13 @@ module.exports = function createDbClient(ctx) {
     }
   };
 
-  // Numerazione della cartella: file locali e, se il branch ha un upstream, quelli del
-  // remoto non ancora presenti in locale (migration di altri). next tiene conto di entrambi.
-  async function numbering(repo, dir, { fetch = false } = {}) {
+  // Numerazione della cartella: il numero più alto tra i file presenti, poi il successivo
+  function numbering(repo, dir) {
+    const abs = mig.resolveInside(repo.path, dir);
     const local = migCall(() => mig.scan(mig.folderFiles(repo.path, dir)));
-    let upstream = null;
-    if (git) {
-      const fetched = fetch ? await git.fetch(repo.path) : null;
-      const ref = await git.upstreamOf(repo.path);
-      if (ref) {
-        const remote = mig.scan(await git.filesAt(repo.path, ref, dir));
-        const names = new Set(local.files.map(f => f.name));
-        upstream = { ref, current: remote.current, width: remote.width, fetched, missing: remote.files.filter(f => !names.has(f.name)) };
-      }
-    }
-    const current = Math.max(local.current, upstream?.current || 0);
-    const width = Math.max(local.width, upstream?.width || 0);
-    return {
-      exists: !!mig.resolveInside(repo.path, dir) && fs.existsSync(mig.resolveInside(repo.path, dir)),
-      ...local, upstream, current, width, next: current + 1, nextPrefix: mig.pad(current + 1, width),
-    };
+    return { exists: !!abs && fs.existsSync(abs), ...local, next: local.current + 1, nextPrefix: mig.pad(local.current + 1, local.width) };
   }
+
 
   // Repository e cartella collegati alla connessione (null se non collegata o repository sparito)
   function linkedFolder(conn) {
@@ -215,10 +200,6 @@ module.exports = function createDbClient(ctx) {
       if (c.kind !== 'write' || !SCHEMA_VERBS.has(c.verb)) throw ctx.error(400, 'raw_not_schema');
       if (op.table && !DB_NAME_RE.test(op.table)) throw ctx.error(400, 'name_invalid');
     }
-  }
-
-  function setApplied(connId, file) {
-    ctx.config.set('dbConnections', connections().map(c => c.id === connId && c.migrations ? { ...c, migrations: { ...c.migrations, applied: file } } : c));
   }
 
   const connectionOr404 = id => {
@@ -848,7 +829,7 @@ module.exports = function createDbClient(ctx) {
           const table = migration.table || proposal.table;
           const operation = migration.operation || proposal.operation;
           const fileFor = async () => {
-            const n = await numbering(folder.repo, folder.dir);
+            const n = numbering(folder.repo, folder.dir);
             return { n, name: migCall(() => mig.fileName(n.next, n.width, table, operation)) };
           };
           const content = name => mig.migrationContent(name, { connection: conn.label, database: db }, statements);
@@ -862,7 +843,6 @@ module.exports = function createDbClient(ctx) {
               linked: !!folder, proposal: { table, operation },
               migration: preview && {
                 file: preview.name, dir: folder.dir, repo: folder.repo.label, content: content(preview.name),
-                behind: preview.n.upstream?.missing?.map(f => f.name) || [], upstream: preview.n.upstream?.ref || null,
               },
             });
           }
@@ -889,108 +869,7 @@ module.exports = function createDbClient(ctx) {
               return sendFailure(res, e, 400, { executed, failed: statement, file: executed.length ? file : null });
             }
           }
-          // 3. snapshot dello schema accanto alle migration
-          if (save) {
-            const schema = await introspect(q, db);
-            mig.writeAtomic(path.join(folder.abs, mig.SNAPSHOT), mig.snapshotContent(db, file, schema));
-            setApplied(conn.id, file);
-          }
           res.json({ ok: true, executed, file, dir: save ? folder.dir : null, sql });
-        } catch (e) { sendFailure(res, e); }
-      },
-
-      // Stato dello schema rispetto allo snapshot del repository:
-      //   no_snapshot · in_sync · changes (modifiche fatte fuori da DevDock, non in una migration)
-      //   behind (lo snapshot è più avanti del DB: migration di altri scaricate e non applicate)
-      // ?renames= JSON { "<tabella>.<nuova>": "<vecchia>" } per le colonne ambigue
-      async schemaStatus(req, res) {
-        const conn = connectionOr404(req.params.id);
-        const { db } = req.params;
-        if (!DB_NAME_RE.test(db)) throw ctx.error(400, 'database_invalid');
-        const folder = linkedFolder(conn);
-        if (!folder) return res.json({ linked: false });
-        let renames = {};
-        try { renames = req.query.renames ? JSON.parse(req.query.renames) : {}; } catch { throw ctx.error(400, 'renames_invalid'); }
-        try {
-          const live = await introspect((await poolFor(conn, db)).promise(), db);
-          const snap = mig.readSnapshot(folder.abs);
-          const files = mig.scan(mig.folderFiles(folder.repo.path, folder.dir)).files;
-          const base = { linked: true, repo: folder.repo.label, dir: folder.dir, applied: conn.migrations.applied || null, tables: Object.keys(live.tables).length };
-          if (!snap) return res.json({ ...base, state: 'no_snapshot' });
-          const { ops, ambiguous } = schemaOps.diff(snap, live, renames);
-          const appliedNum = Number(/^\d+/.exec(conn.migrations.applied || '')?.[0] || 0);
-          const pending = files.filter(f => f.number > appliedNum);
-          let state = 'changes';
-          if (!ops.length) {
-            state = 'in_sync';
-            // il DB coincide con lo snapshot: le migration fino a quella dello snapshot sono applicate
-            if (snap.lastMigration && conn.migrations.applied !== snap.lastMigration) setApplied(conn.id, snap.lastMigration);
-          } else if (conn.migrations.applied && snap.lastMigration && mig.FILE_RE.test(snap.lastMigration)
-                     && Number(/^\d+/.exec(snap.lastMigration)[0]) > appliedNum) state = 'behind';
-          const statements = ops.length ? ddlCall(() => schemaOps.statements(db, ops)) : [];
-          res.json({
-            ...base, state, snapshot: { database: snap.database, lastMigration: snap.lastMigration || null },
-            databaseMismatch: snap.database && snap.database !== db ? snap.database : null,
-            operations: ops, ambiguous, statements, warnings: schemaOps.destructive(ops, snap),
-            pending: state === 'behind' ? pending.map(f => f.name) : [],
-            proposal: ops.length ? schemaOps.proposeName(ops) : null,
-          });
-        } catch (e) { sendFailure(res, e, 502); }
-      },
-
-      // Baseline: lo schema attuale diventa il riferimento (snapshot), con una migration
-      // iniziale facoltativa che crea tutte le tabelle (solo file: il DB ha già lo schema)
-      async schemaBaseline(req, res) {
-        const conn = connectionOr404(req.params.id);
-        const { db } = req.params;
-        if (!DB_NAME_RE.test(db)) throw ctx.error(400, 'database_invalid');
-        const folder = linkedFolder(conn);
-        if (!folder) throw ctx.error(409, 'not_linked');
-        if (!fs.existsSync(folder.abs)) throw ctx.error(404, 'dir_not_found', { dir: folder.dir });
-        try {
-          const live = await introspect((await poolFor(conn, db)).promise(), db);
-          let file = null;
-          if (req.body.withMigration) {
-            const { ops } = schemaOps.diff({ tables: {} }, live);
-            if (ops.length) {
-              const statements = ddlCall(() => schemaOps.statements(db, ops));
-              const n = await numbering(folder.repo, folder.dir);
-              file = migCall(() => mig.fileName(n.next, n.width, 'schema', 'baseline'));
-              migCall(() => mig.writeExclusive(folder.abs, file, mig.migrationContent(file, { connection: conn.label, database: db }, statements)));
-            }
-          }
-          const last = file || mig.readSnapshot(folder.abs)?.lastMigration || conn.migrations.applied || null;
-          mig.writeAtomic(path.join(folder.abs, mig.SNAPSHOT), mig.snapshotContent(db, last, live));
-          if (last) setApplied(conn.id, last);
-          res.json({ ok: true, file, tables: Object.keys(live.tables).length });
-        } catch (e) { sendFailure(res, e); }
-      },
-
-      // Migration per le modifiche fatte fuori da DevDock: solo il file (il DB è già
-      // aggiornato) e il nuovo snapshot. preview: true restituisce nome e contenuto.
-      async schemaCapture(req, res) {
-        const conn = connectionOr404(req.params.id);
-        const { db } = req.params;
-        if (!DB_NAME_RE.test(db)) throw ctx.error(400, 'database_invalid');
-        const folder = linkedFolder(conn);
-        if (!folder) throw ctx.error(409, 'not_linked');
-        const { renames = {}, migration = {}, preview } = req.body;
-        try {
-          const live = await introspect((await poolFor(conn, db)).promise(), db);
-          const snap = mig.readSnapshot(folder.abs);
-          if (!snap) throw ctx.error(409, 'no_snapshot');
-          const { ops } = schemaOps.diff(snap, live, renames);
-          const statements = ddlCall(() => schemaOps.statements(db, ops));
-          const proposal = schemaOps.proposeName(ops);
-          const table = migration.table || proposal.table, operation = migration.operation || proposal.operation;
-          const n = await numbering(folder.repo, folder.dir);
-          const file = migCall(() => mig.fileName(n.next, n.width, table, operation));
-          const content = mig.migrationContent(file, { connection: conn.label, database: db }, statements);
-          if (preview) return res.json({ file, content, statements });
-          migCall(() => mig.writeExclusive(folder.abs, file, content));
-          mig.writeAtomic(path.join(folder.abs, mig.SNAPSHOT), mig.snapshotContent(db, file, live));
-          setApplied(conn.id, file);
-          res.json({ ok: true, file });
         } catch (e) { sendFailure(res, e); }
       },
 
@@ -1014,10 +893,10 @@ module.exports = function createDbClient(ctx) {
         res.json({ ok: true, dir });
       },
 
-      // Anteprima della numerazione di una cartella (prima di collegarla); ?fetch=1 aggiorna il remoto
+      // Anteprima della numerazione di una cartella (prima di collegarla)
       async migrationScan(req, res) {
         const repo = repoOr404(req.params.repo);
-        res.json(await numbering(repo, String(req.query.dir ?? ''), { fetch: req.query.fetch === '1' }));
+        res.json(numbering(repo, String(req.query.dir ?? '')));
       },
 
       // Stato delle migration di una connessione
@@ -1028,7 +907,7 @@ module.exports = function createDbClient(ctx) {
         if (!repo) return res.json({ linked: true, repo: { id: conn.migrations.repo, missing: true }, dir: conn.migrations.dir });
         res.json({
           linked: true, repo: { id: repo.id, label: repo.label }, dir: conn.migrations.dir,
-          ...await numbering(repo, conn.migrations.dir, { fetch: req.query.fetch === '1' }),
+          ...numbering(repo, conn.migrations.dir),
         });
       },
 
@@ -1038,9 +917,7 @@ module.exports = function createDbClient(ctx) {
         const repo = repoOr404(req.body.repo);
         const dir = String(req.body.dir ?? '');
         migCall(() => mig.listFolders(repo.path, dir)); // valida ed esiste
-        // stessa cartella: resta l'ultima migration applicata
-        const same = conn.migrations?.repo === repo.id && conn.migrations?.dir === dir;
-        const migrations = { repo: repo.id, dir, ...(same && conn.migrations.applied ? { applied: conn.migrations.applied } : {}) };
+        const migrations = { repo: repo.id, dir };
         const list = connections().map(c => c.id === conn.id ? { ...c, migrations } : c);
         ctx.config.set('dbConnections', list);
         res.json({ ok: true, migrations });

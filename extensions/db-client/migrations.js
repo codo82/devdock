@@ -123,22 +123,10 @@ function writeExclusive(dirAbs, name, content) {
   return final;
 }
 
-const SNAPSHOT = '.devdock-schema.json';
-
-// Snapshot dello schema nel repository: chiavi ordinate, così i diff in git restano leggibili
-function snapshotContent(database, lastMigration, schema) {
-  const tables = Object.fromEntries(Object.keys(schema.tables).sort().map(t => [t, schema.tables[t]]));
-  return JSON.stringify({ version: 1, database, lastMigration, tables }, null, 2) + '\n';
-}
-
-function readSnapshot(dirAbs) {
-  try { return JSON.parse(fs.readFileSync(path.join(dirAbs, SNAPSHOT), 'utf8')); } catch { return null; }
-}
-
 // Contenuto del file di migration: intestazione e istruzioni separate da ";"
 function migrationContent(name, { connection, database, date = new Date() }, statements) {
   const header = [`-- ${name}`, `-- DevDock · ${connection} · ${database} · ${date.toISOString()}`, ''];
   return header.join('\n') + '\n' + statements.map(s => `${s};`).join('\n\n') + '\n';
 }
 
-Object.assign(module.exports, { writeAtomic, writeExclusive, SNAPSHOT, snapshotContent, readSnapshot, migrationContent });
+Object.assign(module.exports, { writeAtomic, writeExclusive, migrationContent });

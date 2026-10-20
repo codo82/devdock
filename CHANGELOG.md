@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-10-20
+
+### Removed
+- Migrations status panel, schema snapshot (`.devdock-schema.json`), baseline and generation of migrations for changes made outside DevDock: migrations are only the files DevDock writes when it applies a change.
+- Check of the remote branch when numbering migrations: the next number follows the files in the folder.
+- Git extension services `upstreamOf`, `filesAt`, `fetch`.
+
 ## [1.8.0] - 2026-10-20 — M7 DB migrations
 
 ### Added
