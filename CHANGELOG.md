@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-20 — M6 Internationalization
+
+### Added
+- Translatable UI with no list of languages in the code: a language exists when its catalog exists (`public/core/i18n/<tag>.json`, `extensions/<code>/i18n/<tag>.json`, BCP 47 tags, `_meta` with name, native name and direction). Italian is the source language; English is complete.
+- `GET /api/core/i18n/languages`: available languages with completeness, including languages shipped only by an extension.
+- 🌐 language selector in the header; the language is resolved from the user's choice, then `navigator.languages` (with `pt-BR` → `pt` fallback), then Italian. Switching re-renders the shell and the mounted extensions without reloading the page and sets `<html lang dir>`.
+- `public/core/i18n.js`: `t(key, params)` with `{param}` interpolation and CLDR plurals (`Intl.PluralRules`), per-key fallback chain, `data-i18n` / `data-i18n-title` / `data-i18n-placeholder` / `data-i18n-aria-label` markup, locale-aware formatting (`fmt.date`, `relative`, `number`, `bytes`, `duration`, `list` with `Intl`).
+- Extension contract: `i18n/` catalogs namespaced by extension code, `ctx.t`, `ctx.i18n`, `languageChanged(ctx)` hook, manifest `name` / `description` / export `label` as a string or a map by language.
+- Structured API errors for the core and every extension: `{ error, code, params }`, with the source-language message built from the catalogs (`ctx.error(status, name, params)`); the frontend translates the code and falls back to `error`.
+- Catalog tests (validity, stale keys, placeholders, keys used in the code present in the source language, hard-coded text check) and `npm run i18n:report` for completeness and missing keys.
+- README section "Languages" with the steps to add a language.
+
+### Changed
+- All UI texts of the core and of the Swagger, PM2, SSH Tunnels, NPM, Git and Database extensions moved to catalogs (Italian and English).
+- Dates of the Git log, branches and merge preview are sent as ISO 8601 and formatted in the active language; PM2 memory, CPU and uptime, tunnel uptime and other numbers use `Intl`.
+- CSS uses logical properties (`margin-inline-start`, `inset-inline-end`, …) so right-to-left languages work without dedicated stylesheets.
+- Error codes of earlier responses are now namespaced (`dirty` → `git.dirty`, MySQL codes in `params.mysqlCode`); SQL classification reasons and table-designer errors are codes.
+- Process and tunnel status messages written by DevDock in logs and streams are translated in the UI; the output of external commands (`git`, `npm`, `pm2`, `ssh`, MySQL) is shown as it is.
+
 ## [1.6.0] - 2026-10-20 — M4 Branches
 
 ### Added

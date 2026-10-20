@@ -2,7 +2,7 @@
 
 Local web dashboard for everyday development: SSH tunnels, npm scripts, PM2, Git and Swagger preview in a single interface.
 
-It runs on your own machine and only answers on `http://127.0.0.1:3500`. The user interface is in Italian.
+It runs on your own machine and only answers on `http://127.0.0.1:3500`. The user interface is available in Italian and English, and new languages can be added with JSON files (see *Languages*).
 
 ## Requirements
 
@@ -75,6 +75,18 @@ Everything is stored in `config.json` in the project folder. The file is created
 
 Each key belongs to an extension (`groups` and `servers` to tunnels, `projects` to npm, `dbConnections` and `vault` to db-client), which validates it on every save. **Export** offers the checkboxes declared by the extensions (Tunnel SSH, Progetti NPM, Connessioni database) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
 
+## Languages
+
+DevDock starts in the browser's language when it has a catalog for it (a regional variant such as `pt-BR` falls back to `pt`), otherwise in Italian. The 🌐 button in the header switches language without reloading the page; the choice is remembered by the browser. Dates, numbers, sizes and durations follow the selected language. Output of external commands (`git`, `npm`, `pm2`, `ssh`, MySQL) is shown as it is.
+
+Languages are not listed anywhere in the code: a language exists when its catalog exists. Italian is the source language (always complete, and the fallback for any missing text). To add a language, for example German (`de`):
+
+1. Copy `public/core/i18n/it.json` to `public/core/i18n/de.json` and translate the values (keep the keys and the `{placeholders}`); set `_meta`: `{ "name": "German", "nativeName": "Deutsch", "dir": "ltr" }` (`"rtl"` for right-to-left languages).
+2. For each extension, copy `extensions/<code>/i18n/it.json` to `de.json` and translate it.
+3. Plurals are objects with the forms the language needs (`zero`, `one`, `two`, `few`, `many`, `other`; `other` is required): `{ "one": "{count} Datei", "other": "{count} Dateien" }`.
+4. Run `npm run i18n:report -- de` to see the completeness and the missing keys, and `npm test` to check the catalogs (stale keys, placeholders, plural forms). Missing keys are allowed: they fall back to Italian.
+5. Restart DevDock: the language appears in the 🌐 menu with its completeness.
+
 ## Security
 
 DevDock is meant **for local use only**: it listens on `127.0.0.1` and has no authentication. It can run `ssh`, `npm`, `git` and `pm2` on your machine, so it must not be exposed on a network.
@@ -95,9 +107,11 @@ lib/                 core services: config by section, extension loader, securit
                      validators, external tools, port detection, SSE
 routes/core.js       core API (/api/core): extensions, system, config export/import
 public/              UI shell: index.html, core/shell.js (navigation, header, dialogs),
-                     core/ui.js (shared helpers), core/shell.css
+                     core/ui.js (shared helpers), core/i18n.js (translations and
+                     formatting), core/i18n/<lang>.json (core catalogs), core/shell.css
 extensions/<code>/   one folder per feature: setting.json, server.js, view.html,
-                     sidebar.html, view.js, style.css
+                     sidebar.html, view.js, style.css, i18n/<lang>.json
+scripts/             i18n-report.js (translation completeness)
 tests/               integration tests (node:test)
 docs/EXTENSIONS.md   extension contract
 ```
@@ -107,7 +121,7 @@ docs/EXTENSIONS.md   extension contract
 1. Create `extensions/<code>/setting.json` with name, code, colour and position (tab or header button).
 2. Declare the API in `backend.routes` and implement the handlers in `server.js`; they are served under `/api/ext/<code>`.
 3. Declare the `config.json` keys the extension owns (`config`) and the checkboxes it adds to the Export/Import dialogs (`export`).
-4. Add `view.html`, `sidebar.html`, `view.js` and `style.css` for the UI.
+4. Add `view.html`, `sidebar.html`, `view.js` and `style.css` for the UI, with the texts in `i18n/it.json` (and `i18n/en.json`), used through `data-i18n` attributes and `ctx.t()`.
 5. Restart DevDock: the startup log lists the loaded extensions, and `GET /api/core/extensions` explains why one was disabled.
 
 The full contract — manifest fields, the `ctx` objects given to backend and frontend, configuration sections, dependencies between extensions, npm workspaces — is in [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
@@ -117,6 +131,7 @@ The full contract — manifest fields, the `ctx` objects given to backend and fr
 ```bash
 npm test           # integration tests: each file starts DevDock with a temporary config
 npm run dev        # restarts on backend changes
+npm run i18n:report  # translation completeness per language and extension
 ```
 
 Roadmap and progress: [ROADMAP.md](ROADMAP.md) · Changes: [CHANGELOG.md](CHANGELOG.md)
