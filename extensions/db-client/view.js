@@ -249,59 +249,96 @@ export default {
       if (hadFocus) { const i = el.querySelector('[data-grid="search"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
     }
 
-    // ---- designer di nuove tabelle (il CREATE TABLE è generato e confermato dal server) ----
-    let designer = null; // { connId, db, def }
+    // ---- designer delle tabelle: creazione e modifica (SQL generato e confermato dal server) ----
+    // mode 'create': nuova tabella · mode 'alter': tabella esistente, le colonne ricordano
+    // il nome originale (_orig) per le rinomine; le operazioni le calcola il server
+    let designer = null; // { connId, db, mode, table, def }
     let ddlInfo = null;
     const newColumn = (over = {}) => ({ name: '', type: 'VARCHAR', length: 255, nullable: true, default: { kind: 'none' }, ...over });
 
-    async function openDesigner(c, db) {
+    async function openDesigner(c, db, table = null) {
       if (c.readOnly) { toast(t('designer.readOnly'), 'error'); return; }
       if (!db) { toast(t('designer.chooseDb'), 'error'); return; }
-      ddlInfo = ddlInfo || (await ctx.api.get('/info')).ddl;
+      try { ddlInfo = ddlInfo || (await ctx.api.get('/info')).ddl; } catch (e) { toast(e.message, 'error'); return; }
       grid = null;
-      designer = {
-        connId: c.id, db,
-        def: { name: '', engine: 'InnoDB', charset: 'utf8mb4', comment: '',
-               columns: [newColumn({ name: 'id', type: 'INT', length: '', unsigned: true, nullable: false, autoIncrement: true, pk: true })],
-               indexes: [], foreignKeys: [] },
-      };
-      renderDesigner();
+      if (!table) {
+        designer = {
+          connId: c.id, db, mode: 'create', table: null,
+          def: { name: '', engine: 'InnoDB', charset: 'utf8mb4', comment: '',
+                 columns: [newColumn({ name: 'id', type: 'INT', length: '', unsigned: true, nullable: false, autoIncrement: true, pk: true })],
+                 indexes: [], foreignKeys: [] },
+        };
+        renderDesigner();
+        return;
+      }
+      $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('structure.loading'))}</div>`;
+      try {
+        const { definition } = await ctx.api.get(`${tableUrl(c, db, table)}/definition`);
+        const pk = new Set(definition.primaryKey || []);
+        designer = {
+          connId: c.id, db, mode: 'alter', table,
+          def: {
+            name: table, engine: definition.engine || '', comment: definition.comment || '',
+            columns: definition.columns.map(col => ({ ...col, length: col.length ?? '', _orig: col.name, pk: pk.has(col.name) })),
+            indexes: (definition.indexes || []).map(i => ({ ...i })),
+            foreignKeys: (definition.foreignKeys || []).map(f => ({ ...f })),
+          },
+        };
+        renderDesigner();
+      } catch (e) { renderError(e.message); }
     }
 
     const sel = (name, options, value, attrs = '') =>
       `<select class="form-input db-dz" data-dz="${name}" ${attrs}>${options.map(o => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
     const txt = (name, value, attrs = '') => `<input class="form-input db-dz" data-dz="${name}" value="${esc(value ?? '')}" ${attrs}>`;
     const chk = (name, value) => `<input type="checkbox" data-dz="${name}" ${value ? 'checked' : ''}>`;
+    const TEMPORAL = new Set(['DATETIME', 'TIMESTAMP']);
 
-    function renderDesigner(sqlPreview) {
-      const { def, db } = designer;
+    function columnRow(c, i, count) {
+      // tipo non gestito dal designer (es. GEOMETRY): la colonna resta com'è
+      if (c.unsupported) {
+        return `<tr data-col="${i}" class="db-dz-locked"><td>${esc(c.name)}</td><td colspan="11"><code>${esc(c.unsupported)}</code> · ${esc(t('designer.unsupported'))}</td>
+          <td>${moveButtons(i, count)}</td></tr>`;
+      }
+      return `<tr data-col="${i}">
+        <td>${txt('name', c.name, `placeholder="${esc(t('designer.columnPlaceholder'))}"`)}${c._orig && c._orig !== c.name ? `<div class="db-muted db-dz-was">${esc(t('designer.was', { name: c._orig }))}</div>` : ''}</td>
+        <td>${sel('type', ddlInfo.types, c.type)}</td>
+        <td>${txt('length', c.length, 'style="width:70px"')}</td>
+        <td>${c.type === 'DECIMAL' ? txt('scale', c.scale ?? 0, 'style="width:50px"') : ''}</td>
+        <td>${['ENUM', 'SET'].includes(c.type) ? txt('values', (c.values || []).join(','), 'placeholder="a,b,c"') : ''}</td>
+        <td>${chk('unsigned', c.unsigned)}</td>
+        <td>${chk('nullable', c.nullable)}</td>
+        <td class="db-dz-default">${sel('defaultKind', ['none', 'null', 'value', 'current_timestamp'], c.default?.kind || 'none')}${c.default?.kind === 'value' ? txt('defaultValue', c.default.value, 'style="width:90px"') : ''}</td>
+        <td>${TEMPORAL.has(c.type) ? chk('onUpdateCurrentTimestamp', c.onUpdateCurrentTimestamp) : ''}</td>
+        <td>${chk('autoIncrement', c.autoIncrement)}</td>
+        <td>${chk('pk', c.pk)}</td>
+        <td>${txt('comment', c.comment)}</td>
+        <td class="db-dz-row-actions">${moveButtons(i, count)}<button class="btn btn-ghost btn-sm" data-dz-act="del-col" title="${esc(t('designer.remove'))}">✕</button></td>
+      </tr>`;
+    }
+    const moveButtons = (i, count) =>
+      `<button class="btn btn-ghost btn-sm" data-dz-act="up" ${i ? '' : 'disabled'} title="${esc(t('designer.moveUp'))}">↑</button><button class="btn btn-ghost btn-sm" data-dz-act="down" ${i < count - 1 ? '' : 'disabled'} title="${esc(t('designer.moveDown'))}">↓</button>`;
+
+    function renderDesigner() {
+      if (!designer) return;
+      const { def, db, mode } = designer;
       const colNames = def.columns.map(c => c.name).filter(Boolean);
       const tables = (cache.get(nodeKey('d', designer.connId, db)) || []).map?.(tb => tb.name) || [];
+      const conn = connections.find(x => x.id === designer.connId);
+      const linked = migStatus.get(conn?.id)?.linked;
       $(ctx.root, 'results').innerHTML = `
         <div class="db-designer">
           <div class="db-designer-head">
-            <strong>${esc(t('designer.title', { db }))}</strong>
+            <strong>${esc(mode === 'alter' ? t('designer.editTitle', { table: `${db}.${designer.table}` }) : t('designer.title', { db }))}</strong>
             ${txt('name', def.name, `placeholder="${esc(t('designer.tableName'))}" data-scope="table"`)}
-            ${sel('engine', ddlInfo.engines, def.engine, 'data-scope="table"')}
-            ${txt('charset', def.charset, `placeholder="${esc(t('designer.charset'))}" data-scope="table" style="width:100px"`)}
+            ${sel('engine', ['', ...ddlInfo.engines].filter((e, i) => e || mode === 'alter' && !def.engine || i), def.engine, 'data-scope="table"')}
+            ${mode === 'create' ? txt('charset', def.charset, `placeholder="${esc(t('designer.charset'))}" data-scope="table" style="width:100px"`) : ''}
             ${txt('comment', def.comment, `placeholder="${esc(t('designer.comment'))}" data-scope="table"`)}
           </div>
+          <p class="db-muted">${esc(t(linked ? 'designer.linkedHint' : 'designer.notLinkedHint'))}</p>
           <h4>${esc(t('designer.columns'))} <button class="btn btn-ghost btn-sm" data-dz-act="add-col">${esc(t('designer.addColumn'))}</button></h4>
-          <table class="data-table db-dz-table"><thead><tr>${['name', 'type', 'length', 'scale', 'values', 'unsigned', 'null', 'default', 'ai', 'pk', 'comment'].map(k => `<th>${esc(t(`designer.col.${k}`))}</th>`).join('')}<th></th></tr></thead>
-          <tbody>${def.columns.map((c, i) => `<tr data-col="${i}">
-            <td>${txt('name', c.name, `placeholder="${esc(t('designer.columnPlaceholder'))}"`)}</td>
-            <td>${sel('type', ddlInfo.types, c.type)}</td>
-            <td>${txt('length', c.length, 'style="width:70px"')}</td>
-            <td>${c.type === 'DECIMAL' ? txt('scale', c.scale ?? 0, 'style="width:50px"') : ''}</td>
-            <td>${['ENUM', 'SET'].includes(c.type) ? txt('values', (c.values || []).join(','), 'placeholder="a,b,c"') : ''}</td>
-            <td>${chk('unsigned', c.unsigned)}</td>
-            <td>${chk('nullable', c.nullable)}</td>
-            <td class="db-dz-default">${sel('defaultKind', ['none', 'null', 'value', 'current_timestamp'], c.default.kind)}${c.default.kind === 'value' ? txt('defaultValue', c.default.value, 'style="width:90px"') : ''}</td>
-            <td>${chk('autoIncrement', c.autoIncrement)}</td>
-            <td>${chk('pk', c.pk)}</td>
-            <td>${txt('comment', c.comment)}</td>
-            <td><button class="btn btn-ghost btn-sm" data-dz-act="del-col" title="${esc(t('designer.remove'))}">✕</button></td>
-          </tr>`).join('')}</tbody></table>
+          <table class="data-table db-dz-table"><thead><tr>${['name', 'type', 'length', 'scale', 'values', 'unsigned', 'null', 'default', 'onUpdate', 'ai', 'pk', 'comment'].map(k => `<th>${esc(t(`designer.col.${k}`))}</th>`).join('')}<th></th></tr></thead>
+          <tbody>${def.columns.map((c, i) => columnRow(c, i, def.columns.length)).join('')}</tbody></table>
           <h4>${esc(t('designer.indexes'))} <button class="btn btn-ghost btn-sm" data-dz-act="add-index">${esc(t('designer.addIndex'))}</button></h4>
           ${def.indexes.map((ix, i) => `<div class="db-dz-line" data-index="${i}">
             ${txt('name', ix.name, `placeholder="${esc(t('designer.indexName'))}"`)}
@@ -310,6 +347,7 @@ export default {
             <button class="btn btn-ghost btn-sm" data-dz-act="del-index">✕</button></div>`).join('') || `<p class="db-muted db-pad">${esc(t('designer.noIndexes'))}</p>`}
           <h4>${esc(t('designer.foreignKeys'))} <button class="btn btn-ghost btn-sm" data-dz-act="add-fk">${esc(t('designer.addFk'))}</button></h4>
           ${def.foreignKeys.map((fk, i) => `<div class="db-dz-line" data-fk="${i}">
+            ${txt('name', fk.name, `placeholder="${esc(t('designer.fkName'))}" style="width:120px"`)}
             ${txt('columns', fk.columns.join(','), `placeholder="${esc(t('designer.fkColumns'))}"`)} →
             ${tables.length ? sel('refTable', ['', ...tables], fk.refTable) : txt('refTable', fk.refTable, `placeholder="${esc(t('designer.fkTable'))}"`)}
             ${txt('refColumns', fk.refColumns.join(','), `placeholder="${esc(t('designer.fkRefColumns'))}"`)}
@@ -317,11 +355,9 @@ export default {
             ON UPDATE ${sel('onUpdate', ['', ...ddlInfo.fkActions], fk.onUpdate || '')}
             <button class="btn btn-ghost btn-sm" data-dz-act="del-fk">✕</button></div>`).join('') || `<p class="db-muted db-pad">${esc(t('designer.noFks'))}</p>`}
           <div class="db-dz-actions">
-            <button class="btn btn-ghost btn-sm" data-dz-act="preview">${esc(t('designer.preview'))}</button>
-            <button class="btn btn-primary btn-sm" data-dz-act="create">${esc(t('designer.create'))}</button>
+            <button class="btn btn-primary btn-sm" data-dz-act="apply">${esc(t(mode === 'alter' ? 'designer.applyAlter' : 'designer.create'))}</button>
             <button class="btn btn-ghost btn-sm" data-dz-act="cancel">${esc(t('core.action.cancel'))}</button>
           </div>
-          ${sqlPreview ? `<pre class="db-confirm-sql">${highlightSql(sqlPreview, esc)}</pre>` : ''}
         </div>`;
     }
 
@@ -335,57 +371,61 @@ export default {
       const list = v => String(v).split(',').map(x => x.trim()).filter(Boolean);
       if (colRow) {
         const c = def.columns[Number(colRow.dataset.col)];
-        if (field === 'defaultKind') { c.default = { kind: value, value: c.default.value ?? '' }; return true; }
+        if (field === 'defaultKind') { c.default = { kind: value, value: c.default?.value ?? '' }; return true; }
         if (field === 'defaultValue') { c.default.value = value; return false; }
         if (field === 'values') { c.values = list(value); return false; }
         c[field] = value;
-        return field === 'type'; // cambia le celle disponibili (scala, valori ENUM)
+        return field === 'type' || field === 'name'; // celle disponibili e "era: …"
       }
       if (ixRow) { const ix = def.indexes[Number(ixRow.dataset.index)]; ix[field] = field === 'columns' ? list(value) : value; }
       if (fkRow) { const fk = def.foreignKeys[Number(fkRow.dataset.fk)]; fk[field] = ['columns', 'refColumns'].includes(field) ? list(value) : value; }
       return false;
     }
 
-    // Definizione da inviare: chiave primaria dalle caselle PK, campi vuoti tolti
+    // Definizione da inviare: chiave primaria dalle caselle PK, campi vuoti tolti;
+    // renames { nuovo nome: nome originale } per le colonne rinominate
     function designerDefinition() {
       const d = designer.def;
       const num = v => v === '' || v == null ? undefined : Number(v);
-      return {
-        name: d.name.trim(), engine: d.engine, charset: d.charset.trim() || undefined, comment: d.comment || undefined,
-        columns: d.columns.map(c => ({
-          name: c.name.trim(), type: c.type, length: num(c.length), scale: num(c.scale), values: c.values,
+      const renames = {};
+      const columns = d.columns.map(c => {
+        if (c.unsupported) return { ...c, _orig: undefined, pk: undefined };
+        const name = c.name.trim();
+        if (c._orig && c._orig !== name) renames[name] = c._orig;
+        return {
+          name, type: c.type, length: num(c.length), scale: num(c.scale), values: c.values,
           unsigned: !!c.unsigned, nullable: !!c.nullable, autoIncrement: !!c.autoIncrement,
+          onUpdateCurrentTimestamp: TEMPORAL.has(c.type) && !!c.onUpdateCurrentTimestamp || undefined,
           default: c.default, comment: c.comment || undefined,
-        })),
-        primaryKey: d.columns.filter(c => c.pk).map(c => c.name.trim()),
-        indexes: d.indexes.filter(i => i.columns.length),
-        foreignKeys: d.foreignKeys.filter(f => f.columns.length).map(f => ({ ...f, onDelete: f.onDelete || undefined, onUpdate: f.onUpdate || undefined })),
+        };
+      });
+      return {
+        renames,
+        definition: {
+          name: d.name.trim(), engine: d.engine || undefined, charset: d.charset?.trim() || undefined, comment: d.comment || undefined,
+          columns,
+          primaryKey: d.columns.filter(c => c.pk).map(c => c.name.trim()),
+          indexes: d.indexes.filter(i => i.columns.length),
+          foreignKeys: d.foreignKeys.filter(f => f.columns.length).map(f => ({ ...f, name: f.name || undefined, onDelete: f.onDelete || undefined, onUpdate: f.onUpdate || undefined })),
+        },
       };
     }
 
-    async function designerSubmit(execute) {
+    function designerApply() {
       const c = connections.find(x => x.id === designer.connId);
-      const url = `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(designer.db)}/create-table`;
-      const definition = designerDefinition();
-      try {
-        const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ definition }) });
-        const data = await res.json().catch(() => ({}));
-        if (res.status !== 428) { toast(ctx.ui.errorText(data, `HTTP ${res.status}`), 'error'); return; }
-        renderDesigner(data.sql);
-        if (!execute) return;
-        askConfirmation(data, async token => {
-          try {
-            await ctx.api.post(url, { definition, confirm: token });
-            toast(t('designer.created', { name: definition.name }), 'success');
-            const { db } = designer;
-            designer = null;
-            cache.delete(nodeKey('d', c.id, db));
-            open.add(nodeKey('d', c.id, db));
-            await loadTables(c, db);
-            showStructure(c, db, definition.name);
-          } catch (e) { toast(e.message, 'error'); }
-        }, true);
-      } catch (e) { toast(e.message, 'error'); }
+      const { db, mode, table } = designer;
+      const { definition, renames } = designerDefinition();
+      const body = mode === 'create'
+        ? { operations: [{ op: 'create_table', table: definition.name, definition }] }
+        : { design: { table, definition, renames, newName: definition.name } };
+      migrateFlow(c, db, body, async result => {
+        const name = definition.name || table;
+        designer = null;
+        cache.delete(nodeKey('d', c.id, db));
+        open.add(nodeKey('d', c.id, db));
+        await loadTables(c, db);
+        showStructure(c, db, name);
+      });
     }
 
     $(ctx.root, 'results').addEventListener('change', e => {
@@ -398,17 +438,131 @@ export default {
       const a = e.target.closest('[data-dz-act]')?.dataset.dzAct;
       if (!a || !designer) return;
       const d = designer.def;
+      const row = () => Number(e.target.closest('[data-col]').dataset.col);
       if (a === 'add-col') d.columns.push(newColumn());
-      else if (a === 'del-col') d.columns.splice(Number(e.target.closest('[data-col]').dataset.col), 1);
+      else if (a === 'del-col') d.columns.splice(row(), 1);
+      else if (a === 'up' || a === 'down') {
+        const i = row(), j = a === 'up' ? i - 1 : i + 1;
+        if (j < 0 || j >= d.columns.length) return;
+        [d.columns[i], d.columns[j]] = [d.columns[j], d.columns[i]];
+      }
       else if (a === 'add-index') d.indexes.push({ name: '', columns: [], unique: false });
       else if (a === 'del-index') d.indexes.splice(Number(e.target.closest('[data-index]').dataset.index), 1);
       else if (a === 'add-fk') d.foreignKeys.push({ name: '', columns: [], refTable: '', refColumns: [], onDelete: '', onUpdate: '' });
       else if (a === 'del-fk') d.foreignKeys.splice(Number(e.target.closest('[data-fk]').dataset.fk), 1);
-      else if (a === 'preview') return designerSubmit(false);
-      else if (a === 'create') return designerSubmit(true);
+      else if (a === 'apply') return designerApply();
       else if (a === 'cancel') { designer = null; $(ctx.root, 'results').innerHTML = ''; return; }
       renderDesigner();
     });
+
+    // ---- applicazione delle modifiche di schema: anteprima SQL + file di migration ----
+    // body: { operations } o { design }. onDone(result) dopo l'applicazione riuscita.
+    let pendingMigrate = null;
+    const fileSlug = v => String(v ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+    async function migrateFlow(c, db, body, onDone) {
+      const url = `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/migrate`;
+      try {
+        const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json().catch(() => ({}));
+        if (res.status !== 428) { toast(ctx.ui.errorText(data, `HTTP ${res.status}`), 'error'); return; }
+        pendingMigrate = { c, db, url, body, data, onDone };
+        renderMigrateModal();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function migrateFileName() {
+      const p = pendingMigrate;
+      const prefix = /^\d+/.exec(p.data.migration?.file || '')?.[0] || '';
+      const table = fileSlug(document.getElementById('f_mg_table')?.value ?? p.data.proposal.table);
+      const op = fileSlug(document.getElementById('f_mg_op')?.value ?? p.data.proposal.operation);
+      return `${prefix}_${table || '…'}_${op || '…'}.sql`;
+    }
+
+    function renderMigrateModal() {
+      const { data, c, db } = pendingMigrate;
+      const m = data.migration;
+      const warnings = data.warnings || [];
+      const fileBlock = m ? `
+          <div class="db-mg-name">
+            <label class="db-check"><input type="checkbox" id="f_mg_save" checked onchange="Ext['db-client'].migRefresh()"> ${esc(t('migrate.save', { dir: `${m.repo}/${m.dir}` }))}</label>
+            <div class="db-mg-fields">
+              <span class="db-mono">${esc(/^\d+/.exec(m.file)?.[0] || '')}_</span>
+              <input class="form-input" id="f_mg_table" value="${esc(data.proposal.table)}" oninput="Ext['db-client'].migRefresh()" title="${esc(t('migrate.tableField'))}">
+              <span class="db-mono">_</span>
+              <input class="form-input" id="f_mg_op" value="${esc(data.proposal.operation)}" oninput="Ext['db-client'].migRefresh()" title="${esc(t('migrate.operationField'))}">
+              <span class="db-mono">.sql</span>
+            </div>
+            ${m.behind.length ? `<div class="db-mig-warn">⚠ ${esc(t('mig.behind', { count: m.behind.length, ref: m.upstream || '' }))}</div>` : ''}
+          </div>
+          <div class="db-mg-file-name db-mono" data-role="mg-file">${esc(m.file)}</div>
+          <pre class="db-confirm-sql" data-role="mg-content">${highlightSql(m.content, esc)}</pre>`
+        : `<p class="db-muted">${esc(t('migrate.notLinked'))}</p>`;
+      openModal(t('migrate.title', { connection: c.label, db }), `
+        <div class="db-mg">
+          <div class="db-mg-col">
+            <h4>${esc(t('migrate.sqlTitle'))}</h4>
+            <pre class="db-confirm-sql">${highlightSql(data.sql, esc)}</pre>
+          </div>
+          <div class="db-mg-col">
+            <h4>${esc(t('migrate.fileTitle'))}</h4>
+            ${fileBlock}
+          </div>
+        </div>
+        ${warnings.length ? `<div class="db-mg-warnings">
+          <strong>⚠ ${esc(t('migrate.warningsTitle'))}</strong>
+          <ul>${warnings.map(w => `<li>${esc(t(`migrate.warn.${w.key}`, w.params))}</li>`).join('')}</ul>
+          <label class="db-check"><input type="checkbox" id="f_mg_ack" onchange="Ext['db-client'].migRefresh()"> ${esc(t('migrate.acknowledge'))}</label>
+        </div>` : ''}`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].migCancel()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn ${warnings.length ? 'btn-danger' : 'btn-primary'}" data-role="mg-apply" onclick="Ext['db-client'].migApply()" ${warnings.length ? 'disabled' : ''}>${esc(t('migrate.apply'))}</button>`);
+      document.getElementById('modal')?.classList.add('modal-wide');
+    }
+
+    // Nome del file e pulsante aggiornati mentre si scrive
+    function migRefresh() {
+      const p = pendingMigrate;
+      if (!p) return;
+      const save = document.getElementById('f_mg_save');
+      const fileEl = document.querySelector('[data-role="mg-file"]');
+      if (fileEl) { fileEl.textContent = migrateFileName(); fileEl.classList.toggle('db-mg-off', save && !save.checked); }
+      document.querySelector('[data-role="mg-content"]')?.classList.toggle('db-mg-off', save && !save.checked);
+      const ack = document.getElementById('f_mg_ack');
+      const btn = document.querySelector('[data-role="mg-apply"]');
+      if (btn) btn.disabled = !!ack && !ack.checked;
+    }
+
+    async function migApply() {
+      const p = pendingMigrate;
+      if (!p) return;
+      const save = document.getElementById('f_mg_save');
+      const migration = p.data.migration ? {
+        save: !!save?.checked,
+        table: fileSlug(document.getElementById('f_mg_table')?.value),
+        operation: fileSlug(document.getElementById('f_mg_op')?.value),
+      } : { save: false };
+      const body = { ...p.body, migration, confirm: p.data.token, acknowledgeWarnings: !!document.getElementById('f_mg_ack')?.checked };
+      closeModal();
+      try {
+        const res = await fetch(ctx.api.url(p.url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 428) { // lo schema è cambiato nel frattempo: nuova anteprima
+          toast(t('migrate.changed'), 'info');
+          pendingMigrate = { ...p, data };
+          renderMigrateModal();
+          return;
+        }
+        if (!res.ok) {
+          const done = data.executed?.length ? ` ${t('migrate.partial', { count: data.executed.length, file: data.file || '—' })}` : '';
+          toast(ctx.ui.errorText(data, `HTTP ${res.status}`) + done, 'error');
+          return;
+        }
+        pendingMigrate = null;
+        toast(data.file ? t('migrate.doneFile', { file: data.file }) : t('migrate.done'), 'success');
+        loadMigStatus(p.c);
+        await p.onDone?.(data);
+      } catch (e) { toast(e.message, 'error'); }
+    }
 
     // ---- export (il server genera il file in streaming; qui si avvia solo il download) ----
     async function startExport(c, format, source) {
@@ -584,6 +738,7 @@ export default {
         { icon: '▶', label: t('menu.first100'), action: () => runSql(`SELECT * FROM ${full} LIMIT 100;`) },
         { icon: '#', label: t('menu.count'), action: () => runSql(`SELECT COUNT(*) AS ${quoteId(t('menu.countAlias'))} FROM ${full};`) },
         { icon: '▦', label: t('menu.structure'), action: () => showStructure(c, db, name) },
+        ...(tb?.view ? [] : [{ icon: '✎', label: t('menu.alter'), disabled: ro, action: () => openDesigner(c, db, name) }]),
         ...formats().map(([f, label]) => ({ icon: '⤓', label: t('menu.export', { format: label }), action: () => startExport(c, f, { type: 'table', db, table: name }) })),
         { icon: '⌘', label: tb?.view ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE', action: () => runSql(`SHOW CREATE ${tb?.view ? 'VIEW' : 'TABLE'} ${full};`) },
         'separator',
@@ -754,6 +909,9 @@ export default {
 
     const migActions = {
       migrationsDialog,
+      migRefresh: () => migRefresh(),
+      migApply: () => migApply(),
+      migCancel() { pendingMigrate = null; },
       migRepo(id) { migDlg.repo = id; migDlg.dir = ''; migLoad(); },
       migNav(dir) { migDlg.dir = dir; migLoad(); },
       migFetch() { migLoad(true); },

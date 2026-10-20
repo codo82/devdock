@@ -65,6 +65,7 @@ window.UI = (() => {
 
   // ---- MODAL ----
   function openModal(title, bodyHtml, footerHtml) {
+    document.getElementById('modal').className = 'modal'; // classi extra (es. modal-wide) solo per il dialog che le aggiunge
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalBody').innerHTML = bodyHtml;
     document.getElementById('modalFooter').innerHTML = footerHtml;

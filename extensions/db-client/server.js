@@ -859,7 +859,7 @@ module.exports = function createDbClient(ctx) {
               linked: !!folder, proposal: { table, operation },
               migration: preview && {
                 file: preview.name, dir: folder.dir, repo: folder.repo.label, content: content(preview.name),
-                behind: preview.n.upstream?.missing?.map(f => f.name) || [],
+                behind: preview.n.upstream?.missing?.map(f => f.name) || [], upstream: preview.n.upstream?.ref || null,
               },
             });
           }
