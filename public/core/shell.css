@@ -248,3 +248,4 @@
   .export-item:hover{background:var(--surface2)}
   .export-name{font-weight:600;font-size:13px}
   .export-keys{font-size:11px;color:var(--muted);font-family:var(--font)}
+  .transfer-info{flex:1;min-width:0}

@@ -35,6 +35,10 @@ before(async () => {
         ],
       },
       frontend: { js: 'view.js', html: 'view.html' },
+      transfer: [
+        { id: 'dump', label: 'Dump', description: 'Testo libero', export: 'dumpOut', import: 'dumpIn', filename: 'alpha.txt' },
+        { id: 'solo-json', label: 'JSON', export: 'jsonOut' },
+      ],
     }),
     'server.js': `module.exports = ctx => ({
       handlers: {
@@ -47,6 +51,11 @@ before(async () => {
         unused: () => {},
       },
       services: { greet: name => 'ciao ' + name },
+      transfer: {
+        dumpOut: () => 'contenuto alpha',
+        dumpIn: content => 'ricevuti ' + content.length + ' caratteri',
+        jsonOut: () => ({ a: 1 }),
+      },
       config: {
         alpha: {
           empty: {},
@@ -82,6 +91,13 @@ before(async () => {
   });
   ext(root, 'needs-nohandler', { 'setting.json': manifest('needs-nohandler', { dependencies: [{ code: 'nohandler', required: true }] }) });
   ext(root, 'clash', { 'setting.json': manifest('clash', { config: ['alpha'] }) });
+  ext(root, 'badtransfer', {
+    'setting.json': manifest('badtransfer', {
+      transfer: [{ id: 'x', label: 'X', export: 'manca' }],
+      backend: { module: 'server.js', routes: [] },
+    }),
+    'server.js': 'module.exports = () => ({ handlers: {} });',
+  });
   ext(root, 'escape', { 'setting.json': manifest('escape', { frontend: { js: '../alpha/server.js' } }) });
   fs.mkdirSync(path.join(root, 'senza-manifest'));
 
@@ -185,4 +201,29 @@ test('sezioni di config: proprietario, validazione e import dell\'estensione', a
 
   const exp = await srv.request('GET', '/api/core/config/export?name=alpha&sections=alpha');
   assert.deepEqual(exp.json, { alpha: { a: 1, b: 2 } });
+});
+
+test('transfer: validazione del manifest e degli handler', async () => {
+  const all = await list();
+  assert.match(all.badtransfer.error, /handler di transfer non trovati: manca/);
+  assert.deepEqual(all.alpha.transfer.map(t => [t.id, t.canExport, t.canImport]), [['dump', true, true], ['solo-json', true, false]]);
+});
+
+test('transfer: elenco, export come file e import di testo', async () => {
+  const items = (await srv.request('GET', '/api/core/transfers')).json;
+  assert.deepEqual(items.map(t => `${t.code}/${t.id}`), ['alpha/dump', 'alpha/solo-json']);
+  assert.equal(items[0].extension, 'ALPHA');
+
+  const txt = await srv.request('GET', '/api/core/transfers/alpha/dump/export');
+  assert.equal(txt.text, 'contenuto alpha');
+  assert.match(txt.headers['content-disposition'], /filename="alpha.txt"/);
+  const json = await srv.request('GET', '/api/core/transfers/alpha/solo-json/export');
+  assert.deepEqual(json.json, { a: 1 });
+  assert.match(json.headers['content-disposition'], /devdock-alpha-solo-json\.json/);
+
+  const imp = await srv.request('POST', '/api/core/transfers/alpha/dump/import', { body: { content: 'abc' } });
+  assert.deepEqual(imp.json, { ok: true, message: 'ricevuti 3 caratteri' });
+  assert.equal((await srv.request('POST', '/api/core/transfers/alpha/solo-json/import', { body: { content: 'x' } })).status, 404);
+  assert.equal((await srv.request('POST', '/api/core/transfers/alpha/dump/import', { body: {} })).status, 400);
+  assert.equal((await srv.request('GET', '/api/core/transfers/gamma/x/export')).status, 404);
 });

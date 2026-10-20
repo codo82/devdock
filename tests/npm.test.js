@@ -68,3 +68,17 @@ test('installed-versions ignora nomi non validi', async () => {
   const r = await srv.request('POST', '/api/ext/npm/projects/app/installed-versions', { body: { packages: ['../../../../etc', 'left-pad'] } });
   assert.deepEqual(r.json, { 'left-pad': null });
 });
+
+test('import "Cartelle di progetto"', async () => {
+  const fs = require('fs');
+  const dir = tmpDir();
+  const a = makeRepo(path.join(dir, 'Mio Progetto'));
+  const b = path.join(dir, 'app'); // stesso nome dell'id esistente "app"
+  fs.mkdirSync(b);
+  const content = ['# commento', a, '', b, '/non/esiste', projectDir, 'relativo/x'].join('\n');
+  const r = await srv.request('POST', '/api/core/transfers/npm/folders/import', { body: { content } });
+  assert.equal(r.status, 200);
+  assert.match(r.json.message, /^2 progetti aggiunti, 3 saltati/);
+  const projects = (await srv.request('GET', '/api/ext/npm/projects')).json;
+  assert.deepEqual(projects.map(p => [p.id, p.label]), [['app', 'App'], ['mio-progetto', 'fixture'], ['app-2', 'app']]);
+});

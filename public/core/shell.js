@@ -264,21 +264,33 @@ window.Shell = (() => {
   const ownerName = owner => owner === 'core' ? 'DevDock' : (extList.find(e => e.code === owner)?.name || owner);
 
   async function exportConfig() {
-    let sections = [];
-    try { sections = await apiClient('/api/core').get('/config/sections'); } catch (e) { toast(e.message, 'error'); return; }
+    let sections = [], transfers = [];
+    try {
+      [sections, transfers] = await Promise.all([
+        apiClient('/api/core').get('/config/sections'),
+        apiClient('/api/core').get('/transfers'),
+      ]);
+    } catch (e) { toast(e.message, 'error'); return; }
     const byOwner = new Map();
     for (const s of sections) byOwner.set(s.owner, [...(byOwner.get(s.owner) || []), s.key]);
+    const others = transfers.filter(t => t.canExport);
     openModal('Esporta configurazione', `
       <div class="export-list">
-        <p class="export-hint">Scegli le sezioni da esportare:</p>
+        <p class="export-hint">Configurazione DevDock (.json) — scegli le sezioni:</p>
         ${[...byOwner].map(([owner, keys]) => `
           <label class="export-item">
             <input type="checkbox" value="${esc(keys.join(','))}" checked>
             <div><div class="export-name">${esc(ownerName(owner))}</div><div class="export-keys">${esc(keys.join(', '))}</div></div>
           </label>`).join('')}
+        ${others.length ? `<p class="export-hint">Altri formati delle estensioni:</p>
+          ${others.map(t => `
+            <div class="export-item">
+              <div class="transfer-info"><div class="export-name">${esc(t.label)} <span class="export-keys">· ${esc(t.extension)}</span></div><div class="export-keys">${esc(t.description)}</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="Shell.exportTransfer(${js(t.code)},${js(t.id)})">↓ Scarica</button>
+            </div>`).join('')}` : ''}
       </div>`,
       `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
-       <button class="btn btn-primary" onclick="Shell.doExport()">↓ Esporta</button>`);
+       <button class="btn btn-primary" onclick="Shell.doExport()">↓ Esporta configurazione</button>`);
   }
 
   function doExport() {
@@ -291,10 +303,57 @@ window.Shell = (() => {
       : `/api/core/config/export?name=partial&sections=${encodeURIComponent(keys.join(','))}`;
   }
 
-  async function importConfig(input) {
-    const file = input.files[0];
-    input.value = '';
-    if (!file) return;
+  function exportTransfer(code, id) {
+    closeModal();
+    window.location.href = `/api/core/transfers/${encodeURIComponent(code)}/${encodeURIComponent(id)}/export`;
+  }
+
+  // ---- import: configurazione DevDock o formati delle estensioni ----
+  let pendingImport = null; // null = config.json, altrimenti { code, id }
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.hidden = true;
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    fileInput.value = '';
+    if (file) (pendingImport ? importTransfer(pendingImport, file) : importConfig(file));
+  });
+  document.body.appendChild(fileInput);
+
+  async function openImport() {
+    let transfers = [];
+    try { transfers = (await apiClient('/api/core').get('/transfers')).filter(t => t.canImport); } catch {}
+    if (!transfers.length) return pickImport(null); // solo config.json: niente scelta da fare
+    openModal('Importa', `
+      <div class="export-list">
+        <div class="export-item">
+          <div class="transfer-info"><div class="export-name">Configurazione DevDock</div><div class="export-keys">File .json esportato da DevDock</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="Shell.pickImport()">↑ Scegli file</button>
+        </div>
+        ${transfers.map(t => `
+          <div class="export-item">
+            <div class="transfer-info"><div class="export-name">${esc(t.label)} <span class="export-keys">· ${esc(t.extension)}</span></div><div class="export-keys">${esc(t.description)}</div></div>
+            <button class="btn btn-ghost btn-sm" onclick="Shell.pickImport(${js(t.code)},${js(t.id)})">↑ Scegli file</button>
+          </div>`).join('')}
+      </div>`, '<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>');
+  }
+
+  function pickImport(code, id) {
+    closeModal();
+    pendingImport = code ? { code, id } : null;
+    fileInput.accept = code ? '' : '.json';
+    fileInput.click();
+  }
+
+  async function importTransfer({ code, id }, file) {
+    try {
+      const r = await apiClient('/api/core').post(`/transfers/${encodeURIComponent(code)}/${encodeURIComponent(id)}/import`, { content: await file.text() });
+      toast(r.message, 'success');
+      refresh();
+    } catch (e) { toast('Errore import: ' + e.message, 'error'); }
+  }
+
+  async function importConfig(file) {
     try {
       const cfg = JSON.parse(await file.text());
       const sections = await apiClient('/api/core').get('/config/sections');
@@ -357,5 +416,5 @@ window.Shell = (() => {
       '<div class="empty-state"><div class="icon">🧩</div><p>Nessuna estensione disponibile</p></div>';
   })();
 
-  return { has, activate, open, refresh, toggleNotifications, exportConfig, doExport, importConfig };
+  return { has, activate, open, refresh, toggleNotifications, exportConfig, doExport, exportTransfer, openImport, pickImport };
 })();

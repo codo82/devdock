@@ -81,3 +81,11 @@ test('CRUD server e gruppi con validazione', async () => {
   assert.deepEqual(srv.readConfig().groups.find(g => g.key === 'grp').servers, []);
 });
 
+
+test('export "Comandi ssh"', async () => {
+  const r = await srv.request('GET', '/api/core/transfers/tunnels/ssh-commands/export');
+  assert.equal(r.status, 200);
+  assert.match(r.headers['content-disposition'], /devdock-tunnels\.sh/);
+  assert.match(r.text, /^#!\/bin\/sh/);
+  assert.match(r.text, /# G\nssh -N -L 127\.0\.0\.1:45999:db\.internal:5432 devdock-test\.invalid {3}# Test/);
+});

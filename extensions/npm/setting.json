@@ -10,6 +10,14 @@
   "config": [
     "projects"
   ],
+  "transfer": [
+    {
+      "id": "folders",
+      "label": "Cartelle di progetto",
+      "description": "File di testo con un percorso assoluto per riga: ogni cartella diventa un progetto",
+      "import": "importFolders"
+    }
+  ],
   "backend": {
     "module": "server.js",
     "routes": [
