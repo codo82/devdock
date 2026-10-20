@@ -1,5 +1,8 @@
 // API del core: estensioni caricate e strumenti di sistema
 const express = require('express');
+const path = require('path');
+const { ROOT } = require('../lib/env');
+const { SOURCE_LANG, languages } = require('../lib/i18n');
 const { getTools, refreshTools } = require('../lib/system');
 const { ConfigError, listSections, exportConfig, importConfig } = require('../lib/config');
 
@@ -10,6 +13,14 @@ module.exports = function coreRoutes(extensions) {
 
   router.get('/extensions', (req, res) => {
     res.json(extensions.list());
+  });
+
+  // Lingue dai cataloghi del core, con la completezza (core + estensioni attive)
+  router.get('/i18n/languages', (req, res) => {
+    const extCatalogs = extensions.extensions
+      .filter(e => e.state !== 'disabled' && e.i18n.length)
+      .map(e => ({ code: e.manifest.code, dir: path.join(e.dir, 'i18n') }));
+    res.json({ source: SOURCE_LANG, languages: languages(path.join(ROOT, 'public/core/i18n'), extCatalogs) });
   });
 
   // ?refresh=1 ricontrolla gli strumenti (es. dopo un'installazione)

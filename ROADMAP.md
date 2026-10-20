@@ -148,8 +148,8 @@ Planned after the current milestones, independent of the work in progress. Not o
 Goal: the whole UI (core and extensions) translatable into **any language**, with no list of languages hard-coded in the code: a language exists when its catalog exists. Adding one means adding JSON files, without touching JS. Italian is the **source language** (the complete reference and the last fallback); the first additional language is English. No build step and no external libraries: a small vanilla JS helper in the core, consistent with the rest of the project.
 
 **Languages and selection**
-- [ ] **M6.1** Language identifiers are BCP 47 tags (`it`, `en`, `pt-BR`, `zh-Hant`…). The available languages are discovered from the core catalogs (`public/core/i18n/*.json`) and exposed by `GET /api/core/i18n/languages` (tag, native name, direction, completeness %)
-- [ ] **M6.2** Each catalog carries its own metadata in a `_meta` block: `{ "name": "English", "nativeName": "English", "dir": "ltr" }`, so the selector and the layout need no per-language code
+- [x] **M6.1** Language identifiers are BCP 47 tags (`it`, `en`, `pt-BR`, `zh-Hant`…). The available languages are discovered from the core catalogs (`public/core/i18n/*.json`) and exposed by `GET /api/core/i18n/languages` (tag, native name, direction, completeness %)
+- [x] **M6.2** Each catalog carries its own metadata in a `_meta` block: `{ "name": "English", "nativeName": "English", "dir": "ltr" }`, so the selector and the layout need no per-language code
 - [ ] **M6.3** Active language resolved in this order: user choice (stored in `localStorage`) → `navigator.languages` → source language. Matching with progressive truncation (`pt-BR` → `pt`), so a regional variant falls back to the base language. Selector in the header listing the available languages by native name; changing language re-renders the shell and the mounted extensions without a page reload. `<html lang>` and `<html dir>` updated accordingly
 - [ ] **M6.4** Right-to-left support: shell and extension CSS use logical properties (`margin-inline-start`, `inset-inline-end`, `text-align: start`) instead of left/right, so an RTL language (Arabic, Hebrew) works without dedicated stylesheets
 
@@ -207,6 +207,38 @@ Goal: link a DB connection to a project repository so that **every structural ch
 - [ ] **M7.15** Later: shadow-database mode (apply all repository migrations to a temporary DB and introspect it) as an alternative reference state; PostgreSQL once M5.7 is done
 - [ ] **M7.16** Docs: README section "DB migrations" and the generator contract, so new formats can be added
 
+## M8 — MCP server
+
+Goal: expose DevDock to AI agents (Claude Code, Claude Desktop, any MCP client) through a **Model Context Protocol server**, so an agent can query the extensions: tunnel and PM2 status, Git state, npm scripts, API specs, DB schema. As with the UI, every capability comes from an extension: the core only hosts the server and aggregates what the extensions declare.
+
+**Server**
+- [ ] **M8.1** MCP endpoint served by DevDock itself over **Streamable HTTP** at `/mcp` (same process, same port, same services as the UI), built on the official `@modelcontextprotocol/sdk`. A stdio bridge (`npx devdock-mcp`) forwards to the running instance for clients that only support stdio, with a clear error when DevDock is not running
+- [ ] **M8.2** Authentication: random bearer token generated on first start and stored outside `config.json` (not exported); `Origin` validation as required by the MCP spec, consistent with the M1 rules (browser requests rejected). Token regenerable from the UI
+- [ ] **M8.3** Server `instructions` describing what DevDock is and which extensions are loaded, so the agent knows what it can ask
+
+**Extension contract**
+- [ ] **M8.4** Optional `mcp` block in `setting.json` declaring **tools** (`name`, `description`, JSON Schema `inputSchema`, `handler`, annotations `readOnlyHint` / `destructiveHint` / `idempotentHint`) and **resources** (URI template, `handler`). Handlers live in the extension backend module, receive the same `ctx` as the HTTP routes and reuse its services and validation. Documented in `docs/EXTENSIONS.md`
+- [ ] **M8.5** The core loads and namespaces everything by extension code (`git_status`, `pm2_logs`, resources `devdock://<code>/…`); extensions not loaded or with missing dependencies expose nothing. Tool and resource lists are refreshed (`list_changed` notifications) when the configuration changes
+- [ ] **M8.6** Uniform results: structured JSON (`structuredContent`) plus a short text summary; long outputs (logs, diffs, query results) truncated with an explicit limit parameter and a "truncated" flag; errors as MCP tool errors with the M6 structured error code
+
+**Permissions**
+- [ ] **M8.7** **Read-only by default**: only tools marked `readOnlyHint` are enabled out of the box. State-changing tools (start/stop tunnel, PM2 restart, git pull/push, npm run, DDL) are disabled until the user enables them one by one, per extension, in the UI
+- [ ] **M8.8** Activity log in the UI: every MCP call with time, client name, tool, arguments (secrets redacted), outcome and duration; filter by extension
+- [ ] **M8.9** Secrets never leave through MCP: no passwords, tokens, vault data or remote URLs with credentials; DB tools work only while the vault is unlocked from the UI (the agent can't unlock it)
+
+**First tools per extension** (read-only unless noted)
+- [ ] **M8.10** Tunnels: list servers and tunnels with status and ports; *(write)* start/stop a tunnel
+- [ ] **M8.11** PM2: list processes with status, CPU/memory, uptime; tail of the logs of a process (line limit); *(write)* start/stop/restart
+- [ ] **M8.12** Git: list repos with branch and ahead/behind; status, log (with the M2.5 lane names), diff of a file or commit; *(write)* fetch/pull/push
+- [ ] **M8.13** npm: list projects and their scripts; *(write)* run a script, with output returned at the end and truncated
+- [ ] **M8.14** Swagger: list specs; endpoints of a spec; detail of an operation (parameters, schemas) — useful to let an agent write a client against a local API
+- [ ] **M8.15** DB client: list connections (without credentials), tables, structure of a table, **read-only** query with row limit and timeout (enforced with a read-only transaction, not only by parsing); migration status of M7. DDL through MCP only if enabled and always through the M7 pipeline, so it ends up in a migration
+
+**UI, tests, docs**
+- [ ] **M8.16** "MCP" panel: on/off switch, endpoint and token, ready-to-copy setup snippets (`claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header …`, Claude Desktop JSON), tool list per extension with enable toggles, activity log
+- [ ] **M8.17** Tests with the SDK client against a DevDock instance: initialize, list tools/resources, call read-only tools, rejection without token or with a browser `Origin`, disabled write tools not listed, secrets redacted in the log
+- [ ] **M8.18** Docs: README section "MCP server" (setup for Claude Code and Claude Desktop, permissions model) and the `mcp` manifest block in `docs/EXTENSIONS.md`
+
 ---
 
 ## Suggested order and size
@@ -222,3 +254,4 @@ Goal: link a DB connection to a project repository so that **every structural ch
 | M4 Branch switch | S | inside the Git extension |
 | M6 i18n | M | language-agnostic: languages discovered from catalogs; core first, then extensions one at a time; structured API errors |
 | M7 DB migrations | L | after M5; diff engine and plain-SQL generator first, framework formats one at a time |
+| M8 MCP server | L | core server + contract first, then read-only tools per extension, write tools opt-in |
