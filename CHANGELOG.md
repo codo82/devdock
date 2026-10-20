@@ -6,6 +6,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-20 — M3 Extension architecture
+
+### Added
+- Extension system: every feature lives in `extensions/<code>/` with a `setting.json` manifest, backend routes declared in the manifest (served under `/api/ext/<code>`), `view.html`, `sidebar.html`, `view.js` and `style.css`. Contract in `docs/EXTENSIONS.md`.
+- Loader with manifest validation, required/optional dependencies, topological order, cycle detection and per-extension states (`ok`, `warning`, `disabled`), visible in `GET /api/core/extensions`.
+- Configuration by section: each key of `config.json` is owned and validated by one extension; writes are atomic.
+- Export/Import dialogs built from the checkboxes declared by the extensions (Tunnel SSH, Progetti NPM); Import lets you choose what to apply and whether to merge or replace.
+- UI shell: tabs and header buttons ordered by the manifests, lazy loading or preload of the extension modules, header pills, badges, desktop notifications, output drawer per panel.
+- npm workspaces (`extensions/*`) for extension dependencies.
+- Integration test suite (`npm test`, 50 tests) and `CLAUDE.md`.
+- `DEVDOCK_EXTENSIONS_DIR` environment variable.
+
+### Changed
+- SSH tunnels, NPM, Git, PM2 and Swagger are now extensions; the core keeps only security, configuration, loader, shared services and the shell.
+- APIs moved under `/api/ext/<code>/…` (extensions) and `/api/core/…` (core).
+- Git actions run as sequences of steps (`fetch` before `push` is optional), and the per-repository lock lasts as long as the commands even if the browser disconnects.
+- A port typed in a tunnel card is no longer reset by the 5-second refresh.
+
+### Fixed
+- PM2 status badges had an unterminated `class` attribute and showed no colours.
+- The custom port of a tunnel is validated (1–65535).
+
+### Removed
+- `public/core/app.js` (the monolithic frontend), `routes/*` except `routes/core.js`, `lib/tunnels.js`, `lib/process.js`, `lib/projects.js`, `lib/git.js`.
+
 ## [1.3.0] - 2026-10-19 — M2 Known bugs
 
 ### Fixed

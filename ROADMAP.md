@@ -66,7 +66,7 @@ Context: the app only listens on `127.0.0.1`, but the browser is an attack vecto
   - [x] Fallback: name taken from the merge subject (`Merge branch 'x'`, `Merge pull request #n from user/x`) for branches already deleted
   - [x] `branch-N` only as a last resort
 
-## M3 — Extension architecture *(Backlog #5, #6, #6 bis)*
+## M3 — Extension architecture *(Backlog #5, #6, #6 bis)* ✅ (1.4.0)
 
 Every feature becomes an extension with its own manifest, backend routes, HTML, JS and CSS. Contract: [docs/EXTENSIONS.md](docs/EXTENSIONS.md). (Merges the former "backend refactor" and "extensions" milestones, so the code is moved only once.)
 
