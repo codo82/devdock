@@ -5,8 +5,7 @@ const ACTIONS = new Set(['start', 'stop', 'restart', 'delete']);
 
 module.exports = function createPm2(ctx) {
   const { PM2_TARGET_RE } = ctx.lib.validate;
-  const { getProjects } = ctx.lib.config;
-  const { readProjectPackage } = ctx.lib.projects;
+  const npm = ctx.require('npm'); // opzionale: serve solo per avviare gli script dei progetti
 
   return {
     handlers: {
@@ -38,9 +37,10 @@ module.exports = function createPm2(ctx) {
         if (!ACTIONS.has(action)) return res.status(400).json({ error: 'Azione PM2 non supportata' });
         let args;
         if (action === 'start' && projectId) {
-          const p = getProjects().find(x => x.id === projectId);
+          if (!npm) return res.status(400).json({ error: 'Estensione npm non disponibile' });
+          const p = npm.getProject(projectId);
           if (!p) return res.status(404).json({ error: 'Progetto non trovato' });
-          const scripts = readProjectPackage(p)?.scripts || {};
+          const scripts = npm.readPackage(p)?.scripts || {};
           if (typeof script !== 'string' || !Object.hasOwn(scripts, script)) {
             return res.status(400).json({ error: `Script non definito in package.json: ${script}` });
           }

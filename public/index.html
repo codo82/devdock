@@ -15,8 +15,8 @@
 <header>
   <div class="header-top">
     <div class="logo">Dev<span>Dock</span></div>
-    <!-- pill delle estensioni (ctx.setPills) e delle sezioni non ancora migrate -->
-    <div class="header-pills" id="activePills"><span id="legacyPills"></span></div>
+    <!-- pill delle estensioni (ctx.setPills) -->
+    <div class="header-pills" id="activePills"></div>
     <div class="header-actions">
       <button class="notif-btn" id="notifBtn" onclick="Shell.toggleNotifications()" title="Attiva notifiche desktop">🔔</button>
       <button class="btn btn-ghost" onclick="Shell.exportConfig()" title="Esporta config.json">↓ Export</button>
@@ -26,11 +26,6 @@
   </div>
   <!-- Section navigation -->
   <nav class="section-nav">
-    <button class="section-tab" id="navNpm" data-section="npm" data-order="20" onclick="App.goSection('npm')">
-      <span class="section-tab-icon">📦</span>
-      <span>NPM</span>
-      <span class="section-tab-badge" id="badgeNpm">0</span>
-    </button>
     <button class="section-tab" id="navGit" data-section="git" data-order="30" onclick="App.goSection('git')">
       <span class="section-tab-icon">🌿</span>
       <span>Git</span>
@@ -50,19 +45,6 @@
 
   <!-- MAIN CONTENT: un pannello per sezione, mostrato/nascosto -->
   <main class="main" style="position:relative">
-    <div id="mainArea-npm" class="main-panel" style="display:none">
-      <div id="mainContent-npm" style="flex:1;overflow:auto;min-height:0"></div>
-      <div class="sse-panel" id="ssePanel-npm">
-        <div class="sse-panel-header">
-          <span id="ssePanelTitle-npm">Output</span>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-ghost btn-sm" onclick="App.clearSseOutput()" title="Pulisci">🗑</button>
-            <button class="btn btn-ghost btn-sm" onclick="App.closeSsePanel()">✕</button>
-          </div>
-        </div>
-        <div class="sse-body" id="sseBody-npm"></div>
-      </div>
-    </div>
     <div id="mainArea-git" class="main-panel" style="display:none">
       <div id="mainContent-git" style="flex:1;overflow:hidden;min-height:0;position:relative;display:flex;flex-direction:column"></div>
       <div class="sse-panel" id="ssePanel-git">

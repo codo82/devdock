@@ -7,6 +7,12 @@
   "icon": "⚙️",
   "position": "header",
   "order": 10,
+  "dependencies": [
+    {
+      "code": "npm",
+      "required": false
+    }
+  ],
   "backend": {
     "module": "server.js",
     "routes": [

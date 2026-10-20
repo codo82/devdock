@@ -233,6 +233,10 @@ window.Shell = (() => {
       setPills(html) { pillsContainer(meta.code).innerHTML = html || ''; },
       open,
       isActive: () => active === meta.code,
+      // Un'altra estensione è caricata e attiva? (per funzioni che si appoggiano a lei)
+      hasExtension: code => extList.some(e => e.code === code && e.state !== 'disabled'),
+      // Client per le API di un'altra estensione (/api/ext/<code>)
+      apiFor: code => apiClient(`/api/ext/${code}`),
     };
   }
 

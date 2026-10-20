@@ -4,7 +4,6 @@ const path = require('path');
 const { ROOT, PORT, CONFIG_PATH, EXTENSIONS_DIR } = require('./lib/env');
 const { applySecurity } = require('./lib/security');
 const { ConfigError } = require('./lib/config');
-const { stopAllProcesses } = require('./lib/process');
 const { loadExtensions, frontendRouter } = require('./lib/extensions');
 
 const app = express();
@@ -19,16 +18,14 @@ const extensions = loadExtensions(EXTENSIONS_DIR, {
     validate: require('./lib/validate'),
     config:   require('./lib/config'),
     system:   require('./lib/system'),
-    process:  require('./lib/process'),
+    ports:    require('./lib/ports'),
     git:      require('./lib/git'),
-    projects: require('./lib/projects'),
   },
 });
 app.use('/api/ext', extensions.router);
 app.use('/ext', frontendRouter(extensions));
 app.use('/api/core', require('./routes/core')(extensions));
 
-app.use('/api', require('./routes/projects'));
 app.use('/api', require('./routes/git'));
 
 // Errori non gestiti nelle route: le validazioni della config diventano 400 JSON
@@ -43,7 +40,6 @@ app.use((err, req, res, next) => {
 function shutdown(signal) {
   console.log(`\n${signal} — termino tunnel e processi npm...`);
   extensions.shutdown();
-  stopAllProcesses();
   process.exit(0);
 }
 

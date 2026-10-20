@@ -13,11 +13,11 @@ before(async () => {
 });
 after(() => srv.stop());
 
-const start = script => srv.request('POST', '/api/projects/app/npm/start', { body: { script } });
+const start = script => srv.request('POST', '/api/ext/npm/projects/app/run', { body: { script } });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 test('package.json del progetto', async () => {
-  const r = await srv.request('GET', '/api/projects/app/package');
+  const r = await srv.request('GET', '/api/ext/npm/projects/app/package');
   assert.deepEqual(Object.keys(r.json.scripts), ['hello', 'serve']);
 });
 
@@ -32,7 +32,7 @@ test('esecuzione di uno script con log ed exit code', async () => {
   assert.equal(r.status, 200);
   let logs;
   for (let i = 0; i < 50; i++) {
-    logs = (await srv.request('GET', `/api/processes/${r.json.id}/logs`)).json;
+    logs = (await srv.request('GET', `/api/ext/npm/processes/${r.json.id}/logs`)).json;
     if (!logs.running) break;
     await sleep(100);
   }
@@ -40,31 +40,31 @@ test('esecuzione di uno script con log ed exit code', async () => {
   assert.match(logs.logs.map(l => l.text).join(''), /ciao-devdock/);
 
   // stream SSE di un processo terminato: storico + exit
-  const stream = await srv.request('GET', `/api/processes/${r.json.id}/stream`);
+  const stream = await srv.request('GET', `/api/ext/npm/processes/${r.json.id}/stream`);
   assert.equal(stream.events[0].type, 'history');
   assert.match(stream.events[0].data, /ciao-devdock/);
   assert.equal(stream.events.at(-1).type, 'exit');
-  assert.equal((await srv.request('DELETE', `/api/processes/${r.json.id}/dismiss`)).status, 200);
+  assert.equal((await srv.request('DELETE', `/api/ext/npm/processes/${r.json.id}/dismiss`)).status, 200);
 });
 
 test('il riavvio non segna come terminato il processo nuovo', async () => {
   const { json } = await start('serve');
   await sleep(500);
-  assert.equal((await srv.request('POST', `/api/processes/${json.id}/restart`, { body: {} })).status, 200);
+  assert.equal((await srv.request('POST', `/api/ext/npm/processes/${json.id}/restart`, { body: {} })).status, 200);
   await sleep(800);
-  const list = (await srv.request('GET', '/api/processes')).json;
+  const list = (await srv.request('GET', '/api/ext/npm/processes')).json;
   assert.equal(list.find(p => p.id === json.id).running, true);
-  assert.equal((await srv.request('DELETE', `/api/processes/${json.id}`)).status, 200);
+  assert.equal((await srv.request('DELETE', `/api/ext/npm/processes/${json.id}`)).status, 200);
 });
 
 test('npm update solo per pacchetti dichiarati', async () => {
   for (const pkg of ['--global', 'express', '../x']) {
-    const r = await srv.request('POST', '/api/projects/app/npm/update', { body: { package: pkg } });
+    const r = await srv.request('POST', '/api/ext/npm/projects/app/update', { body: { package: pkg } });
     assert.equal(r.status, 400, `atteso 400 per ${pkg}`);
   }
 });
 
 test('installed-versions ignora nomi non validi', async () => {
-  const r = await srv.request('POST', '/api/projects/app/installed-versions', { body: { packages: ['../../../../etc', 'left-pad'] } });
+  const r = await srv.request('POST', '/api/ext/npm/projects/app/installed-versions', { body: { packages: ['../../../../etc', 'left-pad'] } });
   assert.deepEqual(r.json, { 'left-pad': null });
 });

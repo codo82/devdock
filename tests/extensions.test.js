@@ -171,7 +171,7 @@ test('avviso per handler senza route', () => {
 test('sezioni di config: proprietario, validazione e import dell\'estensione', async () => {
   const sections = (await srv.request('GET', '/api/core/config/sections')).json;
   assert.deepEqual(sections.find(x => x.key === 'alpha'), { key: 'alpha', owner: 'alpha' });
-  assert.deepEqual(sections.find(x => x.key === 'projects'), { key: 'projects', owner: 'core' });
+  assert.equal(sections.find(x => x.key === 'projects'), undefined); // nessuna estensione npm nella cartella di prova
 
   const bad = await srv.request('POST', '/api/ext/alpha/config', { body: { bad: true } });
   assert.equal(bad.status, 400);

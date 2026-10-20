@@ -1,16 +1,9 @@
-// Sezioni non ancora migrate a estensioni (npm, git)
+// Sezione non ancora migrata a estensione (git)
 const App = (() => {
   const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, formatUptime } = window.UI;
 
-  let section = null; // 'npm' | 'git' | codice di un'estensione
-  let system = { platform: null, tools: {} }; // strumenti esterni disponibili (/api/system)
-
-  // NPM state
-  let npmProjects = [];
-  let activeProject = null;
-  let npmActiveTab = 'scripts';
+  let section = null; // 'git' | codice di un'estensione
   let sseSource = null;
-  let activeProcesses = [];
 
   // Git state
   let gitRepos = [];
@@ -39,7 +32,7 @@ const App = (() => {
   // ---- SECTION NAV ----
   // Mostra il pannello della sezione attiva, nasconde gli altri
   function switchMainPanel(sec) {
-    ['npm','git'].forEach(s => {
+    ['git'].forEach(s => {
       const p = document.getElementById(`mainArea-${s}`);
       if (p) p.style.display = s === sec ? 'flex' : 'none';
     });
@@ -57,7 +50,7 @@ const App = (() => {
     // Non chiudere closeSsePanel() — ogni sezione mantiene il suo pannello
 
     // Update section tabs
-    ['npm','git'].forEach(s => {
+    ['git'].forEach(s => {
       const el = document.getElementById('nav' + s.charAt(0).toUpperCase() + s.slice(1));
       if (!el) return;
       el.className = 'section-tab' + (section === s ? ` active-${s}` : '');
@@ -73,226 +66,13 @@ const App = (() => {
     if (isExt) return;
 
     // Render section (aggiorna sidebar + eventuale refresh leggero)
-    if (sec === 'npm')      renderNpmSection();
-    else if (sec === 'git') renderGitSection();
+    if (sec === 'git') renderGitSection();
   }
 
   // ---- SECTION BADGES ----
   function updateBadges() {
-    const n = document.getElementById('badgeNpm');
     const g = document.getElementById('badgeGit');
-    if (n) {
-      const running = activeProcesses.filter(x => x.running).length;
-      n.textContent = npmProjects.length + (running ? ` · ${running}▶` : '');
-    }
     if (g) g.textContent = gitRepos.length;
-  }
-
-  // ---- PILLS HEADER ----
-  function renderActivePills() {
-    const pills = document.getElementById('legacyPills');
-    const npmPills = activeProcesses.filter(p => p.running).map(p => {
-      const portStr = (p.ports||[]).map(x => `:${x}`).join(' ');
-      return `
-      <span class="pill pill-npm"
-            onclick="App.goSection('npm')"
-            title="${esc(p.projectLabel)} — npm ${p.script}${portStr?' ('+portStr+')':''}">
-        <span class="pill-dot"></span>
-        ${esc(p.projectLabel)}<span style="opacity:.7;font-size:10px"> npm ${esc(p.script)}</span>
-        ${portStr ? `<span style="opacity:.6;font-size:10px">${portStr}</span>` : ''}
-        <span style="cursor:pointer;opacity:.5;margin-left:2px" onclick="event.stopPropagation();App.stopProcess(${js(p.id)})">✕</span>
-      </span>`;
-    }).join('');
-
-    pills.innerHTML = npmPills;
-  }
-
-  // ================================================================
-  // NPM SECTION
-  // ================================================================
-  async function renderNpmSection() {
-    await loadNpmProjects();
-
-    // Sidebar: projects
-    const sidebar = document.getElementById('sidebarContent');
-    sidebar.innerHTML = `
-      <div class="sidebar-head">
-        <span class="sidebar-head-title">Progetti NPM</span>
-        <button class="btn btn-npm btn-sm" onclick="App.modalAddProject()">+</button>
-      </div>
-      <div class="sidebar-body" id="npmProjectsList"></div>`;
-
-    renderNpmProjectsList();
-
-    // Render main solo se non già presente
-    renderNpmMain();
-  }
-
-  function renderNpmProjectsList() {
-    const el = document.getElementById('npmProjectsList');
-    if (!el) return;
-    if (!npmProjects.length) {
-      el.innerHTML = '<p style="color:var(--muted);font-size:12px;padding:12px 14px">Nessun progetto.<br><br><button class="btn btn-npm btn-sm" onclick="App.modalAddProject()" style="margin-top:4px">+ Aggiungi</button></p>';
-      return;
-    }
-    el.innerHTML = npmProjects.map(p => {
-      const running = activeProcesses.filter(pr => pr.projectId === p.id && pr.running).length;
-      return `
-      <div class="sb-proj ${activeProject===p.id?'active':''}" onclick="App.selectNpmProject(${js(p.id)})">
-        <span style="font-size:14px;flex-shrink:0">${running > 0 ? '🟠' : '📁'}</span>
-        <div class="sb-proj-info">
-          <div class="sb-proj-label">${esc(p.label)}${running>0?` <span style="color:var(--c-npm);font-size:10px">▶${running}</span>`:''}</div>
-          <div class="sb-proj-path">${esc(p.path)}</div>
-        </div>
-        <button class="sb-proj-del" onclick="event.stopPropagation();App.deleteProject(${js(p.id)})" title="Rimuovi">✕</button>
-      </div>`;
-    }).join('');
-  }
-
-  function renderNpmMain() {
-    const main = mainPanel('npm');
-    if (!activeProject) {
-      main.innerHTML = `<div class="empty-state"><div class="icon">📦</div><p>Seleziona un progetto dalla sidebar</p></div>`;
-      return;
-    }
-    const p = npmProjects.find(x => x.id === activeProject);
-    if (!p) { main.innerHTML = `<div class="empty-state"><div class="icon">📦</div><p>Progetto non trovato</p></div>`; return; }
-
-    const running = activeProcesses.filter(pr => pr.projectId === p.id && pr.running).length;
-    main.innerHTML = `
-      <div class="npm-area">
-        <div class="npm-detail-header">
-          <h3 style="color:var(--c-npm)">${esc(p.label)}</h3>
-          <div style="display:flex;align-items:center;gap:10px">
-            <div class="path-label">${esc(p.path)}</div>
-            ${running>0?`<span style="color:var(--c-npm);font-size:11px;font-family:var(--font)">▶ ${running} in esecuzione</span>`:''}
-          </div>
-        </div>
-        <div class="npm-tabs">
-          <button class="npm-tab ${npmActiveTab==='scripts'?'active':''}" onclick="App.switchNpmTab('scripts')">▶ Scripts</button>
-          <button class="npm-tab ${npmActiveTab==='packages'?'active':''}" onclick="App.switchNpmTab('packages')">📦 Pacchetti</button>
-        </div>
-        <div class="npm-tab-content" id="npmTabContent">
-          <div style="color:var(--muted);font-size:12px">Caricamento...</div>
-        </div>
-      </div>`;
-
-    if (npmActiveTab === 'scripts') renderScriptsTab(p);
-    else renderPackagesTab(p);
-  }
-
-  async function selectNpmProject(id) {
-    activeProject = id;
-    renderNpmProjectsList();
-    renderNpmMain();
-  }
-
-  async function switchNpmTab(tab) {
-    npmActiveTab = tab;
-    document.querySelectorAll('.npm-tab').forEach(b => {
-      b.classList.toggle('active',
-        (tab==='scripts'&&b.textContent.includes('Scripts')) ||
-        (tab==='packages'&&b.textContent.includes('Pacchetti')));
-    });
-    const content = document.getElementById('npmTabContent');
-    if (content) content.innerHTML = '<div style="color:var(--muted);font-size:12px">Caricamento...</div>';
-    const p = npmProjects.find(x => x.id === activeProject);
-    if (!p) return;
-    if (tab === 'scripts') await renderScriptsTab(p);
-    else await renderPackagesTab(p);
-  }
-
-  async function renderScriptsTab(p) {
-    const content = document.getElementById('npmTabContent');
-    if (!content) return;
-    let pkg = { scripts: {} };
-    try { pkg = await api.get(`/api/projects/${p.id}/package`); } catch {}
-
-    const scripts = Object.entries(pkg.scripts || {});
-    const procs = activeProcesses.filter(pr => pr.projectId === p.id);
-
-    function scriptRow(name, cmd) {
-      const proc = procs.find(pr => pr.script === name);
-      const isRunning = proc && proc.running;
-      const isDead = proc && !proc.running;
-      const ports = (proc && proc.ports && proc.ports.length) ? proc.ports : [];
-      return `<div class="script-row ${isRunning ? 'running' : ''}">
-        ${isRunning ? `<span class="proc-dot" title="In esecuzione (pid ${proc.pid})"></span>` : isDead ? `<span class="proc-dot dead" title="Terminato (exit ${proc.exitCode})"></span>` : ''}
-        <span class="script-name">${esc(name)}</span>
-        <span class="script-cmd">${esc(cmd||'npm ' + name)}</span>
-        ${isRunning ? `<span class="proc-uptime" data-uptime="${proc.startedAt}">${formatUptime(proc.startedAt)}</span>` : ''}
-        ${ports.map(port => `<span class="proc-port" title="Porta in uso">:${port}</span>`).join('')}
-        <div class="script-actions">
-          ${proc ? `
-            <button class="btn btn-ghost btn-sm" onclick="App.streamProcess(${js(proc.id)},${js(name)})" title="Vedi log">📋</button>
-            ${isRunning ? `
-              <button class="btn btn-ghost btn-sm" onclick="App.restartProcess(${js(proc.id)})" title="Riavvia">↺</button>
-              <button class="btn btn-disconnect btn-sm" onclick="App.stopProcess(${js(proc.id)})" title="Ferma">⏹</button>
-            ` : `
-              <button class="btn btn-npm btn-sm" onclick="App.runNpmScript(${js(p.id)},${js(name)})">▶ Riavvia</button>
-              <button class="btn btn-ghost btn-sm" onclick="App.dismissProcess(${js(proc.id)})" title="Rimuovi">✕</button>
-            `}
-          ` : `<button class="btn btn-npm btn-sm" onclick="App.runNpmScript(${js(p.id)},${js(name)})">▶ Esegui</button>`}
-          ${system.tools.pm2 ? `<button class="btn btn-ghost btn-sm" onclick="App.pm2StartScript(${js(p.id)},${js(name)})" title="Avvia con PM2">PM2</button>` : ''}
-        </div>
-      </div>`;
-    }
-
-    content.innerHTML = `
-      <div class="scripts-grid">
-        ${scriptRow('install', 'npm install')}
-        ${scripts.map(([name, cmd]) => scriptRow(name, cmd)).join('')}
-        ${!scripts.length ? '<p style="color:var(--muted);font-size:12px;margin-top:8px">Nessuno script in package.json</p>' : ''}
-      </div>`;
-  }
-
-  async function renderPackagesTab(p) {
-    const content = document.getElementById('npmTabContent');
-    if (!content) return;
-    content.innerHTML = `<div style="color:var(--muted);font-size:12px">Lettura pacchetti...</div>`;
-    let pkg = { dependencies:{}, devDependencies:{} };
-    try { pkg = await api.get(`/api/projects/${p.id}/package`); } catch {}
-
-    const deps    = Object.entries(pkg.dependencies    || {});
-    const devDeps = Object.entries(pkg.devDependencies || {});
-
-    function depsTable(list, isDev) {
-      if (!list.length) return '';
-      return `
-        <div class="pkg-section">
-          <div class="pkg-section-title">${isDev ? 'devDependencies' : 'dependencies'} <span class="pkg-count">${list.length}</span></div>
-          <table class="data-table">
-            <thead><tr><th>Pacchetto</th><th>Versione config</th><th>Installata</th><th></th></tr></thead>
-            <tbody>${list.map(([name, ver]) => `<tr>
-              <td style="font-family:var(--font);color:var(--c-npm)">${esc(name)}</td>
-              <td style="font-family:var(--font);color:var(--muted)">${esc(ver)}</td>
-              <td style="font-family:var(--font)" id="pkgver_${btoa(name).replace(/=/g,'')}">
-                <span style="color:var(--muted)">—</span>
-              </td>
-              <td>
-                <button class="btn btn-ghost btn-sm" onclick="App.npmUpdate(${js(p.id)},${js(name)})" title="Aggiorna">↑ update</button>
-              </td>
-            </tr>`).join('')}</tbody>
-          </table>
-        </div>`;
-    }
-
-    content.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-        <button class="btn btn-npm btn-sm" onclick="App.runNpmScript(${js(p.id)},'install')">↓ npm install</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.npmOutdated(${js(p.id)})">🔍 Verifica aggiornamenti</button>
-        <span id="outdatedStatus" style="font-size:11px;color:var(--muted)"></span>
-      </div>
-      ${depsTable(deps, false)}
-      ${depsTable(devDeps, true)}
-      ${(!deps.length && !devDeps.length) ? '<p style="color:var(--muted);font-size:12px">Nessuna dipendenza nel package.json</p>' : ''}`;
-
-    loadInstalledVersions(p.id, [...deps, ...devDeps].map(([n]) => n));
-  }
-
-  // ---- STRUMENTI ESTERNI ----
-  async function loadSystem(refresh = false) {
-    try { system = await api.get('/api/core/system' + (refresh ? '?refresh=1' : '')); } catch {}
   }
 
   // ================================================================
@@ -950,181 +730,6 @@ const App = (() => {
     });
   }
 
-  // SETTINGS SECTION
-  // ---- REFRESH ----
-  async function refresh() {
-    try {
-      activeProcesses = await api.get('/api/processes');
-      renderActivePills();
-      updateBadges();
-
-      // Aggiorna la sezione attiva senza ridisegnare tutto
-      if (section === 'npm') {
-        renderNpmProjectsList();
-        // Aggiorna stato scripts se visibile
-        if (npmActiveTab === 'scripts' && activeProject) {
-          const p = npmProjects.find(x => x.id === activeProject);
-          if (p) renderScriptsTab(p);
-        }
-      }
-    } catch(e) { toast('Errore connessione al server','error'); }
-  }
-
-  // ---- NPM ACTIONS ----
-  async function loadNpmProjects() {
-    try { npmProjects = await api.get('/api/projects'); } catch { npmProjects = []; }
-  }
-
-  async function runNpmScript(projectId, script) {
-    const label = `npm ${script === 'install' ? 'install' : 'run ' + script}`;
-    try {
-      const r = await api.post(`/api/projects/${projectId}/npm/start`, { script });
-      toast(`Avviato: ${label}`, 'success');
-      activeProcesses = await api.get('/api/processes');
-      renderActivePills(); updateBadges();
-      const p = npmProjects.find(x => x.id === projectId);
-      if (p) await renderScriptsTab(p);
-      streamProcess(r.id, label);
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  function streamProcess(procId, label) {
-    openSsePanel(label || procId);
-    if (sseSource) sseSource.close();
-    const streamSection = section; // cattura la sezione al momento dell'apertura
-    sseSource = new EventSource(`/api/processes/${procId}/stream`);
-    sseSource.onmessage = e => {
-      const { type, data } = JSON.parse(e.data);
-      if (type === 'history') appendSseToSection(streamSection, data, 'out');
-      else if (type === 'exit') { appendSseToSection(streamSection, data, 'sys'); sseSource.close(); sseSource = null; }
-      else appendSseToSection(streamSection, data, type === 'stderr' ? 'err' : 'out');
-    };
-    sseSource.onerror = () => { appendSseToSection(streamSection, '\n[connessione persa]', 'err'); sseSource.close(); sseSource = null; };
-  }
-
-  async function stopProcess(procId) {
-    try {
-      await api.del(`/api/processes/${procId}`);
-      toast('Processo fermato', 'success');
-      activeProcesses = await api.get('/api/processes');
-      renderActivePills(); updateBadges();
-      const p = npmProjects.find(x => x.id === activeProject);
-      if (p && section === 'npm') await renderScriptsTab(p);
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  async function restartProcess(procId) {
-    try {
-      await api.post(`/api/processes/${procId}/restart`, {});
-      toast('Processo riavviato', 'success');
-      activeProcesses = await api.get('/api/processes');
-      renderActivePills(); updateBadges();
-      const p = npmProjects.find(x => x.id === activeProject);
-      if (p && section === 'npm') await renderScriptsTab(p);
-      const pd = activeProcesses.find(x => x.id === procId);
-      if (pd) streamProcess(procId, `npm ${pd.script === 'install' ? 'install' : 'run ' + pd.script}`);
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  async function dismissProcess(procId) {
-    try {
-      await api.del(`/api/processes/${procId}/dismiss`);
-      activeProcesses = await api.get('/api/processes');
-      renderActivePills(); updateBadges();
-      const p = npmProjects.find(x => x.id === activeProject);
-      if (p && section === 'npm') await renderScriptsTab(p);
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  async function loadInstalledVersions(projectId, names) {
-    if (!names.length) return;
-    try {
-      const data = await api.post(`/api/projects/${projectId}/installed-versions`, { packages: names });
-      for (const [name, ver] of Object.entries(data)) {
-        const el = document.getElementById(`pkgver_${btoa(name).replace(/=/g,'')}`);
-        if (el) el.innerHTML = ver
-          ? `<span style="color:var(--success)">${esc(ver)}</span>`
-          : `<span style="color:var(--muted)">non installato</span>`;
-      }
-    } catch {}
-  }
-
-  async function npmOutdated(projectId) {
-    const status = document.getElementById('outdatedStatus');
-    if (status) status.textContent = 'Controllo in corso...';
-    try {
-      const data = await api.get(`/api/projects/${projectId}/outdated`);
-      const outdated = Object.entries(data);
-      if (!outdated.length) { if (status) status.textContent = '✓ Tutti aggiornati'; return; }
-      if (status) status.textContent = `${outdated.length} aggiornamenti disponibili`;
-      for (const [name, info] of outdated) {
-        const el = document.getElementById(`pkgver_${btoa(name).replace(/=/g,'')}`);
-        if (el) el.innerHTML = `<span style="color:var(--warning)">${esc(info.current)}</span> → <span style="color:var(--success)">${esc(info.latest)}</span>`;
-      }
-    } catch(e) { if (status) status.textContent = 'Errore: ' + e.message; }
-  }
-
-  async function npmUpdate(projectId, packageName) {
-    try {
-      toast(`Aggiornamento ${packageName}...`);
-      const r = await api.post(`/api/projects/${projectId}/npm/update`, { package: packageName });
-      streamProcess(r.id, `npm update ${packageName}`);
-    } catch(e) { toast(e.message, 'error'); }
-  }
-
-  // ---- PM2 ACTIONS ----
-  async function pm2StartScript(projectId, script) {
-    const p = npmProjects.find(x => x.id === projectId);
-    if (!p) return;
-    try {
-      await api.post('/api/ext/pm2/action', { action: 'start', projectId, script });
-      toast(`PM2: ${script} avviato`, 'success');
-    } catch(e) { toast('PM2 errore: ' + e.message, 'error'); }
-  }
-
-  // ---- PROJECT ACTIONS ----
-  function modalAddProject() {
-    openModal('Nuovo progetto', `
-      <div class="form-row">
-        <label>ID (snake_case, non modificabile)</label>
-        <input class="form-input" id="f_proj_id" placeholder="es. my_app">
-      </div>
-      <div class="form-row">
-        <label>Nome</label>
-        <input class="form-input" id="f_proj_label" placeholder="es. My App">
-      </div>
-      <div class="form-row">
-        <label>Percorso assoluto cartella</label>
-        <input class="form-input" id="f_proj_path" placeholder="/home/user/projects/my-app">
-      </div>`, `
-      <button class="btn btn-ghost" onclick="App.closeModal()">Annulla</button>
-      <button class="btn btn-npm" onclick="App.saveProject()">Aggiungi</button>`);
-  }
-
-  async function saveProject() {
-    const id    = (document.getElementById('f_proj_id')?.value||'').trim();
-    const label = (document.getElementById('f_proj_label')?.value||'').trim();
-    const path  = (document.getElementById('f_proj_path')?.value||'').trim();
-    if (!id||!label||!path) { toast('Tutti i campi sono obbligatori','error'); return; }
-    try {
-      await api.post('/api/projects', { id, label, path });
-      closeModal(); toast('Progetto aggiunto','success');
-      await loadNpmProjects();
-      if (section === 'npm') renderNpmSection();
-    } catch(e) { toast(e.message,'error'); }
-  }
-
-  async function deleteProject(id) {
-    if (!confirm('Rimuovere questo progetto dalla lista?')) return;
-    try {
-      await api.del(`/api/projects/${id}`);
-      if (activeProject === id) activeProject = null;
-      toast('Progetto rimosso','success');
-      await loadNpmProjects();
-      if (section === 'npm') renderNpmSection();
-    } catch(e) { toast(e.message,'error'); }
-  }
-
   // ---- SSE PANEL (per-section) ----
   function ssePanelEl()  { return document.getElementById(`ssePanel-${section}`); }
   function sseTitleEl()  { return document.getElementById(`ssePanelTitle-${section}`); }
@@ -1168,25 +773,15 @@ const App = (() => {
   // ---- INIT ----
   async function init() {
     await window.Shell?.init();
-    await loadSystem();
-    await refresh();
-    goSection(window.Shell?.firstSection() || 'npm');
-    setInterval(refresh, 5000);
+    goSection(window.Shell?.firstSection() || 'git');
   }
   init();
 
   return {
     goSection,
     closeModal,
-    // NPM
-    selectNpmProject, switchNpmTab,
-    modalAddProject, saveProject, deleteProject,
-    runNpmScript, streamProcess, stopProcess, restartProcess, dismissProcess,
-    npmOutdated, npmUpdate,
-    // PM2
-    pm2StartScript,
     closeSsePanel, clearSseOutput,
-    refresh,
+    refresh: () => { if (section === 'git') refreshGitSection(); },
     // Git
     selectGitRepo, refreshGitSection,
     loadGitStatus, loadGitLog,
