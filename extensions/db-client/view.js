@@ -23,7 +23,8 @@ function highlightSql(sql, esc) {
 
 export default {
   async mount(ctx) {
-    const { esc, js, toast, openModal, closeModal } = ctx.ui;
+    const { esc, js, toast, openModal, closeModal, fmt } = ctx.ui;
+    const { t } = ctx;
     const $ = (root, role) => root.querySelector(`[data-role="${role}"]`);
 
     let vault = { state: 'uninitialized', minLength: 10 };
@@ -55,7 +56,7 @@ export default {
       $(ctx.sidebar, 'add-btn').hidden = !unlocked;
       $(ctx.sidebar, 'import-btn').hidden = !unlocked;
       if (!unlocked) {
-        $(ctx.sidebar, 'connections').innerHTML = '<p class="db-muted db-pad">🔒 Sblocca la master password per vedere le connessioni.</p>';
+        $(ctx.sidebar, 'connections').innerHTML = `<p class="db-muted db-pad">${esc(t('sidebar.locked'))}</p>`;
         renderGate();
         return;
       }
@@ -82,7 +83,7 @@ export default {
     async function renderConnections() {
       const el = $(ctx.sidebar, 'connections');
       if (!connections.length) {
-        el.innerHTML = '<p class="db-muted db-pad">Nessuna connessione.<br><br><button class="btn btn-ghost btn-sm" data-tree="add">+ Aggiungi</button></p>';
+        el.innerHTML = `<p class="db-muted db-pad">${esc(t('sidebar.none'))}<br><br><button class="btn btn-ghost btn-sm" data-tree="add">${esc(t('sidebar.addButton'))}</button></p>`;
         return;
       }
       const labels = new Map((await projects()).map(p => [p.id, p.label]));
@@ -93,13 +94,13 @@ export default {
       }
       const keys = [...groups.keys()].sort((a, b) => (a === '') - (b === '') || a.localeCompare(b));
       el.innerHTML = `<div class="db-tree" role="tree">${keys.map(g => `
-        ${keys.length > 1 || g ? `<div class="db-group">${esc(g || 'Senza progetto')}</div>` : ''}
+        ${keys.length > 1 || g ? `<div class="db-group">${esc(g || t('sidebar.noProject'))}</div>` : ''}
         ${groups.get(g).map(connNode).join('')}`).join('')}</div>`;
     }
 
     const caret = (key, leaf) => leaf ? '<span class="db-caret"></span>'
       : `<span class="db-caret" data-act="toggle">${open.has(key) ? '▾' : '▸'}</span>`;
-    const loading = entry => !entry || entry.loading ? '<div class="db-tree-msg">Caricamento…</div>'
+    const loading = entry => !entry || entry.loading ? `<div class="db-tree-msg">${esc(t('tree.loading'))}</div>`
       : entry.error ? `<div class="db-tree-msg db-tree-err">${esc(entry.error)}</div>` : '';
     const attrs = (kind, c, db, table) =>
       `data-tree="${kind}" data-conn="${esc(c.id)}"${db != null ? ` data-db="${esc(db)}"` : ''}${table != null ? ` data-table="${esc(table)}"` : ''}`;
@@ -111,7 +112,7 @@ export default {
         <div class="db-row db-row-conn ${c.id === activeId ? 'active' : ''}" ${attrs('conn', c)} title="${esc(target(c))}">
           ${caret(k)}<span class="db-row-icon">${c.readOnly ? '🔒' : '🗄️'}</span><span class="db-row-label">${esc(c.label)}</span>
         </div>
-        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.map(db => dbNode(c, db)).join('') || '<div class="db-tree-msg">Nessun database</div>'}</div>` : ''}
+        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.map(db => dbNode(c, db)).join('') || `<div class="db-tree-msg">${esc(t('tree.noDatabases'))}</div>`}</div>` : ''}
       </div>`;
     }
 
@@ -123,16 +124,16 @@ export default {
         <div class="db-row db-row-db ${isActive ? 'active' : ''}" ${attrs('db', c, db)}>
           ${caret(k)}<span class="db-row-icon">🛢️</span><span class="db-row-label">${esc(db)}</span>
         </div>
-        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.map(t => tableNode(c, db, t)).join('') || '<div class="db-tree-msg">Nessuna tabella</div>'}</div>` : ''}
+        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.map(tb => tableNode(c, db, tb)).join('') || `<div class="db-tree-msg">${esc(t('tree.noTables'))}</div>`}</div>` : ''}
       </div>`;
     }
 
-    function tableNode(c, db, t) {
-      const k = nodeKey('t', c.id, db, t.name);
+    function tableNode(c, db, tb) {
+      const k = nodeKey('t', c.id, db, tb.name);
       const entry = cache.get(k);
       return `<div class="db-node">
-        <div class="db-row db-row-table" ${attrs('table', c, db, t.name)} title="${esc(t.comment || t.name)}${t.rowsEstimate != null ? ` · ~${esc(t.rowsEstimate)} righe` : ''}">
-          ${caret(k)}<span class="db-row-icon">${t.view ? '👁' : '▦'}</span><span class="db-row-label">${esc(t.name)}</span>
+        <div class="db-row db-row-table" ${attrs('table', c, db, tb.name)} title="${esc(tb.comment || tb.name)}${tb.rowsEstimate != null ? ` · ${esc(t('tree.rowsEstimate', { count: tb.rowsEstimate }))}` : ''}">
+          ${caret(k)}<span class="db-row-icon">${tb.view ? '👁' : '▦'}</span><span class="db-row-label">${esc(tb.name)}</span>
         </div>
         ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.columns.map(col => `
           <div class="db-row db-row-col" title="${esc(col.comment || '')}">
@@ -169,7 +170,7 @@ export default {
 
     function renderActiveDb() {
       const db = activeDb.get(activeId);
-      $(ctx.root, 'active-db').innerHTML = db ? `🛢️ ${esc(db)}` : '<span class="db-muted">nessun database: scegline uno dalla sidebar</span>';
+      $(ctx.root, 'active-db').innerHTML = db ? `🛢️ ${esc(db)}` : `<span class="db-muted">${esc(t('toolbar.noDb'))}</span>`;
     }
 
     // Testo nell'editor ed esecuzione (le modifiche passano comunque dalla conferma)
@@ -180,7 +181,8 @@ export default {
     }
 
     // ---- anteprima dati (griglia paginata con ricerca, filtri e ordinamento) ----
-    const FILTER_LABELS = { eq: '=', ne: '≠', contains: 'contiene', starts: 'inizia con', lt: '<', gt: '>', null: 'è NULL', notnull: 'non è NULL' };
+    const FILTER_OPS = ['eq', 'ne', 'contains', 'starts', 'lt', 'gt', 'null', 'notnull'];
+    const filterLabel = op => t(`filter.${op}`);
     let grid = null; // { connId, db, table, page, pageSize, search, filters, sort, data }
 
     function openGrid(c, db, table) {
@@ -218,31 +220,31 @@ export default {
       el.innerHTML = `
         <div class="db-grid-bar">
           <strong class="db-grid-title">${esc(grid.db)}.${esc(grid.table)}</strong>
-          <input class="form-input db-grid-search" data-grid="search" placeholder="Cerca in tutte le colonne…" value="${esc(grid.search)}">
-          <button class="btn btn-ghost btn-sm" data-grid="add-filter">+ Filtro</button>
-          ${canInsert ? '<button class="btn btn-ghost btn-sm" data-grid="insert-dialog">+ Riga</button>' : ''}
-          <button class="btn btn-ghost btn-sm" data-grid="export">⤓ Esporta</button>
-          ${editable ? `<button class="btn btn-danger btn-sm" data-grid="delete-selected" ${grid.selected.size ? '' : 'hidden'}>🗑 Elimina selezionate (${grid.selected.size})</button>` : ''}
-          ${!data.primaryKey.length ? '<span class="db-badge db-badge-warn" title="Senza chiave primaria le righe non si possono identificare">senza chiave primaria: modifica non disponibile</span>' : ''}
-          ${grid.filters.map((f, i) => `<span class="db-chip">${esc(f.column)} ${esc(FILTER_LABELS[f.op])}${f.op === 'null' || f.op === 'notnull' ? '' : ` <b>${esc(f.value)}</b>`}<button data-grid="remove-filter" data-i="${i}" title="Rimuovi">✕</button></span>`).join('')}
+          <input class="form-input db-grid-search" data-grid="search" placeholder="${esc(t('grid.search'))}" value="${esc(grid.search)}">
+          <button class="btn btn-ghost btn-sm" data-grid="add-filter">${esc(t('grid.addFilter'))}</button>
+          ${canInsert ? `<button class="btn btn-ghost btn-sm" data-grid="insert-dialog">${esc(t('grid.addRow'))}</button>` : ''}
+          <button class="btn btn-ghost btn-sm" data-grid="export">${esc(t('grid.export'))}</button>
+          ${editable ? `<button class="btn btn-danger btn-sm" data-grid="delete-selected" ${grid.selected.size ? '' : 'hidden'}>${esc(t('grid.deleteSelected', { count: grid.selected.size }))}</button>` : ''}
+          ${!data.primaryKey.length ? `<span class="db-badge db-badge-warn" title="${esc(t('grid.noPkTitle'))}">${esc(t('grid.noPk'))}</span>` : ''}
+          ${grid.filters.map((f, i) => `<span class="db-chip">${esc(f.column)} ${esc(filterLabel(f.op))}${f.op === 'null' || f.op === 'notnull' ? '' : ` <b>${esc(f.value)}</b>`}<button data-grid="remove-filter" data-i="${i}" title="${esc(t('grid.removeFilter'))}">✕</button></span>`).join('')}
           <div class="db-pager">
             <button class="btn btn-ghost btn-sm" data-grid="page" data-p="1" ${grid.page <= 1 ? 'disabled' : ''}>«</button>
             <button class="btn btn-ghost btn-sm" data-grid="page" data-p="${grid.page - 1}" ${grid.page <= 1 ? 'disabled' : ''}>‹</button>
-            <span>Pagina ${esc(grid.page)} di ${esc(pages)} · ${esc(data.total)} righe</span>
+            <span>${esc(t('grid.page', { page: grid.page, pages }))} · ${esc(t('grid.rows', { count: data.total }))}</span>
             <button class="btn btn-ghost btn-sm" data-grid="page" data-p="${grid.page + 1}" ${grid.page >= pages ? 'disabled' : ''}>›</button>
             <button class="btn btn-ghost btn-sm" data-grid="page" data-p="${pages}" ${grid.page >= pages ? 'disabled' : ''}>»</button>
             <select class="form-input db-select db-page-size" data-grid="page-size">${data.pageSizes.map(n => `<option ${n === data.pageSize ? 'selected' : ''}>${n}</option>`).join('')}</select>
           </div>
         </div>
         <div class="db-table-wrap"><table class="data-table db-table">
-          <thead><tr>${editable ? `<th class="db-row-actions"><input type="checkbox" data-grid="select-all" title="Seleziona tutte le righe della pagina" ${data.rows.length && grid.selected.size === data.rows.length ? 'checked' : ''}></th>` : ''}${data.columns.map(col => `<th data-grid="sort" data-col="${esc(col.name)}" title="${esc(col.type)}${col.key === 'PRI' ? ' · chiave primaria' : ''}">${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)}${sort?.column === col.name ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
+          <thead><tr>${editable ? `<th class="db-row-actions"><input type="checkbox" data-grid="select-all" title="${esc(t('grid.selectAll'))}" ${data.rows.length && grid.selected.size === data.rows.length ? 'checked' : ''}></th>` : ''}${data.columns.map(col => `<th data-grid="sort" data-col="${esc(col.name)}" title="${esc(col.type)}${col.key === 'PRI' ? ` · ${esc(t('grid.primaryKey'))}` : ''}">${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)}${sort?.column === col.name ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
           <tbody>${data.rows.map((row, r) => `<tr data-r="${r}" class="${grid.selected.has(r) ? 'db-selected' : ''}">${editable ? `<td class="db-row-actions">
-              <input type="checkbox" data-grid="select" data-r="${r}" ${grid.selected.has(r) ? 'checked' : ''}><button data-grid="edit-dialog" data-r="${r}" title="Modifica">✏️</button><button data-grid="delete-row" data-r="${r}" title="Elimina">🗑</button></td>` : ''}${row.map((v, c) =>
+              <input type="checkbox" data-grid="select" data-r="${r}" ${grid.selected.has(r) ? 'checked' : ''}><button data-grid="edit-dialog" data-r="${r}" title="${esc(t('grid.edit'))}">✏️</button><button data-grid="delete-row" data-r="${r}" title="${esc(t('grid.delete'))}">🗑</button></td>` : ''}${row.map((v, c) =>
               `<td data-c="${c}" class="${v === null ? 'db-null' : ''}${editable ? ' db-editable' : ''}" title="${esc(v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`).join('')}</tr>`).join('')
-            || `<tr><td class="db-muted" colspan="${data.columns.length + (editable ? 1 : 0)}">Nessuna riga</td></tr>`}
-            ${canInsert ? `<tr class="db-new-row">${editable ? '<td class="db-row-actions"><button data-grid="insert-inline" title="Inserisci la riga">＋</button></td>' : ''}${data.columns.map(col =>
-              `<td><input class="db-cell-input" data-new="${esc(col.name)}" placeholder="${isAuto(col) ? 'auto' : esc(col.default ?? (col.nullable ? 'NULL' : ''))}"></td>`).join('')}
-              ${editable ? '' : '<td><button class="btn btn-ghost btn-sm" data-grid="insert-inline">＋ Inserisci</button></td>'}</tr>` : ''}</tbody>
+            || `<tr><td class="db-muted" colspan="${data.columns.length + (editable ? 1 : 0)}">${esc(t('grid.noRows'))}</td></tr>`}
+            ${canInsert ? `<tr class="db-new-row">${editable ? `<td class="db-row-actions"><button data-grid="insert-inline" title="${esc(t('grid.insertTitle'))}">＋</button></td>` : ''}${data.columns.map(col =>
+              `<td><input class="db-cell-input" data-new="${esc(col.name)}" placeholder="${isAuto(col) ? esc(t('grid.auto')) : esc(col.default ?? (col.nullable ? 'NULL' : ''))}"></td>`).join('')}
+              ${editable ? '' : `<td><button class="btn btn-ghost btn-sm" data-grid="insert-inline">${esc(t('grid.insert'))}</button></td>`}</tr>` : ''}</tbody>
         </table></div>`;
       if (hadFocus) { const i = el.querySelector('[data-grid="search"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
     }
@@ -253,8 +255,8 @@ export default {
     const newColumn = (over = {}) => ({ name: '', type: 'VARCHAR', length: 255, nullable: true, default: { kind: 'none' }, ...over });
 
     async function openDesigner(c, db) {
-      if (c.readOnly) { toast('Connessione in sola lettura', 'error'); return; }
-      if (!db) { toast('Scegli prima un database dalla sidebar', 'error'); return; }
+      if (c.readOnly) { toast(t('designer.readOnly'), 'error'); return; }
+      if (!db) { toast(t('designer.chooseDb'), 'error'); return; }
       ddlInfo = ddlInfo || (await ctx.api.get('/info')).ddl;
       grid = null;
       designer = {
@@ -274,20 +276,20 @@ export default {
     function renderDesigner(sqlPreview) {
       const { def, db } = designer;
       const colNames = def.columns.map(c => c.name).filter(Boolean);
-      const tables = (cache.get(nodeKey('d', designer.connId, db)) || []).map?.(t => t.name) || [];
+      const tables = (cache.get(nodeKey('d', designer.connId, db)) || []).map?.(tb => tb.name) || [];
       $(ctx.root, 'results').innerHTML = `
         <div class="db-designer">
           <div class="db-designer-head">
-            <strong>Nuova tabella in ${esc(db)}</strong>
-            ${txt('name', def.name, 'placeholder="nome_tabella" data-scope="table"')}
+            <strong>${esc(t('designer.title', { db }))}</strong>
+            ${txt('name', def.name, `placeholder="${esc(t('designer.tableName'))}" data-scope="table"`)}
             ${sel('engine', ddlInfo.engines, def.engine, 'data-scope="table"')}
-            ${txt('charset', def.charset, 'placeholder="charset" data-scope="table" style="width:100px"')}
-            ${txt('comment', def.comment, 'placeholder="commento" data-scope="table"')}
+            ${txt('charset', def.charset, `placeholder="${esc(t('designer.charset'))}" data-scope="table" style="width:100px"`)}
+            ${txt('comment', def.comment, `placeholder="${esc(t('designer.comment'))}" data-scope="table"`)}
           </div>
-          <h4>Colonne <button class="btn btn-ghost btn-sm" data-dz-act="add-col">+ Colonna</button></h4>
-          <table class="data-table db-dz-table"><thead><tr><th>Nome</th><th>Tipo</th><th>Lungh./prec.</th><th>Scala</th><th>Valori ENUM</th><th>UNSIGNED</th><th>NULL</th><th>Default</th><th>AI</th><th>PK</th><th>Commento</th><th></th></tr></thead>
+          <h4>${esc(t('designer.columns'))} <button class="btn btn-ghost btn-sm" data-dz-act="add-col">${esc(t('designer.addColumn'))}</button></h4>
+          <table class="data-table db-dz-table"><thead><tr>${['name', 'type', 'length', 'scale', 'values', 'unsigned', 'null', 'default', 'ai', 'pk', 'comment'].map(k => `<th>${esc(t(`designer.col.${k}`))}</th>`).join('')}<th></th></tr></thead>
           <tbody>${def.columns.map((c, i) => `<tr data-col="${i}">
-            <td>${txt('name', c.name, 'placeholder="colonna"')}</td>
+            <td>${txt('name', c.name, `placeholder="${esc(t('designer.columnPlaceholder'))}"`)}</td>
             <td>${sel('type', ddlInfo.types, c.type)}</td>
             <td>${txt('length', c.length, 'style="width:70px"')}</td>
             <td>${c.type === 'DECIMAL' ? txt('scale', c.scale ?? 0, 'style="width:50px"') : ''}</td>
@@ -298,26 +300,26 @@ export default {
             <td>${chk('autoIncrement', c.autoIncrement)}</td>
             <td>${chk('pk', c.pk)}</td>
             <td>${txt('comment', c.comment)}</td>
-            <td><button class="btn btn-ghost btn-sm" data-dz-act="del-col" title="Rimuovi">✕</button></td>
+            <td><button class="btn btn-ghost btn-sm" data-dz-act="del-col" title="${esc(t('designer.remove'))}">✕</button></td>
           </tr>`).join('')}</tbody></table>
-          <h4>Indici <button class="btn btn-ghost btn-sm" data-dz-act="add-index">+ Indice</button></h4>
+          <h4>${esc(t('designer.indexes'))} <button class="btn btn-ghost btn-sm" data-dz-act="add-index">${esc(t('designer.addIndex'))}</button></h4>
           ${def.indexes.map((ix, i) => `<div class="db-dz-line" data-index="${i}">
-            ${txt('name', ix.name, 'placeholder="nome indice (opzionale)"')}
-            ${txt('columns', ix.columns.join(','), `placeholder="colonne: ${esc(colNames.join(','))}"`)}
-            <label class="db-check">${chk('unique', ix.unique)} univoco</label>
-            <button class="btn btn-ghost btn-sm" data-dz-act="del-index">✕</button></div>`).join('') || '<p class="db-muted db-pad">Nessun indice</p>'}
-          <h4>Chiavi esterne <button class="btn btn-ghost btn-sm" data-dz-act="add-fk">+ Chiave esterna</button></h4>
+            ${txt('name', ix.name, `placeholder="${esc(t('designer.indexName'))}"`)}
+            ${txt('columns', ix.columns.join(','), `placeholder="${esc(t('designer.indexColumns', { columns: colNames.join(',') }))}"`)}
+            <label class="db-check">${chk('unique', ix.unique)} ${esc(t('designer.unique'))}</label>
+            <button class="btn btn-ghost btn-sm" data-dz-act="del-index">✕</button></div>`).join('') || `<p class="db-muted db-pad">${esc(t('designer.noIndexes'))}</p>`}
+          <h4>${esc(t('designer.foreignKeys'))} <button class="btn btn-ghost btn-sm" data-dz-act="add-fk">${esc(t('designer.addFk'))}</button></h4>
           ${def.foreignKeys.map((fk, i) => `<div class="db-dz-line" data-fk="${i}">
-            ${txt('columns', fk.columns.join(','), 'placeholder="colonne"')} →
-            ${tables.length ? sel('refTable', ['', ...tables], fk.refTable) : txt('refTable', fk.refTable, 'placeholder="tabella"')}
-            ${txt('refColumns', fk.refColumns.join(','), 'placeholder="colonne riferite"')}
+            ${txt('columns', fk.columns.join(','), `placeholder="${esc(t('designer.fkColumns'))}"`)} →
+            ${tables.length ? sel('refTable', ['', ...tables], fk.refTable) : txt('refTable', fk.refTable, `placeholder="${esc(t('designer.fkTable'))}"`)}
+            ${txt('refColumns', fk.refColumns.join(','), `placeholder="${esc(t('designer.fkRefColumns'))}"`)}
             ON DELETE ${sel('onDelete', ['', ...ddlInfo.fkActions], fk.onDelete || '')}
             ON UPDATE ${sel('onUpdate', ['', ...ddlInfo.fkActions], fk.onUpdate || '')}
-            <button class="btn btn-ghost btn-sm" data-dz-act="del-fk">✕</button></div>`).join('') || '<p class="db-muted db-pad">Nessuna chiave esterna</p>'}
+            <button class="btn btn-ghost btn-sm" data-dz-act="del-fk">✕</button></div>`).join('') || `<p class="db-muted db-pad">${esc(t('designer.noFks'))}</p>`}
           <div class="db-dz-actions">
-            <button class="btn btn-ghost btn-sm" data-dz-act="preview">Anteprima SQL</button>
-            <button class="btn btn-primary btn-sm" data-dz-act="create">Crea tabella</button>
-            <button class="btn btn-ghost btn-sm" data-dz-act="cancel">Annulla</button>
+            <button class="btn btn-ghost btn-sm" data-dz-act="preview">${esc(t('designer.preview'))}</button>
+            <button class="btn btn-primary btn-sm" data-dz-act="create">${esc(t('designer.create'))}</button>
+            <button class="btn btn-ghost btn-sm" data-dz-act="cancel">${esc(t('core.action.cancel'))}</button>
           </div>
           ${sqlPreview ? `<pre class="db-confirm-sql">${highlightSql(sqlPreview, esc)}</pre>` : ''}
         </div>`;
@@ -374,7 +376,7 @@ export default {
         askConfirmation(data, async token => {
           try {
             await ctx.api.post(url, { definition, confirm: token });
-            toast(`Tabella ${definition.name} creata`, 'success');
+            toast(t('designer.created', { name: definition.name }), 'success');
             const { db } = designer;
             designer = null;
             cache.delete(nodeKey('d', c.id, db));
@@ -413,11 +415,11 @@ export default {
       try {
         const r = await ctx.api.post(`/connections/${encodeURIComponent(c.id)}/exports`, { format, source });
         window.location.href = ctx.api.url(`/connections/${encodeURIComponent(c.id)}/exports/${encodeURIComponent(r.id)}`);
-        toast(`Export ${format.toUpperCase()}: ${r.filename}`, 'success');
+        toast(t('export.done', { format: format.toUpperCase(), file: r.filename }), 'success');
       } catch (e) { toast(e.message, 'error'); }
     }
 
-    const FORMATS = [['csv', 'CSV'], ['json', 'JSON'], ['sql', 'SQL (INSERT + CREATE TABLE)']];
+    const formats = () => [['csv', 'CSV'], ['json', 'JSON'], ['sql', t('export.sqlLabel')]];
     function exportMenu(anchor, items) {
       const r = anchor.getBoundingClientRect();
       ctx.ui.contextMenu(r.left, r.bottom + 4, items);
@@ -427,16 +429,16 @@ export default {
       const filtered = withFilters && (grid.search || grid.filters.length);
       const src = all => ({ type: 'table', db, table, ...(all ? {} : { search: grid.search, filters: grid.filters, sort: grid.sort }) });
       exportMenu(anchor, [
-        ...FORMATS.map(([f, label]) => ({ icon: '⤓', label: `${label}${filtered ? ' — righe filtrate' : ''}`, action: () => startExport(c, f, src(!withFilters)) })),
-        ...(filtered ? ['separator', ...FORMATS.map(([f, label]) => ({ icon: '⤓', label: `${label} — tutta la tabella`, action: () => startExport(c, f, src(true)) }))] : []),
+        ...formats().map(([f, label]) => ({ icon: '⤓', label: filtered ? t('export.filtered', { format: label }) : label, action: () => startExport(c, f, src(!withFilters)) })),
+        ...(filtered ? ['separator', ...formats().map(([f, label]) => ({ icon: '⤓', label: t('export.whole', { format: label }), action: () => startExport(c, f, src(true)) }))] : []),
       ]);
     }
 
     function exportQuery(anchor) {
       const c = active();
       const sql = statement();
-      if (!c || !sql) { toast('Scrivi una SELECT nell\'editor', 'error'); return; }
-      exportMenu(anchor, FORMATS.map(([f, label]) => ({
+      if (!c || !sql) { toast(t('export.needSelect'), 'error'); return; }
+      exportMenu(anchor, formats().map(([f, label]) => ({
         icon: '⤓', label, action: () => startExport(c, f, { type: 'query', sql, database: activeDb.get(c.id) || null }),
       })));
     }
@@ -448,8 +450,8 @@ export default {
       const send = async confirm => {
         try {
           const r = await ctx.api.post(url, { op, key, values, keys, ...(confirm ? { confirm } : {}) });
-          const label = { insert: 'Riga inserita', update: 'Riga modificata', delete: 'Riga eliminata', 'delete-many': `${r.affectedRows} righe eliminate` }[op];
-          toast(r.affectedRows ? `${label}${r.insertId ? ` (id ${r.insertId})` : ''}` : 'Nessuna riga modificata (già uguale o non trovata)', r.affectedRows ? 'success' : 'info');
+          const label = op === 'delete-many' ? t('row.deletedMany', { count: r.affectedRows }) : t({ insert: 'row.inserted', update: 'row.updated', delete: 'row.deleted' }[op]);
+          toast(r.affectedRows ? `${label}${r.insertId ? ` ${t('row.insertId', { id: String(r.insertId) })}` : ''}` : t('row.unchanged'), r.affectedRows ? 'success' : 'info');
           loadGrid();
         } catch (e) { toast(e.message, 'error'); }
       };
@@ -468,7 +470,7 @@ export default {
       const col = grid.data.columns[c];
       const value = grid.data.rows[r][c];
       td.innerHTML = `<div class="db-cell-edit"><input class="db-cell-input" value="${esc(value ?? '')}" placeholder="${value === null ? 'NULL' : ''}">
-        ${col.nullable ? '<button title="Imposta NULL" data-null>NULL</button>' : ''}</div>`;
+        ${col.nullable ? `<button title="${esc(t('grid.setNull'))}" data-null>NULL</button>` : ''}</div>`;
       const input = td.querySelector('input');
       input.focus();
       input.select();
@@ -498,28 +500,28 @@ export default {
         const id = `f_row_${c}`;
         const input = LONG_TYPES.test(col.dataType)
           ? `<textarea class="form-input" id="${id}" rows="3">${esc(v ?? '')}</textarea>`
-          : `<input class="form-input" id="${id}" value="${esc(v ?? '')}" placeholder="${!editing && isAuto(col) ? 'automatico' : esc(col.type)}">`;
+          : `<input class="form-input" id="${id}" value="${esc(v ?? '')}" placeholder="${!editing && isAuto(col) ? esc(t('row.autoPlaceholder')) : esc(col.type)}">`;
         return `<div class="form-row">
           <label>${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)} <span class="db-muted">${esc(col.type)}</span></label>
           ${input}
           ${col.nullable ? `<label class="db-check"><input type="checkbox" id="${id}_null" ${editing && v === null ? 'checked' : ''}> NULL</label>` : ''}
         </div>`;
       }).join('');
-      openModal(editing ? 'Modifica riga' : 'Nuova riga', `<div class="db-row-form">${fields}</div>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
-         <button class="btn btn-primary" onclick="Ext['db-client'].saveRowDialog(${editing ? r : 'null'})">${editing ? 'Salva' : 'Inserisci'}</button>`);
+      openModal(t(editing ? 'row.editTitle' : 'row.newTitle'), `<div class="db-row-form">${fields}</div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" onclick="Ext['db-client'].saveRowDialog(${editing ? r : 'null'})">${esc(editing ? t('core.action.save') : t('row.insert'))}</button>`);
     }
 
     function addFilter() {
       const cols = grid.data.columns;
-      openModal('Aggiungi filtro', `
+      openModal(t('filterDialog.title'), `
         <div class="form-grid">
-          <div class="form-row"><label>Colonna</label><select class="form-input" id="f_flt_col">${cols.map(c => `<option>${esc(c.name)}</option>`).join('')}</select></div>
-          <div class="form-row"><label>Condizione</label><select class="form-input" id="f_flt_op" onchange="document.getElementById('f_flt_val_row').hidden=['null','notnull'].includes(this.value)">
-            ${Object.entries(FILTER_LABELS).map(([op, l]) => `<option value="${op}">${esc(l)}</option>`).join('')}</select></div>
+          <div class="form-row"><label>${esc(t('filterDialog.column'))}</label><select class="form-input" id="f_flt_col">${cols.map(c => `<option>${esc(c.name)}</option>`).join('')}</select></div>
+          <div class="form-row"><label>${esc(t('filterDialog.condition'))}</label><select class="form-input" id="f_flt_op" onchange="document.getElementById('f_flt_val_row').hidden=['null','notnull'].includes(this.value)">
+            ${FILTER_OPS.map(op => `<option value="${op}">${esc(filterLabel(op))}</option>`).join('')}</select></div>
         </div>
-        <div class="form-row" id="f_flt_val_row"><label>Valore</label><input class="form-input" id="f_flt_val"></div>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button><button class="btn btn-primary" onclick="Ext['db-client'].applyFilter()">Applica</button>`);
+        <div class="form-row" id="f_flt_val_row"><label>${esc(t('filterDialog.value'))}</label><input class="form-input" id="f_flt_val"></div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button><button class="btn btn-primary" onclick="Ext['db-client'].applyFilter()">${esc(t('filterDialog.apply'))}</button>`);
     }
 
     let searchTimer = null;
@@ -543,23 +545,23 @@ export default {
       if (e.target.dataset.grid === 'page-size') { grid.pageSize = Number(e.target.value); grid.page = 1; loadGrid(); }
     });
     $(ctx.root, 'results').addEventListener('click', e => {
-      const t = e.target.closest('[data-grid]');
-      if (!t || !grid) return;
-      const a = t.dataset.grid;
-      if (a === 'page') { grid.page = Number(t.dataset.p); loadGrid(); }
+      const el = e.target.closest('[data-grid]');
+      if (!el || !grid) return;
+      const a = el.dataset.grid;
+      if (a === 'page') { grid.page = Number(el.dataset.p); loadGrid(); }
       else if (a === 'sort') {
-        const col = t.dataset.col;
+        const col = el.dataset.col;
         grid.sort = grid.sort?.column !== col ? { column: col, dir: 'asc' } : grid.sort.dir === 'asc' ? { column: col, dir: 'desc' } : null;
         grid.page = 1;
         loadGrid();
       } else if (a === 'add-filter') addFilter();
       else if (a === 'insert-dialog') rowDialog(null);
-      else if (a === 'export') exportTableMenu(t, connections.find(x => x.id === grid.connId), grid.db, grid.table, true);
-      else if (a === 'edit-dialog') rowDialog(Number(t.dataset.r));
-      else if (a === 'delete-row') saveRow('delete', keyOf(grid.data.rows[Number(t.dataset.r)]));
+      else if (a === 'export') exportTableMenu(el, connections.find(x => x.id === grid.connId), grid.db, grid.table, true);
+      else if (a === 'edit-dialog') rowDialog(Number(el.dataset.r));
+      else if (a === 'delete-row') saveRow('delete', keyOf(grid.data.rows[Number(el.dataset.r)]));
       else if (a === 'select' || a === 'select-all') {
-        if (a === 'select') { const r = Number(t.dataset.r); grid.selected.has(r) ? grid.selected.delete(r) : grid.selected.add(r); }
-        else grid.selected = t.checked ? new Set(grid.data.rows.map((_, i) => i)) : new Set();
+        if (a === 'select') { const r = Number(el.dataset.r); grid.selected.has(r) ? grid.selected.delete(r) : grid.selected.add(r); }
+        else grid.selected = el.checked ? new Set(grid.data.rows.map((_, i) => i)) : new Set();
         renderGrid();
       } else if (a === 'delete-selected' && grid.selected.size) {
         const keys = [...grid.selected].sort((x, y) => x - y).map(r => keyOf(grid.data.rows[r]));
@@ -570,56 +572,58 @@ export default {
         for (const input of $(ctx.root, 'results').querySelectorAll('[data-new]')) if (input.value !== '') values[input.dataset.new] = input.value;
         saveRow('insert', null, values);
       }
-      else if (a === 'remove-filter') { grid.filters.splice(Number(t.dataset.i), 1); grid.page = 1; loadGrid(); }
+      else if (a === 'remove-filter') { grid.filters.splice(Number(el.dataset.i), 1); grid.page = 1; loadGrid(); }
     });
 
     function tableMenu(ev, c, db, name) {
-      const t = (cache.get(nodeKey('d', c.id, db)) || []).find?.(x => x.name === name);
+      const tb = (cache.get(nodeKey('d', c.id, db)) || []).find?.(x => x.name === name);
       const full = `${quoteId(db)}.${quoteId(name)}`;
       const ro = c.readOnly;
       ctx.ui.contextMenu(ev.clientX, ev.clientY, [
-        { icon: '▤', label: 'Apri dati', action: () => openGrid(c, db, name) },
-        { icon: '▶', label: 'Prime 100 righe nell\'editor', action: () => runSql(`SELECT * FROM ${full} LIMIT 100;`) },
-        { icon: '#', label: 'Conta righe', action: () => runSql(`SELECT COUNT(*) AS righe FROM ${full};`) },
-        { icon: '▦', label: 'Struttura', action: () => showStructure(c, db, name) },
-        ...FORMATS.map(([f, label]) => ({ icon: '⤓', label: `Esporta ${label}`, action: () => startExport(c, f, { type: 'table', db, table: name }) })),
-        { icon: '⌘', label: t?.view ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE', action: () => runSql(`SHOW CREATE ${t?.view ? 'VIEW' : 'TABLE'} ${full};`) },
+        { icon: '▤', label: t('menu.openData'), action: () => openGrid(c, db, name) },
+        { icon: '▶', label: t('menu.first100'), action: () => runSql(`SELECT * FROM ${full} LIMIT 100;`) },
+        { icon: '#', label: t('menu.count'), action: () => runSql(`SELECT COUNT(*) AS ${quoteId(t('menu.countAlias'))} FROM ${full};`) },
+        { icon: '▦', label: t('menu.structure'), action: () => showStructure(c, db, name) },
+        ...formats().map(([f, label]) => ({ icon: '⤓', label: t('menu.export', { format: label }), action: () => startExport(c, f, { type: 'table', db, table: name }) })),
+        { icon: '⌘', label: tb?.view ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE', action: () => runSql(`SHOW CREATE ${tb?.view ? 'VIEW' : 'TABLE'} ${full};`) },
         'separator',
-        { icon: '↳', label: 'Inserisci il nome nell\'editor', action: () => {
+        { icon: '↳', label: t('menu.insertName'), action: () => {
           sqlInput.setRangeText(full, sqlInput.selectionStart, sqlInput.selectionEnd, 'end');
           sqlInput.dispatchEvent(new Event('input'));
           sqlInput.focus();
         } },
-        { icon: '⧉', label: 'Copia il nome', action: () => navigator.clipboard?.writeText(name).then(() => toast('Nome copiato')) },
+        { icon: '⧉', label: t('menu.copyName'), action: () => navigator.clipboard?.writeText(name).then(() => toast(t('menu.copied'))) },
         'separator',
-        ...(t?.view ? [] : [{ icon: '⌫', label: 'Svuota tabella (TRUNCATE)…', danger: true, disabled: ro, action: () => runSql(`TRUNCATE TABLE ${full};`) }]),
-        { icon: '✕', label: t?.view ? 'Elimina vista (DROP)…' : 'Elimina tabella (DROP)…', danger: true, disabled: ro, action: () => runSql(`DROP ${t?.view ? 'VIEW' : 'TABLE'} ${full};`) },
+        ...(tb?.view ? [] : [{ icon: '⌫', label: t('menu.truncate'), danger: true, disabled: ro, action: () => runSql(`TRUNCATE TABLE ${full};`) }]),
+        { icon: '✕', label: t(tb?.view ? 'menu.dropView' : 'menu.dropTable'), danger: true, disabled: ro, action: () => runSql(`DROP ${tb?.view ? 'VIEW' : 'TABLE'} ${full};`) },
       ]);
     }
 
     async function showStructure(c, db, name) {
       grid = null;
       const el = $(ctx.root, 'results');
-      el.innerHTML = '<div class="db-muted db-pad">Caricamento struttura…</div>';
+      el.innerHTML = `<div class="db-muted db-pad">${esc(t('structure.loading'))}</div>`;
       try {
         const info = await ctx.api.get(tableUrl(c, db, name));
-        const table = (head, rows) => `<table class="data-table db-table"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+        const table = (head, rows) => `<table class="data-table db-table"><thead><tr>${head.map(h => `<th>${esc(t(`structure.${h}`))}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+        const yesNo = v => esc(t(v ? 'structure.yes' : 'structure.no'));
+        const none = `<p class="db-muted db-pad">${esc(t('structure.none'))}</p>`;
         el.innerHTML = `
-          <div class="db-result-meta">Struttura di ${esc(db)}.${esc(name)}</div>
+          <div class="db-result-meta">${esc(t('structure.title', { name: `${db}.${name}` }))}</div>
           <div class="db-table-wrap db-structure">
-            <h4>Colonne</h4>
-            ${table(['Nome', 'Tipo', 'NULL', 'Chiave', 'Default', 'Extra', 'Commento'], info.columns.map(col => `<tr>
-              <td>${esc(col.name)}</td><td>${esc(col.type)}</td><td>${col.nullable ? 'sì' : 'no'}</td><td>${esc(col.key)}</td>
+            <h4>${esc(t('structure.columns'))}</h4>
+            ${table(['name', 'type', 'null', 'key', 'default', 'extra', 'comment'], info.columns.map(col => `<tr>
+              <td>${esc(col.name)}</td><td>${esc(col.type)}</td><td>${yesNo(col.nullable)}</td><td>${esc(col.key)}</td>
               <td>${col.default === null ? '<span class="db-null">NULL</span>' : esc(col.default)}</td><td>${esc(col.extra)}</td><td>${esc(col.comment)}</td></tr>`))}
-            <h4>Indici</h4>
-            ${info.indexes.length ? table(['Nome', 'Colonne', 'Univoco'], info.indexes.map(i => `<tr><td>${esc(i.name)}</td><td>${esc(i.columns.join(', '))}</td><td>${i.unique ? 'sì' : 'no'}</td></tr>`)) : '<p class="db-muted db-pad">Nessuno</p>'}
-            <h4>Chiavi esterne</h4>
-            ${info.foreignKeys.length ? table(['Nome', 'Colonne', 'Riferimento'], info.foreignKeys.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.columns.join(', '))}</td><td>${esc(f.refDatabase)}.${esc(f.refTable)} (${esc(f.refColumns.join(', '))})</td></tr>`)) : '<p class="db-muted db-pad">Nessuna</p>'}
+            <h4>${esc(t('structure.indexes'))}</h4>
+            ${info.indexes.length ? table(['name', 'indexColumns', 'unique'], info.indexes.map(i => `<tr><td>${esc(i.name)}</td><td>${esc(i.columns.join(', '))}</td><td>${yesNo(i.unique)}</td></tr>`)) : none}
+            <h4>${esc(t('structure.foreignKeys'))}</h4>
+            ${info.foreignKeys.length ? table(['name', 'indexColumns', 'reference'], info.foreignKeys.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.columns.join(', '))}</td><td>${esc(f.refDatabase)}.${esc(f.refTable)} (${esc(f.refColumns.join(', '))})</td></tr>`)) : none}
           </div>`;
       } catch (e) { renderError(e.message); }
     }
 
-    const target = c => c.tunnel ? `tunnel ${c.tunnel}` : `${c.host}:${c.port}`;
+    const target = c => c.tunnel ? t('conn.tunnel', { name: c.tunnel }) : `${c.host}:${c.port}`;
 
     function renderWorkspace() {
       const c = active();
@@ -633,12 +637,12 @@ export default {
       $(ctx.root, 'conn-header').innerHTML = `
         <h3>🗄️ ${esc(c.label)}</h3>
         <span class="db-conn-meta">${esc(c.user)}@${esc(target(c))}${c.database ? ` / ${esc(c.database)}` : ''}</span>
-        ${c.readOnly ? '<span class="db-badge">sola lettura</span>' : ''}
-        ${c.hasPassword ? '' : '<span class="db-badge db-badge-warn">senza password</span>'}
+        ${c.readOnly ? `<span class="db-badge">${esc(t('conn.readOnly'))}</span>` : ''}
+        ${c.hasPassword ? '' : `<span class="db-badge db-badge-warn">${esc(t('conn.noPassword'))}</span>`}
         <div class="db-conn-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].testConnection(${js(c.id)})">⚡ Prova</button>
-          <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].editConnection(${js(c.id)})">✏️ Modifica</button>
-          <button class="btn btn-ghost btn-sm db-danger" onclick="Ext['db-client'].deleteConnection(${js(c.id)})">🗑</button>
+          <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].testConnection(${js(c.id)})">${esc(t('conn.test'))}</button>
+          <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].editConnection(${js(c.id)})">${esc(t('conn.edit'))}</button>
+          <button class="btn btn-ghost btn-sm db-danger" onclick="Ext['db-client'].deleteConnection(${js(c.id)})" title="${esc(t('core.action.delete'))}">🗑</button>
         </div>`;
     }
 
@@ -649,29 +653,29 @@ export default {
       const opt = (value, label, selected) => `<option value="${esc(value)}" ${selected ? 'selected' : ''}>${esc(label)}</option>`;
       return `
         <div class="form-grid">
-          <div class="form-row"><label>ID (non modificabile)</label><input class="form-input" id="f_db_id" value="${esc(c.id || '')}" placeholder="es. app_locale" ${c.id ? 'disabled' : ''}></div>
-          <div class="form-row"><label>Nome</label><input class="form-input" id="f_db_label" value="${esc(c.label || '')}" placeholder="es. App — locale"></div>
+          <div class="form-row"><label>${esc(t('form.id'))}</label><input class="form-input" id="f_db_id" value="${esc(c.id || '')}" placeholder="${esc(t('form.idPlaceholder'))}" ${c.id ? 'disabled' : ''}></div>
+          <div class="form-row"><label>${esc(t('form.name'))}</label><input class="form-input" id="f_db_label" value="${esc(c.label || '')}" placeholder="${esc(t('form.namePlaceholder'))}"></div>
         </div>
-        ${tunnelsAvailable ? `<div class="form-row"><label>Collegamento</label>
+        ${tunnelsAvailable ? `<div class="form-row"><label>${esc(t('form.link'))}</label>
           <select class="form-input" id="f_db_tunnel" onchange="document.getElementById('f_db_direct').hidden=!!this.value">
-            ${opt('', 'Diretto (host e porta)', !c.tunnel)}
-            ${tunnelServers.map(s => opt(s.key, `Tunnel SSH: ${s.label} (→ ${s.remote})`, c.tunnel === s.key)).join('')}
+            ${opt('', t('form.direct'), !c.tunnel)}
+            ${tunnelServers.map(s => opt(s.key, t('form.tunnel', { name: s.label, remote: s.remote }), c.tunnel === s.key)).join('')}
           </select></div>` : ''}
         <div class="form-grid" id="f_db_direct" ${c.tunnel ? 'hidden' : ''}>
-          <div class="form-row"><label>Host</label><input class="form-input" id="f_db_host" value="${esc(c.host || '127.0.0.1')}"></div>
-          <div class="form-row"><label>Porta</label><input class="form-input" id="f_db_port" type="number" min="1" max="65535" value="${esc(c.port || 3306)}"></div>
+          <div class="form-row"><label>${esc(t('form.host'))}</label><input class="form-input" id="f_db_host" value="${esc(c.host || '127.0.0.1')}"></div>
+          <div class="form-row"><label>${esc(t('form.port'))}</label><input class="form-input" id="f_db_port" type="number" min="1" max="65535" value="${esc(c.port || 3306)}"></div>
         </div>
         <div class="form-grid">
-          <div class="form-row"><label>Utente</label><input class="form-input" id="f_db_user" value="${esc(c.user || '')}" autocomplete="off"></div>
-          <div class="form-row"><label>Password${c.id ? ' (vuota = invariata)' : ''}</label><input class="form-input" id="f_db_password" type="password" autocomplete="new-password" placeholder="${c.hasPassword ? '••••••••' : ''}"></div>
+          <div class="form-row"><label>${esc(t('form.user'))}</label><input class="form-input" id="f_db_user" value="${esc(c.user || '')}" autocomplete="off"></div>
+          <div class="form-row"><label>${esc(t(c.id ? 'form.passwordKeep' : 'form.password'))}</label><input class="form-input" id="f_db_password" type="password" autocomplete="new-password" placeholder="${c.hasPassword ? '••••••••' : ''}"></div>
         </div>
         <div class="form-grid">
-          <div class="form-row"><label>Database (opzionale)</label><input class="form-input" id="f_db_database" value="${esc(c.database || '')}"></div>
-          ${projectList.length ? `<div class="form-row"><label>Progetto (opzionale)</label><select class="form-input" id="f_db_project">
-            ${opt('', '— Nessuno —', !c.projectId)}${projectList.map(p => opt(p.id, p.label, c.projectId === p.id)).join('')}</select></div>` : ''}
+          <div class="form-row"><label>${esc(t('form.database'))}</label><input class="form-input" id="f_db_database" value="${esc(c.database || '')}"></div>
+          ${projectList.length ? `<div class="form-row"><label>${esc(t('form.project'))}</label><select class="form-input" id="f_db_project">
+            ${opt('', t('form.noProject'), !c.projectId)}${projectList.map(p => opt(p.id, p.label, c.projectId === p.id)).join('')}</select></div>` : ''}
         </div>
-        <label class="db-check"><input type="checkbox" id="f_db_readonly" ${c.readOnly ? 'checked' : ''}> Sola lettura (blocca qualsiasi modifica a dati e schema)</label>
-        ${c.hasPassword ? '<label class="db-check"><input type="checkbox" id="f_db_clear"> Rimuovi la password salvata</label>' : ''}`;
+        <label class="db-check"><input type="checkbox" id="f_db_readonly" ${c.readOnly ? 'checked' : ''}> ${esc(t('form.readOnly'))}</label>
+        ${c.hasPassword ? `<label class="db-check"><input type="checkbox" id="f_db_clear"> ${esc(t('form.clearPassword'))}</label>` : ''}`;
     }
 
     function formValues() {
@@ -725,13 +729,15 @@ export default {
     function showHistory() {
       const list = readHistory();
       const label = id => connections.find(c => c.id === id)?.label || id;
-      openModal('Storico della sessione', list.length ? `
+      // summary: { rows } o { affected } (le voci più vecchie hanno un testo già pronto)
+      const summary = s => typeof s === 'string' ? s : s?.rows != null ? t('history.rows', { count: s.rows }) : t('history.affected', { count: s?.affected ?? 0 });
+      openModal(t('history.title'), list.length ? `
         <div class="db-history">${list.map((h, i) => `
-          <button class="db-history-item" onclick="Ext['db-client'].useHistory(${i})" title="Carica nell'editor">
-            <span class="db-history-meta">${esc(new Date(h.at).toLocaleTimeString())} · ${esc(label(h.connId))}${h.db ? ` / ${esc(h.db)}` : ''} · ${h.ok ? `✓ ${esc(h.summary)}` : '✖ errore'}</span>
+          <button class="db-history-item" onclick="Ext['db-client'].useHistory(${i})" title="${esc(t('history.load'))}">
+            <span class="db-history-meta">${esc(fmt.date(h.at, { timeStyle: 'medium' }))} · ${esc(label(h.connId))}${h.db ? ` / ${esc(h.db)}` : ''} · ${h.ok ? `✓ ${esc(summary(h.summary))}` : esc(t('history.error'))}</span>
             <code>${esc(h.sql.length > 300 ? h.sql.slice(0, 300) + '…' : h.sql)}</code>
-          </button>`).join('')}</div>` : '<p class="db-muted">Nessuna query eseguita in questa sessione.</p>',
-        `${list.length ? `<button class="btn btn-ghost" onclick="Ext['db-client'].clearHistory()">Svuota</button>` : ''}<button class="btn btn-primary" onclick="UI.closeModal()">Chiudi</button>`);
+          </button>`).join('')}</div>` : `<p class="db-muted">${esc(t('history.none'))}</p>`,
+        `${list.length ? `<button class="btn btn-ghost" onclick="Ext['db-client'].clearHistory()">${esc(t('history.clear'))}</button>` : ''}<button class="btn btn-primary" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>`);
     }
 
     let running = false;
@@ -746,7 +752,7 @@ export default {
       running = true;
       grid = null;
       designer = null;
-      $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">Esecuzione...</div>';
+      $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('run.running'))}</div>`;
       try {
         const res = await fetch(ctx.api.url(`/connections/${encodeURIComponent(c.id)}/query`), {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -757,7 +763,7 @@ export default {
         else if (!res.ok) { renderError(data.error || `HTTP ${res.status}`, sql); record(false); }
         else {
           renderResult(data);
-          record(true, data.kind === 'rows' ? `${data.rowCount} righe` : `${data.affectedRows} righe interessate`);
+          record(true, data.kind === 'rows' ? { rows: data.rowCount } : { affected: data.affectedRows });
         }
       } catch (e) {
         renderError(e.message, sql);
@@ -771,12 +777,17 @@ export default {
     // onConfirm(token) rimanda la stessa richiesta con il token della conferma
     function askConfirmation(data, onConfirm, keepResults = false) {
       pendingConfirm = { data, onConfirm, keepResults };
-      if (!keepResults) $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">In attesa di conferma…</div>';
-      openModal('Conferma modifica', `
-        <p class="db-confirm-text">Questa istruzione <strong>${esc(data.verb || 'sconosciuta')}</strong> può modificare dati o schema${data.database ? ` del database <strong>${esc(data.database)}</strong>` : ''} su <strong>${esc(active()?.label || '')}</strong>.${data.reason ? ` <span class="db-muted">(${esc(data.reason)})</span>` : ''}</p>
+      if (!keepResults) $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('run.waiting'))}</div>`;
+      // parametri in grassetto: il testo tradotto è escapato, poi i segnaposto diventano <strong>
+      const strong = v => `\u0000${v}\u0001`;
+      const text = esc(t(data.database ? 'confirm.textDb' : 'confirm.text', {
+        verb: strong(data.verb || t('confirm.unknownVerb')), database: strong(data.database || ''), connection: strong(active()?.label || ''),
+      })).replace(/\u0000/g, '<strong>').replace(/\u0001/g, '</strong>');
+      openModal(t('confirm.title'), `
+        <p class="db-confirm-text">${text}${data.reason ? ` <span class="db-muted">(${esc(data.reason)})</span>` : ''}</p>
         <pre class="db-confirm-sql">${highlightSql(data.sql, esc)}</pre>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].cancelConfirm()">Annulla</button>
-         <button class="btn btn-danger" onclick="Ext['db-client'].confirmRun()">Esegui</button>`);
+        `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].cancelConfirm()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-danger" onclick="Ext['db-client'].confirmRun()">${esc(t('confirm.run'))}</button>`);
     }
 
     function renderError(message, sql) {
@@ -801,30 +812,30 @@ export default {
       if (!keepSort) resultSort = null;
       lastResult = data;
       if (data.kind === 'result') {
-        el.innerHTML = `<div class="db-ok">✓ ${esc(data.affectedRows)} righe interessate${data.insertId ? ` · insertId ${esc(data.insertId)}` : ''}${data.info ? ` · ${esc(data.info)}` : ''} <span class="db-muted">(${esc(data.ms)} ms)</span></div>`;
+        el.innerHTML = `<div class="db-ok">${esc(t('result.affected', { count: data.affectedRows }))}${data.insertId ? ` · insertId ${esc(data.insertId)}` : ''}${data.info ? ` · ${esc(data.info)}` : ''} <span class="db-muted">(${esc(t('result.ms', { ms: data.ms }))})</span></div>`;
         return;
       }
       el.innerHTML = `
-        <div class="db-result-meta">${esc(data.rowCount)} righe${data.truncated ? ` (limitate a ${esc(data.limit)})` : ''} · ${esc(data.ms)} ms</div>
+        <div class="db-result-meta">${esc(t('result.rows', { count: data.rowCount }))}${data.truncated ? ` ${esc(t('result.truncated', { limit: data.limit }))}` : ''} · ${esc(t('result.ms', { ms: data.ms }))}</div>
         <div class="db-table-wrap"><table class="data-table db-table">
-          <thead><tr>${data.columns.map((col, i) => `<th data-result-sort="${i}" title="${esc(col.type)} · clic per ordinare">${esc(col.name)}${resultSort?.col === i ? (resultSort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
+          <thead><tr>${data.columns.map((col, i) => `<th data-result-sort="${i}" title="${esc(t('result.sortTitle', { type: col.type }))}">${esc(col.name)}${resultSort?.col === i ? (resultSort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
           <tbody>${sortedRows(data).map(row => `<tr>${row.map(v => v === null ? '<td class="db-null">NULL</td>' : `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody>
         </table></div>`;
     }
 
     const modalButtons = (label, call) =>
-      `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button><button class="btn btn-primary" onclick="${esc(call)}">${esc(label)}</button>`;
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button><button class="btn btn-primary" onclick="${esc(call)}">${esc(label)}</button>`;
 
     function renderGate() {
       const creating = vault.state === 'uninitialized';
-      $(ctx.root, 'gate-title').textContent = creating ? 'Crea la master password' : 'Database bloccato';
+      $(ctx.root, 'gate-title').textContent = t(creating ? 'gate.createTitle' : 'gate.lockedTitle');
       $(ctx.root, 'gate-text').textContent = creating
-        ? `Le password dei database vengono cifrate con questa password. Non viene salvata da nessuna parte: se la dimentichi le password salvate andranno reinserite. Almeno ${vault.minLength} caratteri.`
-        : `Inserisci la master password per usare le connessioni. Si blocca da sola dopo ${vault.lockAfterMinutes} minuti di inattività.`;
-      $(ctx.root, 'gate-password').placeholder = 'Master password';
+        ? t('gate.createText', { min: vault.minLength })
+        : t('gate.unlockText', { count: vault.lockAfterMinutes });
+      $(ctx.root, 'gate-password').placeholder = t('gate.placeholder');
       $(ctx.root, 'gate-confirm').hidden = !creating;
       $(ctx.root, 'gate-forgot').hidden = creating;
-      $(ctx.root, 'gate-submit').textContent = creating ? 'Crea' : 'Sblocca';
+      $(ctx.root, 'gate-submit').textContent = t(creating ? 'gate.create' : 'gate.unlock');
       $(ctx.root, 'gate-error').textContent = '';
       setTimeout(() => $(ctx.root, 'gate-password').focus(), 0);
     }
@@ -834,8 +845,8 @@ export default {
       const pwd = $(ctx.root, 'gate-password').value;
       const error = $(ctx.root, 'gate-error');
       if (vault.state === 'uninitialized') {
-        if ([...pwd].length < vault.minLength) { error.textContent = `Almeno ${vault.minLength} caratteri`; return; }
-        if (pwd !== $(ctx.root, 'gate-confirm').value) { error.textContent = 'Le due password non coincidono'; return; }
+        if ([...pwd].length < vault.minLength) { error.textContent = t('gate.tooShort', { min: vault.minLength }); return; }
+        if (pwd !== $(ctx.root, 'gate-confirm').value) { error.textContent = t('gate.mismatch'); return; }
       }
       const submit = $(ctx.root, 'gate-submit');
       submit.disabled = true;
@@ -853,14 +864,14 @@ export default {
 
     // Menu del vault: blocca, cambia password, timeout
     function vaultMenu() {
-      openModal('Master password', `
-        <div class="form-row"><label>Password attuale</label><input class="form-input" type="password" id="f_vault_old" autocomplete="off"></div>
-        <div class="form-row"><label>Nuova password (almeno ${esc(vault.minLength)} caratteri)</label><input class="form-input" type="password" id="f_vault_new" autocomplete="off"></div>
-        <div class="form-row"><label>Ripeti la nuova password</label><input class="form-input" type="password" id="f_vault_new2" autocomplete="off"></div>
-        <div class="form-row"><label>Blocco automatico dopo (minuti di inattività)</label><input class="form-input" type="number" min="1" max="1440" id="f_vault_minutes" value="${esc(vault.lockAfterMinutes)}"></div>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
-         <button class="btn btn-ghost" onclick="Ext['db-client'].lock()">🔒 Blocca ora</button>
-         <button class="btn btn-primary" onclick="Ext['db-client'].saveVault()">Salva</button>`);
+      openModal(t('vault.title'), `
+        <div class="form-row"><label>${esc(t('vault.oldPassword'))}</label><input class="form-input" type="password" id="f_vault_old" autocomplete="off"></div>
+        <div class="form-row"><label>${esc(t('vault.newPassword', { min: vault.minLength }))}</label><input class="form-input" type="password" id="f_vault_new" autocomplete="off"></div>
+        <div class="form-row"><label>${esc(t('vault.repeatPassword'))}</label><input class="form-input" type="password" id="f_vault_new2" autocomplete="off"></div>
+        <div class="form-row"><label>${esc(t('vault.lockAfter'))}</label><input class="form-input" type="number" min="1" max="1440" id="f_vault_minutes" value="${esc(vault.lockAfterMinutes)}"></div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-ghost" onclick="Ext['db-client'].lock()">${esc(t('vault.lockNow'))}</button>
+         <button class="btn btn-primary" onclick="Ext['db-client'].saveVault()">${esc(t('core.action.save'))}</button>`);
     }
 
     async function saveVault() {
@@ -869,11 +880,11 @@ export default {
         const minutes = Number(val('f_vault_minutes'));
         if (minutes !== vault.lockAfterMinutes) await ctx.api.post('/vault/settings', { lockAfterMinutes: minutes });
         if (val('f_vault_new')) {
-          if (val('f_vault_new') !== val('f_vault_new2')) { toast('Le nuove password non coincidono', 'error'); return; }
+          if (val('f_vault_new') !== val('f_vault_new2')) { toast(t('vault.mismatch'), 'error'); return; }
           const r = await ctx.api.post('/vault/change', { oldPassword: val('f_vault_old'), newPassword: val('f_vault_new') });
-          toast(`Master password cambiata (${r.reencrypted} password ri-cifrate)`, 'success');
+          toast(t('vault.changed', { count: r.reencrypted }), 'success');
         } else {
-          toast('Impostazioni salvate', 'success');
+          toast(t('vault.saved'), 'success');
         }
         closeModal();
         await loadVault();
@@ -887,10 +898,10 @@ export default {
     }
 
     async function resetVault() {
-      if (prompt('Le password salvate verranno cancellate (le connessioni restano). Scrivi RESET per confermare:') !== 'RESET') return;
+      if (prompt(t('vault.resetPrompt')) !== 'RESET') return;
       try {
         await ctx.api.post('/vault/reset', { confirm: 'RESET' });
-        toast('Master password azzerata: creane una nuova', 'success');
+        toast(t('vault.resetDone'), 'success');
         await loadVault();
       } catch (e) { toast(e.message, 'error'); }
     }
@@ -899,26 +910,26 @@ export default {
       lock, saveVault,
       run: () => run(),
       importConnections() {
-        openModal('Importa connessioni', `
-          <p class="db-muted">File .json esportato da DevDock (casella "Connessioni database"). Le password vengono ri-cifrate con la tua master password.</p>
-          <div class="form-row"><label>File</label><input class="form-input" type="file" accept=".json" id="f_imp_file"></div>
-          <div class="form-row"><label>Master password del file</label><input class="form-input" type="password" id="f_imp_password" autocomplete="off"></div>
-          <label class="db-check"><input type="radio" name="f_imp_mode" value="merge" checked> Unisci: aggiunge le connessioni nuove</label>
-          <label class="db-check"><input type="radio" name="f_imp_mode" value="replace"> Sostituisci tutte le connessioni</label>`,
-          `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button><button class="btn btn-primary" onclick="Ext['db-client'].doImportConnections()">Importa</button>`);
+        openModal(t('import.title'), `
+          <p class="db-muted">${esc(t('import.hint'))}</p>
+          <div class="form-row"><label>${esc(t('import.file'))}</label><input class="form-input" type="file" accept=".json" id="f_imp_file"></div>
+          <div class="form-row"><label>${esc(t('import.password'))}</label><input class="form-input" type="password" id="f_imp_password" autocomplete="off"></div>
+          <label class="db-check"><input type="radio" name="f_imp_mode" value="merge" checked> ${esc(t('import.merge'))}</label>
+          <label class="db-check"><input type="radio" name="f_imp_mode" value="replace"> ${esc(t('import.replace'))}</label>`,
+          `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button><button class="btn btn-primary" onclick="Ext['db-client'].doImportConnections()">${esc(t('import.submit'))}</button>`);
       },
       async doImportConnections() {
         const file = document.getElementById('f_imp_file')?.files[0];
-        if (!file) { toast('Scegli un file', 'error'); return; }
+        if (!file) { toast(t('import.chooseFile'), 'error'); return; }
         try {
           const config = JSON.parse(await file.text());
           const mode = document.querySelector('input[name="f_imp_mode"]:checked')?.value || 'merge';
-          if (mode === 'replace' && !confirm('Sostituire tutte le connessioni con quelle del file?')) return;
+          if (mode === 'replace' && !confirm(t('import.confirmReplace'))) return;
           const r = await ctx.api.post('/connections/import', { config, password: document.getElementById('f_imp_password').value, mode });
           closeModal();
-          toast(`${r.imported} connessioni importate${r.skipped ? `, ${r.skipped} già presenti` : ''}`, 'success');
+          toast(t('import.done', { count: r.imported }) + (r.skipped ? `, ${t('import.skipped', { count: r.skipped })}` : ''), 'success');
           await loadConnections();
-        } catch (e) { toast(e instanceof SyntaxError ? 'File non valido' : e.message, 'error'); }
+        } catch (e) { toast(e instanceof SyntaxError ? t('import.invalid') : e.message, 'error'); }
       },
       useHistory(i) {
         const h = readHistory()[i];
@@ -931,7 +942,7 @@ export default {
         sqlInput.dispatchEvent(new Event('input'));
         sqlInput.focus();
       },
-      clearHistory() { try { sessionStorage.removeItem(HISTORY_KEY); } catch {} closeModal(); toast('Storico svuotato'); },
+      clearHistory() { try { sessionStorage.removeItem(HISTORY_KEY); } catch {} closeModal(); toast(t('history.cleared')); },
       saveRowDialog(r) {
         const editing = r != null;
         const row = editing ? grid.data.rows[r] : null;
@@ -941,7 +952,7 @@ export default {
           const v = isNull ? null : document.getElementById(`f_row_${c}`).value;
           if (editing ? changed(v, row[c]) : (v !== '' || isNull)) values[col.name] = v; // solo i campi cambiati / compilati
         });
-        if (editing && !Object.keys(values).length) { toast('Nessuna modifica'); return; }
+        if (editing && !Object.keys(values).length) { toast(t('row.noChanges')); return; }
         closeModal();
         saveRow(editing ? 'update' : 'insert', editing ? keyOf(row) : null, values);
       },
@@ -961,43 +972,43 @@ export default {
       cancelConfirm() {
         const p = pendingConfirm;
         pendingConfirm = null;
-        if (p && !p.keepResults) $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">Esecuzione annullata: nessuna modifica.</div>';
-        else toast('Nessuna modifica eseguita');
+        if (p && !p.keepResults) $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('run.cancelled'))}</div>`;
+        else toast(t('run.nothingDone'));
       },
       select(id) { activeId = id; renderConnections(); renderWorkspace(); },
-      async addConnection() { openModal('Nuova connessione', await connectionForm(), modalButtons('Crea', "Ext['db-client'].saveConnection()")); },
+      async addConnection() { openModal(t('connections.newTitle'), await connectionForm(), modalButtons(t('connections.create'), "Ext['db-client'].saveConnection()")); },
       async editConnection(id) {
         const c = connections.find(x => x.id === id);
-        if (c) openModal('Modifica connessione', await connectionForm(c), modalButtons('Salva', `Ext['db-client'].saveConnection(${JSON.stringify(id)})`));
+        if (c) openModal(t('connections.editTitle'), await connectionForm(c), modalButtons(t('core.action.save'), `Ext['db-client'].saveConnection(${JSON.stringify(id)})`));
       },
       async saveConnection(existingId) {
         const body = formValues();
-        if (!body.label || !body.user || (!existingId && !body.id)) { toast('ID, nome e utente sono obbligatori', 'error'); return; }
+        if (!body.label || !body.user || (!existingId && !body.id)) { toast(t('connections.required'), 'error'); return; }
         try {
           const r = existingId
             ? await ctx.api.put(`/connections/${encodeURIComponent(existingId)}`, body)
             : await ctx.api.post('/connections', body);
           closeModal();
-          toast('Connessione salvata', 'success');
+          toast(t('connections.saved'), 'success');
           activeId = r.connection.id;
           await loadConnections();
         } catch (e) { toast(e.message, 'error'); }
       },
       async deleteConnection(id) {
         const c = connections.find(x => x.id === id);
-        if (!c || !confirm(`Eliminare la connessione "${c.label}"? Il database non viene toccato.`)) return;
+        if (!c || !confirm(t('connections.confirmDelete', { name: c.label }))) return;
         try {
           await ctx.api.del(`/connections/${encodeURIComponent(id)}`);
           if (activeId === id) activeId = null;
-          toast('Connessione eliminata', 'success');
+          toast(t('connections.deleted'), 'success');
           await loadConnections();
         } catch (e) { toast(e.message, 'error'); }
       },
       async testConnection(id) {
-        toast('Connessione in corso...');
+        toast(t('connections.testing'));
         try {
           const r = await ctx.api.post(`/connections/${encodeURIComponent(id)}/test`);
-          toast(`✓ MySQL ${r.version} — ${r.user}${r.via ? ` via tunnel ${r.via}` : ''} (${r.ms} ms)`, 'success');
+          toast(t(r.via ? 'connections.testOkTunnel' : 'connections.testOk', { version: r.version, user: r.user, via: r.via, ms: r.ms }), 'success');
         } catch (e) { toast(e.message, 'error'); }
       },
     };
@@ -1045,8 +1056,8 @@ export default {
       const c = connections.find(x => x.id === dbRow.dataset.conn);
       const db = dbRow.dataset.db;
       ctx.ui.contextMenu(e.clientX, e.clientY, [
-        { icon: '＋', label: 'Nuova tabella…', disabled: c.readOnly, action: () => { setActiveDb(c, db); openDesigner(c, db); } },
-        { icon: '↻', label: 'Aggiorna tabelle', action: () => { cache.delete(nodeKey('d', c.id, db)); open.add(nodeKey('d', c.id, db)); loadTables(c, db); } },
+        { icon: '＋', label: t('menu.newTable'), disabled: c.readOnly, action: () => { setActiveDb(c, db); openDesigner(c, db); } },
+        { icon: '↻', label: t('menu.refreshTables'), action: () => { cache.delete(nodeKey('d', c.id, db)); open.add(nodeKey('d', c.id, db)); loadTables(c, db); } },
       ]);
     });
     ctx.sidebar.addEventListener('click', e => {
@@ -1066,7 +1077,23 @@ export default {
         if (kind === 'c') loadDatabases(c); else if (kind === 'd') loadTables(c, db); else loadColumns(c, db, table);
       }
     }
+    // Testi delle opzioni del limite di righe ("1000 righe")
+    function renderLimitOptions() {
+      for (const o of $(ctx.root, 'limit').options) o.textContent = t('toolbar.limit', { count: Number(o.value) });
+    }
+    renderLimitOptions();
+
     this.show = loadVault;
     this.refresh = async () => { cache.clear(); await loadVault(); reopen(); };
+    // Cambio di lingua: testi dinamici di nuovo, senza ricaricare dati né perdere l'editor
+    this.languageChanged = () => {
+      renderLimitOptions();
+      if (vault.state !== 'unlocked') { render(); return; }
+      renderConnections();
+      renderWorkspace();
+      if (designer) renderDesigner();
+      else if (grid?.data) renderGrid();
+      else if (lastResult) renderResult(lastResult, true);
+    };
   },
 };

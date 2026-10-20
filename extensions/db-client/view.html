@@ -5,30 +5,30 @@
     <h3 data-role="gate-title"></h3>
     <p class="db-gate-text" data-role="gate-text"></p>
     <input class="form-input" type="password" data-role="gate-password" autocomplete="off">
-    <input class="form-input" type="password" data-role="gate-confirm" placeholder="Ripeti la master password" autocomplete="off" hidden>
+    <input class="form-input" type="password" data-role="gate-confirm" data-i18n-placeholder="gate.confirmPlaceholder" autocomplete="off" hidden>
     <div class="db-gate-error" data-role="gate-error"></div>
     <button class="btn btn-primary" type="submit" data-role="gate-submit"></button>
-    <button class="btn btn-ghost btn-sm db-gate-forgot" type="button" data-action="vault-reset" data-role="gate-forgot" hidden>Ho dimenticato la master password</button>
+    <button class="btn btn-ghost btn-sm db-gate-forgot" type="button" data-action="vault-reset" data-role="gate-forgot" data-i18n="gate.forgot" hidden></button>
   </form>
 </div>
 
 <!-- Contenuto disponibile a vault sbloccato -->
 <div class="db-main" data-role="main" hidden>
-  <div class="empty-state" data-role="no-connection"><div class="icon">🗄️</div><p>Seleziona una connessione dalla sidebar</p></div>
+  <div class="empty-state" data-role="no-connection"><div class="icon">🗄️</div><p data-i18n="main.noConnection"></p></div>
   <div class="db-workspace" data-role="workspace" hidden>
     <div class="db-conn-header" data-role="conn-header"></div>
     <div class="db-toolbar">
-      <span class="db-active" data-role="active-db" title="Database attivo: sceglilo dalla sidebar"></span>
-      <select class="form-input db-select db-limit" data-role="limit" title="Righe massime">
-        <option value="100">100 righe</option>
-        <option value="1000" selected>1000 righe</option>
-        <option value="10000">10000 righe</option>
+      <span class="db-active" data-role="active-db" data-i18n-title="toolbar.activeDbTitle"></span>
+      <select class="form-input db-select db-limit" data-role="limit" data-i18n-title="toolbar.limitTitle">
+        <option value="100"></option>
+        <option value="1000" selected></option>
+        <option value="10000"></option>
       </select>
-      <button class="btn btn-primary btn-sm" data-action="run" title="Esegui (Ctrl/Cmd+Invio): la selezione o tutto il testo">▶ Esegui</button>
-      <button class="btn btn-ghost btn-sm" data-action="export-query" title="Esporta il risultato della SELECT (CSV, JSON, SQL)">⤓ Esporta</button>
-      <button class="btn btn-ghost btn-sm" data-action="new-table" title="Crea una tabella nel database attivo">＋ Tabella</button>
-      <button class="btn btn-ghost btn-sm" data-action="history" title="Query eseguite in questa sessione">🕘 Storico</button>
-      <span class="db-hint">Ctrl/Cmd+Invio · le modifiche a dati e schema chiedono sempre conferma</span>
+      <button class="btn btn-primary btn-sm" data-action="run" data-i18n="toolbar.run" data-i18n-title="toolbar.runTitle"></button>
+      <button class="btn btn-ghost btn-sm" data-action="export-query" data-i18n="toolbar.export" data-i18n-title="toolbar.exportTitle"></button>
+      <button class="btn btn-ghost btn-sm" data-action="new-table" data-i18n="toolbar.newTable" data-i18n-title="toolbar.newTableTitle"></button>
+      <button class="btn btn-ghost btn-sm" data-action="history" data-i18n="toolbar.history" data-i18n-title="toolbar.historyTitle"></button>
+      <span class="db-hint" data-i18n="toolbar.hint"></span>
     </div>
     <div class="db-editor" data-role="editor">
       <pre class="db-editor-highlight" aria-hidden="true"><code data-role="highlight"></code></pre>
