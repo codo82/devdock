@@ -161,7 +161,7 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 - [x] **M6.9** Migrate every hard-coded string in `public/core/*` (toasts, modals, confirms, `toolNotice`, empty states, tooltips)
 
 **Extensions**
-- [ ] **M6.10** Contract extension (documented in `docs/EXTENSIONS.md`): optional `i18n/<lang>.json` folder per extension, keys automatically namespaced by the extension `code`; frontend modules receive `ctx.t` already bound to their namespace. An extension may support a different set of languages from the core: missing keys follow the same fallback chain. An extension may also ship a language the core lacks (its strings are used, the core falls back). Manifest `name` and `description` translatable as a map by tag (`"name": { "it": "…", "en": "…" }`) or a plain string as today
+- [x] **M6.10** Contract extension (documented in `docs/EXTENSIONS.md`): optional `i18n/<lang>.json` folder per extension, keys automatically namespaced by the extension `code`; frontend modules receive `ctx.t` already bound to their namespace. An extension may support a different set of languages from the core: missing keys follow the same fallback chain. An extension may also ship a language the core lacks (its strings are used, the core falls back). Manifest `name` and `description` translatable as a map by tag (`"name": { "it": "…", "en": "…" }`) or a plain string as today
 - [ ] **M6.11** Migrate the existing extensions one at a time (Swagger, PM2, Tunnels, npm, Git); from then on every new extension (DB client) is born with at least the source-language catalog
 
 **Backend**

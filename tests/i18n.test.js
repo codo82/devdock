@@ -24,6 +24,7 @@ before(async () => {
     'i18n/it.json': { 'title': 'Titolo', 'items': { one: '{count} elemento', other: '{count} elementi' } },
     'i18n/en.json': { 'title': 'Title' },
     'i18n/xx-bad.json': '{ not json',
+    'i18n/ar.json': { 'title': 'عنوان' },
   });
   ext(root, 'core', { 'setting.json': manifest('core'), 'view.js': '' });
   ext(root, 'beta', { 'setting.json': manifest('beta', { name: { it: '' } }), 'view.js': '' });
@@ -41,12 +42,18 @@ test('elenco delle lingue dai cataloghi del core, con completezza', async () => 
   assert.equal(it.completeness, 100);
   assert.equal(en.dir, 'ltr');
   assert.ok(en.completeness < 100, 'manca alpha.items in inglese');
+  assert.equal(en.core, true);
+  // lingua fornita solo da un'estensione: nomi e direzione da Intl
+  const ar = json.languages.find(l => l.tag === 'ar');
+  assert.equal(ar.core, false);
+  assert.equal(ar.dir, 'rtl');
+  assert.equal(ar.name, 'Arabic');
 });
 
 test('cataloghi delle estensioni: elenco, file serviti, cataloghi non validi ignorati', async () => {
   const list = (await srv.request('GET', '/api/core/extensions')).json;
   const alpha = list.find(e => e.code === 'alpha');
-  assert.deepEqual(alpha.i18n, ['en', 'it']);
+  assert.deepEqual(alpha.i18n, ['ar', 'en', 'it']);
   assert.deepEqual(alpha.name, { it: 'Alfa', en: 'Alpha' });
   assert.ok(alpha.warnings.some(w => w.includes('xx-bad')));
   const cat = await srv.request('GET', '/ext/alpha/i18n/en.json');

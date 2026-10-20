@@ -24,6 +24,7 @@ extensions/
     sidebar.html     markup of the sidebar (optional: without it the panel is full width)
     view.js          frontend logic (ES module)
     style.css        styles (optional)
+    i18n/it.json     translations, one file per language (optional; see *Translations*)
     package.json     own npm dependencies (optional, npm workspace)
 ```
 
@@ -63,10 +64,10 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
 
 | Field | Required | Meaning |
 |---|---|---|
-| `name` | yes | Label shown in the UI |
-| `code` | yes | Unique id, `[a-z0-9-]`, equal to the folder name; used in URLs (`/api/ext/<code>`, `/ext/<code>`), in `dependencies` and as `window.Ext.<code>` |
+| `name` | yes | Label shown in the UI: a string or a map by language tag (`{ "it": "Database", "en": "Database" }`) |
+| `code` | yes | Unique id, `[a-z0-9-]`, equal to the folder name (`core` is reserved); used in URLs (`/api/ext/<code>`, `/ext/<code>`), in `dependencies` and as `window.Ext.<code>` |
 | `version` | no | Extension version (SemVer) |
-| `description` | no | One line |
+| `description` | no | One line; a string or a map by language tag |
 | `color` | yes | Accent colour (`#rrggbb`) for tab, badges, pills and `--ext-color` |
 | `icon` | no | Emoji or short text for the tab / header button |
 | `position` | yes | `"tab"`: entry in the section bar with its own panel · `"header"`: button in the header bar that opens its panel |
@@ -173,8 +174,8 @@ The header **Export** and **Import** dialogs are built from the checkboxes the e
 | Field | Meaning |
 |---|---|
 | `id` | Unique within the extension, `[a-z0-9-]` |
-| `label` | Checkbox label |
-| `description` | Optional hint under the label |
+| `label` | Checkbox label; a string or a map by language tag |
+| `description` | Optional hint under the label; a string or a map by language tag |
 | `sections` | Sections included when the box is checked; they must be listed in the extension's `config` (otherwise the extension is disabled) |
 
 Sections not covered by any checkbox are not exported. **Export** downloads a single `.json` file with the checked sections. **Import** reads the file in the browser, shows the checkboxes whose sections the file contains, and applies the checked ones in *merge* mode (new items added, existing ones unchanged, using `idField`/`merge`) or *replace* mode (the sections take the place of the current ones); everything else is left untouched.
@@ -208,6 +209,7 @@ export default {
   show(ctx) {},    // panel became visible
   hide(ctx) {},    // panel hidden (stop work that only matters while visible)
   refresh(ctx) {}, // the user pressed ↻ in the header
+  languageChanged(ctx) {}, // the user picked another language (default: refresh)
 };
 ```
 
@@ -224,7 +226,9 @@ export default {
 | `ctx.core` | Same client for `/api/core` (e.g. `ctx.core.get('/system')`) |
 | `ctx.apiFor(code)` | Same client for another extension's API |
 | `ctx.hasExtension(code)` | Whether another extension is loaded (for features that rely on it) |
-| `ctx.ui` | `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `contextMenu(x, y, items)` (items: `{ label, icon, action, danger, disabled }` or `'separator'`), `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`) |
+| `ctx.t(key, params)` | Translation of a key of the extension's catalogs (keys are relative: `t('branches.title')` reads `git.branches.title`; keys starting with `core.` are the core's). See *Translations* |
+| `ctx.i18n` | `lang` (active tag), `pick(value)` (text of a string-or-map manifest field), `apply(element)` (translates `data-i18n…` attributes in markup the extension creates) |
+| `ctx.ui` | `t` (global keys), `fmt` (locale-aware formatting, see *Translations*), `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `contextMenu(x, y, items)` (items: `{ label, icon, action, danger, disabled }` or `'separator'`), `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`) |
 | `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions (e.g. `npm:projects-changed`) |
 | `ctx.expose(obj)` | Publishes functions as `window.Ext.<code>` for inline handlers |
 | `ctx.setBadge(value)` | Number or text on the tab or header button (`null` hides it) |
@@ -237,11 +241,50 @@ Inside the panel, the sidebar and the pills the CSS variable `--ext-color` holds
 
 The header (notifications, Export/Import dialogs built from the extensions' checkboxes, ↻) belongs to the core.
 
+## Translations
+
+The UI is translatable into any language; a language exists when its catalog exists, there is no list of languages in the code. **Italian is the source language**: its catalogs are complete and are the last fallback. English is the first additional language.
+
+Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i18n/<tag>.json` (`tag` is a BCP 47 tag: `it`, `en`, `pt-BR`, `zh-Hant`…) and carry a `_meta` block; an extension's are in `extensions/<code>/i18n/<tag>.json`, where `_meta` is optional and keys are automatically prefixed with the extension `code`:
+
+```json
+{
+  "_meta": { "name": "Italian", "nativeName": "Italiano", "dir": "ltr" },
+  "branches.title": "Branch",
+  "branches.ahead": "{count} avanti",
+  "commits": { "one": "{count} commit", "other": "{count} commit" }
+}
+```
+
+- `{name}` is replaced with `params.name`; numbers are formatted for the active language.
+- A value can be an object of plural forms by CLDR category (`zero`, `one`, `two`, `few`, `many`, `other`; only `other` is required), chosen with `Intl.PluralRules` on `params.count`.
+- Lookup goes along the chain *active language → its base language (`pt-BR` → `pt`) → Italian → the key itself* (with a console warning), so a partially translated language works. An extension may support a different set of languages from the core, and may ship a language the core lacks (the core falls back to Italian for its own strings).
+- Catalogs that fail validation are ignored and reported in the extension's warnings.
+
+**Markup.** In `view.html` and `sidebar.html` use attributes instead of text; the shell translates them when the file is loaded and again when the language changes. Keys are relative to the extension:
+
+```html
+<span class="sidebar-head-title" data-i18n="sidebar.title"></span>
+<button data-action="reload" data-i18n-title="sidebar.reload">↻</button>
+<input data-i18n-placeholder="search.placeholder">
+```
+
+`data-i18n` (text), `data-i18n-title`, `data-i18n-placeholder` and `data-i18n-aria-label` are supported. For markup built in `view.js` call `ctx.t()` directly (or `ctx.i18n.apply(element)` on elements that use the attributes).
+
+**Language change.** The user picks the language from the 🌐 button in the header (shown when there is more than one language); the choice is stored in the browser. Without a choice the language comes from `navigator.languages`. The change does not reload the page: the shell re-translates the static markup and calls `languageChanged(ctx)` (or `refresh(ctx)` when it is not defined) on every mounted module, which re-renders its dynamic parts.
+
+**Formatting.** Dates, numbers and durations go through `ctx.ui.fmt`, never formatted by hand: `fmt.date(d, opts)`, `fmt.number(n, opts)`, `fmt.relative(d)` ("3 minutes ago"), `fmt.list(items)`, `fmt.bytes(n)`, `fmt.duration(seconds)`.
+
+**Right-to-left languages.** A catalog with `"dir": "rtl"` sets `<html dir="rtl">`. Write CSS with logical properties (`margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `text-align: start`, `border-inline-start`) instead of left/right.
+
+**Not translated:** the output of external commands (`git`, `npm`, `pm2`, `ssh`) is shown as is.
+
 ## Core API
 
 | Route | Purpose |
 |---|---|
 | `GET /api/core/extensions` | Extensions with manifest data, state, warnings and error |
+| `GET /api/core/i18n/languages` | Source language and available languages: `{ source, languages: [{ tag, name, nativeName, dir, core, completeness }] }` (`core: false` = only some extension ships it; `completeness` = % of the source keys translated, core and extensions together) |
 | `GET /api/core/system` | Platform and external tools (`?refresh=1` checks again) |
 | `GET /api/core/config/sections` | Config sections and their owner |
 | `GET /api/core/config/export?sections=a,b&name=x` | Export (download), optionally limited to some sections |
@@ -267,5 +310,6 @@ A single `npm install` at the root installs everything into the shared `node_mod
 2. Backend (if needed): declare the routes in `backend.routes` and write `server.js` returning `handlers` with the same names; use `ctx.lib.validate` and `ConfigError` for input coming from the UI.
 3. Configuration (if needed): list the keys in `config`, describe them in `instance.config` and add the `export` checkboxes that should appear in the Export/Import dialogs.
 4. Frontend (if needed): `view.html`, optionally `sidebar.html` and `style.css`, and `view.js` with `mount(ctx)`.
-5. Restart the server: the log line `Estensioni: …` lists the loaded extensions, and `GET /api/core/extensions` explains why one is disabled.
-6. Add tests in `tests/` (see `tests/helpers.js`: `startServer()` runs DevDock on a free port with a temporary config).
+5. Texts: write the UI strings in `i18n/it.json` (the source language) and use them with `data-i18n…` attributes and `ctx.t()`; add `i18n/en.json` and any other language.
+6. Restart the server: the log line `Estensioni: …` lists the loaded extensions, and `GET /api/core/extensions` explains why one is disabled.
+7. Add tests in `tests/` (see `tests/helpers.js`: `startServer()` runs DevDock on a free port with a temporary config).
