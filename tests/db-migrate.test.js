@@ -130,6 +130,47 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     r = await api('POST', '/connections/c/query', { sql: 'DELETE FROM ordini', database: 'app' });
     assert.equal(r.json.migration, null);
 
+    // 6d. modifiche fatte fuori da DevDock: lo stato le trova, la migration scrive solo il file
+    const status = () => api('GET', '/connections/c/databases/app/schema-status');
+    assert.equal((await status()).json.state, 'in_sync');
+    r = await api('POST', '/connections/c/query', { sql: 'ALTER TABLE ordini ADD COLUMN esterna INT', database: 'app' });
+    await api('POST', '/connections/c/query', { sql: 'ALTER TABLE ordini ADD COLUMN esterna INT', database: 'app', confirm: r.json.token });
+    r = await status();
+    assert.equal(r.json.state, 'changes');
+    assert.deepEqual(r.json.operations.map(o => o.op), ['add_column']);
+    assert.deepEqual(r.json.proposal, { table: 'ordini', operation: 'add_esterna' });
+    r = await api('POST', '/connections/c/databases/app/schema-capture', { preview: true });
+    assert.equal(r.json.file, '008_ordini_add_esterna.sql');
+    assert.match(r.json.content, /ADD COLUMN `esterna` INT NULL/);
+    r = await api('POST', '/connections/c/databases/app/schema-capture', {});
+    assert.equal(r.json.file, '008_ordini_add_esterna.sql');
+    assert.equal((await status()).json.state, 'in_sync');
+
+    // 6e. snapshot più avanti del DB (migration di un collega scaricate e non applicate)
+    const snapFile = path.join(dir, '.devdock-schema.json');
+    const original = fs.readFileSync(snapFile, 'utf8');
+    const ahead = JSON.parse(original);
+    ahead.lastMigration = '099_fatture_create.sql';
+    ahead.tables.fatture = { columns: [col('n')], primaryKey: [], indexes: [], foreignKeys: [] };
+    fs.writeFileSync(snapFile, JSON.stringify(ahead));
+    fs.writeFileSync(path.join(dir, '099_fatture_create.sql'), 'CREATE TABLE fatture (n VARCHAR(50));\n');
+    r = await status();
+    assert.equal(r.json.state, 'behind');
+    assert.deepEqual(r.json.pending, ['099_fatture_create.sql']);
+    fs.writeFileSync(snapFile, original);
+    fs.rmSync(path.join(dir, '099_fatture_create.sql'));
+
+    // 6f. baseline su una cartella nuova: snapshot e migration iniziale con tutto lo schema
+    fs.mkdirSync(path.join(repo, 'db/altro'));
+    await api('PUT', '/connections/c/migrations', { repo: 'app', dir: 'db/altro' });
+    assert.equal((await status()).json.state, 'no_snapshot');
+    r = await api('POST', '/connections/c/databases/app/schema-baseline', { withMigration: true });
+    assert.equal(r.json.file, '001_schema_baseline.sql');
+    const base = fs.readFileSync(path.join(repo, 'db/altro/001_schema_baseline.sql'), 'utf8');
+    assert.ok(base.indexOf('CREATE TABLE `app`.`clienti`') < base.indexOf('ADD CONSTRAINT `fk_cliente`'), 'chiavi esterne dopo le tabelle');
+    assert.equal((await status()).json.state, 'in_sync');
+    await api('PUT', '/connections/c/migrations', { repo: 'app', dir: 'db/migrations' });
+
     // 7. senza repository collegato: solo DDL, nessun file
     await api('DELETE', '/connections/c/migrations');
     const plain = [{ op: 'drop_index', table: 'ordini', name: 'ix_stato' }];
@@ -137,7 +178,7 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     assert.equal(r.json.migration, null);
     r = await migrate({ operations: plain, confirm: r.json.token });
     assert.deepEqual([r.status, r.json.file], [200, null]);
-    assert.equal(fs.readdirSync(dir).filter(f => f.endsWith('.sql')).length, 7);
+    assert.equal(fs.readdirSync(dir).filter(f => f.endsWith('.sql')).length, 8);
   } finally {
     await s.stop();
     await mysqlDb.stop();

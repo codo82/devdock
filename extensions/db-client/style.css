@@ -149,3 +149,10 @@
 .db-mg-warnings{margin-top:12px;padding:8px 10px;border:1px solid var(--danger);border-radius:var(--radius);color:var(--danger);font-size:13px}
 .db-mg-warnings ul{margin:4px 0 8px;padding-inline-start:18px}
 @media (max-width:800px){.db-mg{grid-template-columns:1fr}}
+
+/* stato delle migration */
+.db-schema{display:flex;flex-direction:column;gap:8px;padding:8px 12px;font-size:13px}
+.db-schema-list{margin:0;padding-inline-start:20px}
+.db-schema-ambiguous{max-width:520px}
+.db-badge-btn{cursor:pointer;font:inherit}
+.db-badge-btn:hover{filter:brightness(1.2)}
