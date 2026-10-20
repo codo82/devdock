@@ -89,7 +89,7 @@ Built as an extension on the M3 architecture.
 
 - [x] **M5.1** `db-client` extension with the `mysql2` dependency in its own `package.json`
 - [ ] **M5.2** Connections configurable per project (host, port, db, user, password). "Use tunnel" option linking a connection to an already configured SSH server
-- [ ] **M5.2b** **Vault with master password** (works the same on macOS and Windows, `node:crypto` only, no native dependencies):
+- [x] **M5.2b** **Vault with master password** (works the same on macOS and Windows, `node:crypto` only, no native dependencies):
   - First access to the Database section: the UI asks to **create** the master password (with confirmation, at least 10 characters). The server generates a random `salt` and derives the key with **scrypt** (`crypto.scrypt`, 32-byte key)
   - Each DB password is encrypted with **AES-256-GCM** using a random IV per value, and stored as `{ iv, tag, data }` in base64
   - **Separate keys**: from the scrypt key (`masterKey`) **HKDF-SHA256** derives two independent subkeys: `encKey` (info `"devdock-vault-enc"`) for encryption and `verifyKey` (info `"devdock-vault-verify"`) for verification, so the stored value reveals nothing about `encKey`
@@ -110,6 +110,7 @@ Built as an extension on the M3 architecture.
   - "I forgot the password": vault reset, which deletes the stored passwords (connections stay, without password) after explicit confirmation
   - Export/import: passwords travel encrypted together with the `vault` block, so they can be moved to another machine with the same master password. When importing into a config that already has a vault with a different salt, ask for the imported config's master password and re-encrypt
   - Tests: init/unlock/wrong password/change/lock, check that `config.json` never contains plaintext passwords
+- [ ] **M5.2c** Import of connections encrypted with a different master password: ask for the imported file's master password and re-encrypt them with the current key
 - [ ] **M5.3** Backend: pool per connection, `POST /api/ext/db-client/query` with timeout, row limit, optional read-only flag
 - [ ] **M5.4** UI: editor with minimal syntax highlighting (CodeMirror 6 from CDN with SRI, or a light custom highlighter), run with Ctrl/Cmd+Enter
 - [ ] **M5.5** Results in a table (sortable columns, highlighted NULLs, row count/time), messages for queries without a result set

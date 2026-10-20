@@ -135,6 +135,7 @@ Only `handlers` is needed when the manifest declares routes; everything else is 
 |---|---|
 | `ctx.code`, `ctx.dir` | Extension code and folder |
 | `ctx.config.get(key)` / `ctx.config.set(key, value)` | Read/write a key declared in `setting.json → config`; every write is validated and saved atomically. Other keys throw |
+| `ctx.config.update({ key: value, … })` | Writes several of the extension's keys in a single atomic save (e.g. data that must change together) |
 | `ctx.require(code)` | `services` of a dependency declared in the manifest (`null` if an optional dependency is missing) |
 | `ctx.sse(res)` | Opens an SSE response; returns `send(type, data)`, with `send.end()` to close it |
 | `ctx.lib.validate` | `KEY_RE`, `COLOR_RE`, `REMOTE_RE`, `ALIAS_RE`, `NPM_NAME_RE`, `PM2_TARGET_RE`, `isPort`, `isText`, `isValidBranchName`, `isValidCommitHash` |
