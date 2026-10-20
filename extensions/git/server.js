@@ -24,8 +24,8 @@ module.exports = function createGit(ctx) {
 
   // ---- Validazione delle azioni git ----
 
-  const GIT_ACTIONS = new Set(['commit', 'pull', 'push', 'push_force', 'pull_push', 'merge', 'merge_abort', 'merge_continue', 'fetch', 'checkout', 'checkout_new', 'stash', 'stash_pop']);
-  const BRANCH_ACTIONS = new Set(['push', 'push_force', 'pull_push', 'merge', 'checkout', 'checkout_new']); // branch obbligatorio
+  const GIT_ACTIONS = new Set(['commit', 'pull', 'push', 'push_force', 'pull_push', 'merge', 'merge_abort', 'merge_continue', 'fetch', 'checkout', 'checkout_new', 'branch_delete', 'stash', 'stash_pop']);
+  const BRANCH_ACTIONS = new Set(['push', 'push_force', 'pull_push', 'merge', 'checkout', 'checkout_new', 'branch_delete']); // branch obbligatorio
   const REMOTE_ACTIONS = new Set(['pull', 'push', 'push_force', 'pull_push']);              // remote usato
 
   async function getGitRemotes(cwd) {
@@ -374,6 +374,18 @@ module.exports = function createGit(ctx) {
           if (left.length) return res.status(409).json({ code: 'conflicts', files: left, error: `Conflitti ancora da risolvere in ${left.length} file` });
           const toAdd = (await getGitStatus(repo.path)).files.filter(f => CONFLICT_XY.has(f.xy)).map(f => f.name);
           switchSteps = [...(toAdd.length ? [{ args: ['add', '-A', '--', ...toAdd] }] : []), { args: ['commit', '--no-edit'] }];
+        }
+
+        // Eliminazione di un branch locale: mai quello corrente; se non è unito serve force
+        if (action === 'branch_delete') {
+          if (!await refExists(repo.path, `refs/heads/${branch}`)) return res.status(404).json({ error: `Branch locale inesistente: ${branch}` });
+          const current = (await gitExec(repo.path, ['branch', '--show-current'], { allowFail: true })).out.trim();
+          if (branch === current) return res.status(409).json({ code: 'current', error: 'Non si può eliminare il branch corrente' });
+          const merged = (await gitExec(repo.path, ['merge-base', '--is-ancestor', branch, 'HEAD'], { allowFail: true })).code === 0;
+          if (!merged && req.body.force !== true) {
+            return res.status(409).json({ code: 'unmerged', error: `Il branch "${branch}" contiene commit non uniti in ${current || 'HEAD'}` });
+          }
+          switchSteps = [{ args: ['branch', merged ? '-d' : '-D', branch] }];
         }
 
         // Cambio/creazione di branch: modifiche non committate, branch esistente o mancante

@@ -235,3 +235,21 @@ test('merge: anteprima, opzioni, conflitti, annulla e concludi', async () => {
   assert.equal(fs.readFileSync(path.join(repo, 'conflitto.txt'), 'utf8'), 'versione A e B\n');
   assert.equal((await action({ action: 'merge_abort' })).status, 409);
 });
+
+test('eliminazione dei branch locali', async () => {
+  git(repo, 'checkout', '-q', 'main');
+  git(repo, 'branch', '-f', 'da-eliminare', 'main');
+  git(repo, 'checkout', '-q', '-b', 'non-unito'); commitFile(repo, 'solo-qui.txt'); git(repo, 'checkout', '-q', 'main');
+
+  assert.equal((await action({ action: 'branch_delete', branch: 'main' })).json.code, 'current');
+  assert.equal((await action({ action: 'branch_delete', branch: 'inesistente' })).status, 404);
+  let r = await action({ action: 'branch_delete', branch: 'da-eliminare' });
+  assert.equal(exitOf(r), 0, r.text);
+  assert.match(r.text, /branch -d da-eliminare/);
+  r = await action({ action: 'branch_delete', branch: 'non-unito' });
+  assert.equal(r.json.code, 'unmerged');
+  r = await action({ action: 'branch_delete', branch: 'non-unito', force: true });
+  assert.equal(exitOf(r), 0, r.text);
+  assert.match(r.text, /branch -D non-unito/);
+  assert.doesNotMatch(git(repo, 'branch'), /non-unito|da-eliminare/);
+});
