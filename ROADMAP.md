@@ -87,7 +87,7 @@ Every feature becomes an extension with its own manifest, backend routes, HTML, 
 
 Built as an extension on the M3 architecture.
 
-- [ ] **M5.1** `db-client` extension with the `mysql2` dependency in its own `package.json`
+- [x] **M5.1** `db-client` extension with the `mysql2` dependency in its own `package.json`
 - [ ] **M5.2** Connections configurable per project (host, port, db, user, password). "Use tunnel" option linking a connection to an already configured SSH server
 - [ ] **M5.2b** **Vault with master password** (works the same on macOS and Windows, `node:crypto` only, no native dependencies):
   - First access to the Database section: the UI asks to **create** the master password (with confirmation, at least 10 characters). The server generates a random `salt` and derives the key with **scrypt** (`crypto.scrypt`, 32-byte key)
