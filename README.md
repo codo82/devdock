@@ -32,12 +32,15 @@ When the server stops (Ctrl+C, `kill` or closing the terminal), the tunnels and 
 
 ## Sections
 
-- **🔗 SSH tunnels** — servers grouped by colour; one click opens `ssh -N -L 127.0.0.1:<port>:<remote> <alias>`. Automatic reconnection with backoff (5s → 60s), per-tunnel logs, desktop notifications, "Stop all".
-- **📦 NPM** — local projects: run the `package.json` scripts with live logs, restart/stop (the whole process group), listening ports, dependencies with installed version and `npm outdated`.
-- **⚙️ PM2** — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ icon in the header.
-- **🌿 Git** — repositories are derived from the NPM projects (walking up to the `.git` folder). Status, file selection and commit, commit graph, pull/push/merge/checkout/stash/fetch. Only one git operation at a time runs on each repository.
-- **📄 Swagger** — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
-- **≡ Configuration** — management of tunnel groups and servers; configuration export/import from the header.
+Each section is an extension (see [Writing an extension](#writing-an-extension)):
+
+- **🔗 SSH tunnels** (`tunnels`) — servers grouped by colour; one click opens `ssh -N -L 127.0.0.1:<port>:<remote> <alias>`. Automatic reconnection with backoff (5s → 60s), per-tunnel logs, header pills with "Stop all", desktop notifications. Groups and servers are managed from the ≡ button in the sidebar.
+- **📦 NPM** (`npm`) — local projects: run the `package.json` scripts with live logs, restart/stop (the whole process group), listening ports, dependencies with installed version, `npm outdated` and updates.
+- **🌿 Git** (`git`) — repositories derived from the NPM projects (walking up to the `.git` folder). Status, file selection and commit, commit graph with branch legend, pull/push/merge/checkout/stash/fetch. Only one git operation at a time runs on each repository.
+- **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
+- **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ button in the header.
+
+The header also holds desktop notifications (🔔), **Export**/**Import** of the configuration and ↻ to refresh.
 
 ## Configuration
 
@@ -62,7 +65,7 @@ Everything is stored in `config.json` in the project folder. The file is created
 - `servers[].alias` — host or alias from `~/.ssh/config` (authentication is ssh's own: keys, agent)
 - `projects[].path` — absolute path of the folder containing `package.json`
 
-The export can include everything, only the tunnels or only the projects. The import applies only the sections present in the file: *replace* overwrites those sections, *merge* adds the new items; sections missing from the file are left untouched.
+Each key belongs to an extension (`groups` and `servers` to tunnels, `projects` to npm), which validates it on every save. **Export** offers the checkboxes declared by the extensions (Tunnel SSH, Progetti NPM) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
 
 ## Security
 
@@ -76,9 +79,36 @@ Active protections:
 
 Local command-line clients (curl, scripts) that send no `Origin` header are allowed, like any other local program.
 
+## Project structure
+
+```
+server.js            entry point: security middleware, extension loader, core API, startup
+lib/                 core services: config by section, extension loader, security,
+                     validators, external tools, port detection, SSE
+routes/core.js       core API (/api/core): extensions, system, config export/import
+public/              UI shell: index.html, core/shell.js (navigation, header, dialogs),
+                     core/ui.js (shared helpers), core/shell.css
+extensions/<code>/   one folder per feature: setting.json, server.js, view.html,
+                     sidebar.html, view.js, style.css
+tests/               integration tests (node:test)
+docs/EXTENSIONS.md   extension contract
+```
+
+## Writing an extension
+
+1. Create `extensions/<code>/setting.json` with name, code, colour and position (tab or header button).
+2. Declare the API in `backend.routes` and implement the handlers in `server.js`; they are served under `/api/ext/<code>`.
+3. Declare the `config.json` keys the extension owns (`config`) and the checkboxes it adds to the Export/Import dialogs (`export`).
+4. Add `view.html`, `sidebar.html`, `view.js` and `style.css` for the UI.
+5. Restart DevDock: the startup log lists the loaded extensions, and `GET /api/core/extensions` explains why one was disabled.
+
+The full contract — manifest fields, the `ctx` objects given to backend and frontend, configuration sections, dependencies between extensions, npm workspaces — is in [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
+
 ## Development
 
-- Backend: `server.js` (Express)
-- Frontend: `public/index.html` (HTML, CSS and vanilla JavaScript in a single file, no build step)
+```bash
+npm test           # integration tests: each file starts DevDock with a temporary config
+npm run dev        # restarts on backend changes
+```
 
 Roadmap and progress: [ROADMAP.md](ROADMAP.md) · Changes: [CHANGELOG.md](CHANGELOG.md)

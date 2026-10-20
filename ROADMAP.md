@@ -14,7 +14,7 @@ Status legend: `[ ]` to do · `[~]` in progress · `[x]` done
 - [x] **D.2** Initial `CHANGELOG.md` in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format: `1.0.0` entry for the existing state + `[Unreleased]` section
 - [x] **D.3** Align `package.json` (name `devdock` instead of `port-forward-manager`, version, description) and the server startup log
 - [ ] **D.4** At the end of every milestone: update the CHANGELOG (Added/Changed/Fixed/Security/Removed) and the README where needed
-- [ ] **D.5** In M3: README sections "Project structure" and "Writing an extension"; in M5: section "DB client"
+- [~] **D.5** In M3: README sections "Project structure" and "Writing an extension" ✓; in M5: section "DB client"
 - [x] **D.6** Roadmap, README and CHANGELOG in English
 
 ---
