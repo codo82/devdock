@@ -223,7 +223,7 @@ export default {
 | `ctx.core` | Same client for `/api/core` (e.g. `ctx.core.get('/system')`) |
 | `ctx.apiFor(code)` | Same client for another extension's API |
 | `ctx.hasExtension(code)` | Whether another extension is loaded (for features that rely on it) |
-| `ctx.ui` | `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`) |
+| `ctx.ui` | `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `contextMenu(x, y, items)` (items: `{ label, icon, action, danger, disabled }` or `'separator'`), `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`) |
 | `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions (e.g. `npm:projects-changed`) |
 | `ctx.expose(obj)` | Publishes functions as `window.Ext.<code>` for inline handlers |
 | `ctx.setBadge(value)` | Number or text on the tab or header button (`null` hides it) |

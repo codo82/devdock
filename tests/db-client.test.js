@@ -250,3 +250,36 @@ test('query: letture subito, scritture solo con la conferma della stessa istruzi
     await mysqlDb.stop();
   }
 });
+
+test('schema: tabelle e struttura di una tabella', async t => {
+  const mysqlDb = await startMysql();
+  if (!mysqlDb) return t.skip('mysqld non installato');
+  const s = await startServer();
+  try {
+    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    await api('POST', '/vault/init', { password: 'master-password-db' });
+    await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass' });
+    // tabella con indice e chiave esterna (DDL confermato)
+    const ddl = 'CREATE TABLE ordini (id INT PRIMARY KEY, cliente_id INT NOT NULL, totale DECIMAL(10,2) DEFAULT 0 COMMENT "euro", UNIQUE KEY u_cli (cliente_id, id), FOREIGN KEY (cliente_id) REFERENCES clienti(id))';
+    const first = await api('POST', '/connections/c/query', { sql: ddl, database: 'app' });
+    assert.equal((await api('POST', '/connections/c/query', { sql: ddl, database: 'app', confirm: first.json.token })).status, 200);
+
+    const tables = (await api('GET', '/connections/c/databases/app/tables')).json.tables;
+    assert.deepEqual(tables.map(t => t.name), ['clienti', 'ordini']);
+    assert.equal(tables[0].view, false);
+
+    const info = (await api('GET', '/connections/c/databases/app/tables/ordini')).json;
+    assert.deepEqual(info.columns.map(c => [c.name, c.type, c.nullable, c.key]), [
+      ['id', 'int', false, 'PRI'], ['cliente_id', 'int', false, 'MUL'], ['totale', 'decimal(10,2)', true, ''],
+    ]);
+    assert.equal(info.columns[2].comment, 'euro');
+    assert.deepEqual(info.indexes.find(i => i.name === 'u_cli'), { name: 'u_cli', unique: true, columns: ['cliente_id', 'id'] });
+    assert.deepEqual(info.foreignKeys.map(f => [f.columns, f.refTable, f.refColumns]), [[['cliente_id'], 'clienti', ['id']]]);
+
+    assert.equal((await api('GET', '/connections/c/databases/app/tables/inesistente')).status, 404);
+    assert.equal((await api('GET', '/connections/c/databases/a%60b/tables')).status, 400);
+  } finally {
+    await s.stop();
+    await mysqlDb.stop();
+  }
+});

@@ -119,8 +119,37 @@ window.UI = (() => {
     </div>`;
   }
 
+  // Menu contestuale alle coordinate x,y. items: [{ label, icon?, action, danger?, disabled? } | 'separator']
+  let menuEl = null;
+  function closeContextMenu() { menuEl?.remove(); menuEl = null; }
+  function contextMenu(x, y, items) {
+    closeContextMenu();
+    menuEl = document.createElement('div');
+    menuEl.className = 'ctx-menu';
+    menuEl.setAttribute('role', 'menu');
+    for (const it of items) {
+      if (it === 'separator') { menuEl.appendChild(Object.assign(document.createElement('div'), { className: 'ctx-sep' })); continue; }
+      const b = document.createElement('button');
+      b.className = 'ctx-item' + (it.danger ? ' danger' : '');
+      b.disabled = !!it.disabled;
+      b.setAttribute('role', 'menuitem');
+      b.innerHTML = `<span class="ctx-icon">${esc(it.icon || '')}</span>${esc(it.label)}`;
+      b.addEventListener('click', () => { closeContextMenu(); it.action(); });
+      menuEl.appendChild(b);
+    }
+    document.body.appendChild(menuEl);
+    // dentro la finestra
+    const r = menuEl.getBoundingClientRect();
+    menuEl.style.left = Math.min(x, window.innerWidth - r.width - 8) + 'px';
+    menuEl.style.top = Math.min(y, window.innerHeight - r.height - 8) + 'px';
+    menuEl.querySelector('.ctx-item:not(:disabled)')?.focus();
+  }
+  document.addEventListener('mousedown', e => { if (menuEl && !menuEl.contains(e.target)) closeContextMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeContextMenu(); });
+  window.addEventListener('blur', closeContextMenu);
+
   // click fuori dal modal lo chiude
   document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
-  return { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice };
+  return { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
 })();

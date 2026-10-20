@@ -33,6 +33,13 @@ export default {
 
     const active = () => connections.find(c => c.id === activeId) || null;
     const editors = new Map(); // testo dell'editor per connessione
+    const activeDb = new Map(); // database attivo per connessione
+
+    // Albero della sidebar: connessione ▸ database ▸ tabelle ▸ colonne (caricati all'apertura)
+    const open = new Set();      // nodi aperti: "c|id", "d|id|db", "t|id|db|table"
+    const cache = new Map();     // stesse chiavi → { loading } | { error } | dati
+    const nodeKey = (...parts) => parts.join('|');
+    const quoteId = name => '`' + String(name).replace(/`/g, '``') + '`';
 
     // ---- vault ----
     async function loadVault() {
@@ -74,7 +81,7 @@ export default {
     async function renderConnections() {
       const el = $(ctx.sidebar, 'connections');
       if (!connections.length) {
-        el.innerHTML = '<p class="db-muted db-pad">Nessuna connessione.<br><br><button class="btn btn-ghost btn-sm" onclick="Ext[\'db-client\'].addConnection()">+ Aggiungi</button></p>';
+        el.innerHTML = '<p class="db-muted db-pad">Nessuna connessione.<br><br><button class="btn btn-ghost btn-sm" data-tree="add">+ Aggiungi</button></p>';
         return;
       }
       const labels = new Map((await projects()).map(p => [p.id, p.label]));
@@ -84,13 +91,134 @@ export default {
         groups.set(g, [...(groups.get(g) || []), c]);
       }
       const keys = [...groups.keys()].sort((a, b) => (a === '') - (b === '') || a.localeCompare(b));
-      el.innerHTML = keys.map(g => `
+      el.innerHTML = `<div class="db-tree" role="tree">${keys.map(g => `
         ${keys.length > 1 || g ? `<div class="db-group">${esc(g || 'Senza progetto')}</div>` : ''}
-        ${groups.get(g).map(c => `
-          <button class="sb-item ${c.id === activeId ? 'active' : ''}" onclick="Ext['db-client'].select(${js(c.id)})" title="${esc(target(c))}">
-            <span class="sb-icon">${c.readOnly ? '🔒' : '🗄️'}</span>
-            <span class="db-conn-name">${esc(c.label)}</span>
-          </button>`).join('')}`).join('');
+        ${groups.get(g).map(connNode).join('')}`).join('')}</div>`;
+    }
+
+    const caret = (key, leaf) => leaf ? '<span class="db-caret"></span>'
+      : `<span class="db-caret" data-act="toggle">${open.has(key) ? '▾' : '▸'}</span>`;
+    const loading = entry => !entry || entry.loading ? '<div class="db-tree-msg">Caricamento…</div>'
+      : entry.error ? `<div class="db-tree-msg db-tree-err">${esc(entry.error)}</div>` : '';
+    const attrs = (kind, c, db, table) =>
+      `data-tree="${kind}" data-conn="${esc(c.id)}"${db != null ? ` data-db="${esc(db)}"` : ''}${table != null ? ` data-table="${esc(table)}"` : ''}`;
+
+    function connNode(c) {
+      const k = nodeKey('c', c.id);
+      const entry = cache.get(k);
+      return `<div class="db-node">
+        <div class="db-row db-row-conn ${c.id === activeId ? 'active' : ''}" ${attrs('conn', c)} title="${esc(target(c))}">
+          ${caret(k)}<span class="db-row-icon">${c.readOnly ? '🔒' : '🗄️'}</span><span class="db-row-label">${esc(c.label)}</span>
+        </div>
+        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.map(db => dbNode(c, db)).join('') || '<div class="db-tree-msg">Nessun database</div>'}</div>` : ''}
+      </div>`;
+    }
+
+    function dbNode(c, db) {
+      const k = nodeKey('d', c.id, db);
+      const entry = cache.get(k);
+      const isActive = c.id === activeId && activeDb.get(c.id) === db;
+      return `<div class="db-node">
+        <div class="db-row db-row-db ${isActive ? 'active' : ''}" ${attrs('db', c, db)}>
+          ${caret(k)}<span class="db-row-icon">🛢️</span><span class="db-row-label">${esc(db)}</span>
+        </div>
+        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.map(t => tableNode(c, db, t)).join('') || '<div class="db-tree-msg">Nessuna tabella</div>'}</div>` : ''}
+      </div>`;
+    }
+
+    function tableNode(c, db, t) {
+      const k = nodeKey('t', c.id, db, t.name);
+      const entry = cache.get(k);
+      return `<div class="db-node">
+        <div class="db-row db-row-table" ${attrs('table', c, db, t.name)} title="${esc(t.comment || t.name)}${t.rowsEstimate != null ? ` · ~${esc(t.rowsEstimate)} righe` : ''}">
+          ${caret(k)}<span class="db-row-icon">${t.view ? '👁' : '▦'}</span><span class="db-row-label">${esc(t.name)}</span>
+        </div>
+        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.columns.map(col => `
+          <div class="db-row db-row-col" title="${esc(col.comment || '')}">
+            <span class="db-caret"></span><span class="db-row-icon">${col.key === 'PRI' ? '🔑' : col.key ? '◆' : '·'}</span>
+            <span class="db-row-label">${esc(col.name)}</span><span class="db-col-type">${esc(col.type)}${col.nullable ? '' : ' NN'}</span>
+          </div>`).join('')}</div>` : ''}
+      </div>`;
+    }
+
+    // Carica i figli di un nodo (una volta; ↻ svuota la cache)
+    async function loadNode(k, url, map = x => x) {
+      if (cache.get(k) && !cache.get(k).error) return;
+      cache.set(k, { loading: true });
+      renderConnections();
+      try { cache.set(k, map(await ctx.api.get(url))); }
+      catch (e) { cache.set(k, { error: e.message }); }
+      renderConnections();
+    }
+
+    const loadDatabases = c => loadNode(nodeKey('c', c.id), `/connections/${encodeURIComponent(c.id)}/databases`, r => r.databases);
+    const loadTables = (c, db) => loadNode(nodeKey('d', c.id, db), `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/tables`, r => r.tables);
+    const tableUrl = (c, db, t) => `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(t)}`;
+    const loadColumns = (c, db, t) => loadNode(nodeKey('t', c.id, db, t), tableUrl(c, db, t));
+
+    function toggle(k, loader) {
+      if (open.has(k)) open.delete(k); else { open.add(k); loader(); }
+      renderConnections();
+    }
+
+    function setActiveDb(c, db) {
+      activeDb.set(c.id, db);
+      if (activeId !== c.id) actions.select(c.id); else { renderConnections(); renderActiveDb(); }
+    }
+
+    function renderActiveDb() {
+      const db = activeDb.get(activeId);
+      $(ctx.root, 'active-db').innerHTML = db ? `🛢️ ${esc(db)}` : '<span class="db-muted">nessun database: scegline uno dalla sidebar</span>';
+    }
+
+    // Testo nell'editor ed esecuzione (le modifiche passano comunque dalla conferma)
+    function runSql(sql) {
+      sqlInput.value = sql;
+      sqlInput.dispatchEvent(new Event('input'));
+      run();
+    }
+
+    function tableMenu(ev, c, db, name) {
+      const t = (cache.get(nodeKey('d', c.id, db)) || []).find?.(x => x.name === name);
+      const full = `${quoteId(db)}.${quoteId(name)}`;
+      const ro = c.readOnly;
+      ctx.ui.contextMenu(ev.clientX, ev.clientY, [
+        { icon: '▶', label: 'Prime 100 righe', action: () => runSql(`SELECT * FROM ${full} LIMIT 100;`) },
+        { icon: '#', label: 'Conta righe', action: () => runSql(`SELECT COUNT(*) AS righe FROM ${full};`) },
+        { icon: '▦', label: 'Struttura', action: () => showStructure(c, db, name) },
+        { icon: '⌘', label: t?.view ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE', action: () => runSql(`SHOW CREATE ${t?.view ? 'VIEW' : 'TABLE'} ${full};`) },
+        'separator',
+        { icon: '↳', label: 'Inserisci il nome nell\'editor', action: () => {
+          sqlInput.setRangeText(full, sqlInput.selectionStart, sqlInput.selectionEnd, 'end');
+          sqlInput.dispatchEvent(new Event('input'));
+          sqlInput.focus();
+        } },
+        { icon: '⧉', label: 'Copia il nome', action: () => navigator.clipboard?.writeText(name).then(() => toast('Nome copiato')) },
+        'separator',
+        ...(t?.view ? [] : [{ icon: '⌫', label: 'Svuota tabella (TRUNCATE)…', danger: true, disabled: ro, action: () => runSql(`TRUNCATE TABLE ${full};`) }]),
+        { icon: '✕', label: t?.view ? 'Elimina vista (DROP)…' : 'Elimina tabella (DROP)…', danger: true, disabled: ro, action: () => runSql(`DROP ${t?.view ? 'VIEW' : 'TABLE'} ${full};`) },
+      ]);
+    }
+
+    async function showStructure(c, db, name) {
+      const el = $(ctx.root, 'results');
+      el.innerHTML = '<div class="db-muted db-pad">Caricamento struttura…</div>';
+      try {
+        const info = await ctx.api.get(tableUrl(c, db, name));
+        const table = (head, rows) => `<table class="data-table db-table"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+        el.innerHTML = `
+          <div class="db-result-meta">Struttura di ${esc(db)}.${esc(name)}</div>
+          <div class="db-table-wrap db-structure">
+            <h4>Colonne</h4>
+            ${table(['Nome', 'Tipo', 'NULL', 'Chiave', 'Default', 'Extra', 'Commento'], info.columns.map(col => `<tr>
+              <td>${esc(col.name)}</td><td>${esc(col.type)}</td><td>${col.nullable ? 'sì' : 'no'}</td><td>${esc(col.key)}</td>
+              <td>${col.default === null ? '<span class="db-null">NULL</span>' : esc(col.default)}</td><td>${esc(col.extra)}</td><td>${esc(col.comment)}</td></tr>`))}
+            <h4>Indici</h4>
+            ${info.indexes.length ? table(['Nome', 'Colonne', 'Univoco'], info.indexes.map(i => `<tr><td>${esc(i.name)}</td><td>${esc(i.columns.join(', '))}</td><td>${i.unique ? 'sì' : 'no'}</td></tr>`)) : '<p class="db-muted db-pad">Nessuno</p>'}
+            <h4>Chiavi esterne</h4>
+            ${info.foreignKeys.length ? table(['Nome', 'Colonne', 'Riferimento'], info.foreignKeys.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.columns.join(', '))}</td><td>${esc(f.refDatabase)}.${esc(f.refTable)} (${esc(f.refColumns.join(', '))})</td></tr>`)) : '<p class="db-muted db-pad">Nessuna</p>'}
+          </div>`;
+      } catch (e) { renderError(e.message); }
     }
 
     const target = c => c.tunnel ? `tunnel ${c.tunnel}` : `${c.host}:${c.port}`;
@@ -102,7 +230,8 @@ export default {
       if (!c) return;
       $(ctx.root, 'sql').value = editors.get(c.id) || '';
       syncHighlight();
-      loadDatabases(c);
+      if (!activeDb.has(c.id) && c.database) activeDb.set(c.id, c.database);
+      renderActiveDb();
       $(ctx.root, 'conn-header').innerHTML = `
         <h3>🗄️ ${esc(c.label)}</h3>
         <span class="db-conn-meta">${esc(c.user)}@${esc(target(c))}${c.database ? ` / ${esc(c.database)}` : ''}</span>
@@ -179,16 +308,6 @@ export default {
       }
     });
 
-    async function loadDatabases(c) {
-      const select = $(ctx.root, 'database');
-      select.innerHTML = c.database ? `<option>${esc(c.database)}</option>` : '<option value="">— nessuno —</option>';
-      try {
-        const r = await ctx.api.get(`/connections/${encodeURIComponent(c.id)}/databases`);
-        if (activeId !== c.id) return;
-        select.innerHTML = `<option value="">— nessuno —</option>` + r.databases.map(d => `<option ${d === (select.dataset.chosen || r.default) ? 'selected' : ''}>${esc(d)}</option>`).join('');
-      } catch { /* senza connessione resta il database configurato */ }
-    }
-
     // Testo da eseguire: la selezione, se c'è, altrimenti tutto
     const statement = () => {
       const sel = sqlInput.value.slice(sqlInput.selectionStart, sqlInput.selectionEnd);
@@ -201,7 +320,7 @@ export default {
       const sql = typeof confirmToken === 'object' ? confirmToken.sql : statement();
       if (!c || !sql || running) return;
       const body = {
-        sql, database: $(ctx.root, 'database').value || null, limit: Number($(ctx.root, 'limit').value),
+        sql, database: activeDb.get(c.id) || null, limit: Number($(ctx.root, 'limit').value),
         ...(typeof confirmToken === 'object' ? { confirm: confirmToken.token } : {}),
       };
       running = true;
@@ -391,7 +510,33 @@ export default {
       if (a === 'vault-reset') resetVault();
       else if (a === 'run') run();
     });
-    $(ctx.root, 'database').addEventListener('change', e => { e.target.dataset.chosen = e.target.value; });
+    // Albero: freccia apre/chiude; clic sulla connessione la seleziona, sul database lo rende
+    // attivo, sulla tabella apre il menu contestuale (anche con il tasto destro)
+    function onTree(e, contextual) {
+      const row = e.target.closest('[data-tree]');
+      if (!row) return;
+      if (row.dataset.tree === 'add') return actions.addConnection();
+      const c = connections.find(x => x.id === row.dataset.conn);
+      if (!c) return;
+      const { db, table } = row.dataset;
+      const toggling = e.target.closest('[data-act="toggle"]');
+      if (contextual) e.preventDefault();
+      if (row.dataset.tree === 'conn') {
+        if (toggling) return toggle(nodeKey('c', c.id), () => loadDatabases(c));
+        if (!open.has(nodeKey('c', c.id))) toggle(nodeKey('c', c.id), () => loadDatabases(c));
+        actions.select(c.id);
+      } else if (row.dataset.tree === 'db') {
+        if (toggling) return toggle(nodeKey('d', c.id, db), () => loadTables(c, db));
+        if (!open.has(nodeKey('d', c.id, db))) toggle(nodeKey('d', c.id, db), () => loadTables(c, db));
+        setActiveDb(c, db);
+      } else if (row.dataset.tree === 'table') {
+        if (toggling) return toggle(nodeKey('t', c.id, db, table), () => loadColumns(c, db, table));
+        if (activeId !== c.id || activeDb.get(c.id) !== db) setActiveDb(c, db);
+        tableMenu(e, c, db, table);
+      }
+    }
+    ctx.sidebar.addEventListener('click', e => onTree(e, false));
+    ctx.sidebar.addEventListener('contextmenu', e => { if (e.target.closest('[data-tree="table"]')) onTree(e, true); });
     ctx.sidebar.addEventListener('click', e => {
       if (e.target.closest('[data-action="vault-menu"]')) vaultMenu();
       else if (e.target.closest('[data-action="add-connection"]')) actions.addConnection();
@@ -399,7 +544,16 @@ export default {
     ctx.bus.on('npm:projects-changed', () => { if (vault.state === 'unlocked') renderConnections(); });
     ctx.expose(actions);
 
+    // ↻: lo schema può essere cambiato (anche da questa sessione): ricarica i nodi aperti
+    function reopen() {
+      for (const k of open) {
+        const [kind, id, db, table] = k.split('|');
+        const c = connections.find(x => x.id === id);
+        if (!c) continue;
+        if (kind === 'c') loadDatabases(c); else if (kind === 'd') loadTables(c, db); else loadColumns(c, db, table);
+      }
+    }
     this.show = loadVault;
-    this.refresh = loadVault;
+    this.refresh = async () => { cache.clear(); await loadVault(); reopen(); };
   },
 };

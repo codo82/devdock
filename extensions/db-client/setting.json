@@ -25,6 +25,8 @@
       { "method": "DELETE", "path": "/connections/:id",       "handler": "deleteConnection" },
       { "method": "POST",   "path": "/connections/:id/test",  "handler": "testConnection" },
       { "method": "GET",    "path": "/connections/:id/databases", "handler": "databases" },
+      { "method": "GET",    "path": "/connections/:id/databases/:db/tables", "handler": "tables" },
+      { "method": "GET",    "path": "/connections/:id/databases/:db/tables/:table", "handler": "tableInfo" },
       { "method": "POST",   "path": "/connections/:id/query",  "handler": "query" },
       { "method": "GET",    "path": "/vault",                 "handler": "vaultStatus" },
       { "method": "POST",   "path": "/vault/init",            "handler": "vaultInit" },

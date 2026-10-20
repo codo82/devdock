@@ -2,7 +2,7 @@
 // view.html / style.css / view.js e contesto (ctx) passato ai moduli frontend.
 // Contratto in docs/EXTENSIONS.md. Navigazione, header e avvio dell'app.
 window.Shell = (() => {
-  const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice } = window.UI;
+  const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu } = window.UI;
 
   const exts = new Map();   // code → { meta, panel, sidebar, tab, module, ctx, loading }
   const bus = new EventTarget();
@@ -215,7 +215,7 @@ window.Shell = (() => {
       sidebar,
       api,
       core: apiClient('/api/core'),
-      ui: { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, output, formatUptime, toolNotice, notify },
+      ui: { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, output, formatUptime, toolNotice, notify, contextMenu },
       bus: {
         on(name, fn) { const h = e => fn(e.detail); bus.addEventListener(name, h); return () => bus.removeEventListener(name, h); },
         emit(name, detail) { bus.dispatchEvent(new CustomEvent(name, { detail })); },

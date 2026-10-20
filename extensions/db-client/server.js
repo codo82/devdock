@@ -313,6 +313,54 @@ module.exports = function createDbClient(ctx) {
         }
       },
 
+      // Tabelle e viste di un database (letture su information_schema, con parametri)
+      async tables(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        if (!DB_NAME_RE.test(req.params.db)) return res.status(400).json({ error: 'Nome database non valido' });
+        try {
+          const [rows] = await (await poolFor(conn)).promise().query(
+            `SELECT TABLE_NAME AS name, TABLE_TYPE AS type, ENGINE AS engine, TABLE_ROWS AS rowsEstimate, TABLE_COMMENT AS comment
+               FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME`, [req.params.db]);
+          res.json({ tables: rows.map(t => ({ ...t, view: t.type === 'VIEW' })) });
+        } catch (e) {
+          res.status(e.status || 502).json({ error: e.message });
+        }
+      },
+
+      // Struttura di una tabella: colonne, indici, chiavi esterne
+      async tableInfo(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const { db, table } = req.params;
+        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) return res.status(400).json({ error: 'Nome non valido' });
+        try {
+          const q = (await poolFor(conn)).promise();
+          const [[columns], [indexes], [foreignKeys]] = await Promise.all([
+            q.query(`SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE = 'YES' AS nullable, COLUMN_KEY AS \`key\`,
+                            COLUMN_DEFAULT AS \`default\`, EXTRA AS extra, COLUMN_COMMENT AS comment
+                       FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]),
+            q.query(`SELECT INDEX_NAME AS name, NON_UNIQUE = 0 AS \`unique\`, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns
+                       FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? GROUP BY INDEX_NAME, NON_UNIQUE`, [db, table]),
+            q.query(`SELECT CONSTRAINT_NAME AS name, GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION) AS columns,
+                            REFERENCED_TABLE_SCHEMA AS refDatabase, REFERENCED_TABLE_NAME AS refTable,
+                            GROUP_CONCAT(REFERENCED_COLUMN_NAME ORDER BY ORDINAL_POSITION) AS refColumns
+                       FROM information_schema.KEY_COLUMN_USAGE
+                      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
+                      GROUP BY CONSTRAINT_NAME, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME`, [db, table]),
+          ]);
+          if (!columns.length) return res.status(404).json({ error: 'Tabella non trovata' });
+          const split = list => list.map(x => ({ ...x, columns: String(x.columns).split(','), ...(x.refColumns ? { refColumns: String(x.refColumns).split(',') } : {}) }));
+          res.json({
+            columns: columns.map(c => ({ ...c, nullable: !!Number(c.nullable) })),
+            indexes: split(indexes).map(i => ({ ...i, unique: !!Number(i.unique) })),
+            foreignKeys: split(foreignKeys),
+          });
+        } catch (e) {
+          res.status(e.status || 502).json({ error: e.message });
+        }
+      },
+
       // Esegue una istruzione. Le letture partono subito; tutto ciò che può modificare
       // dati o schema richiede il token di conferma di quella esatta istruzione (428).
       async query(req, res) {
