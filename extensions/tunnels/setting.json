@@ -1,8 +1,11 @@
 {
-  "name": "Tunnels SSH",
+  "name": { "it": "Tunnel SSH", "en": "SSH Tunnels" },
   "code": "tunnels",
   "version": "1.0.0",
-  "description": "Port forwarding SSH (ssh -L / autossh) per gruppi di server, con riconnessione automatica",
+  "description": {
+    "it": "Port forwarding SSH (ssh -L / autossh) per gruppi di server, con riconnessione automatica",
+    "en": "SSH port forwarding (ssh -L / autossh) for groups of servers, with automatic reconnection"
+  },
   "color": "#388bfd",
   "icon": "🔗",
   "position": "tab",
@@ -14,8 +17,8 @@
   "export": [
     {
       "id": "tunnels",
-      "label": "Tunnel SSH",
-      "description": "Gruppi e server",
+      "label": { "it": "Tunnel SSH", "en": "SSH tunnels" },
+      "description": { "it": "Gruppi e server", "en": "Groups and servers" },
       "sections": [
         "groups",
         "servers"

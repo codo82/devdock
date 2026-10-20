@@ -10,6 +10,11 @@ const CDN = {
   jsYaml:        { url: `${CDNJS}/js-yaml/4.1.0/js-yaml.min.js`,                            sri: 'sha512-CSBhVREyzHAjAFfBlIBakjoRUKp5h7VSweP0InR/pAJyptH7peuhCsqAI/snV+TwZmXZqoUklpXp6R6wMnYf5Q==' },
 };
 
+// Errore di caricamento con l'URL: il messaggio è tradotto da chi lo mostra
+class ScriptError extends Error {
+  constructor(url) { super(url); this.url = url; }
+}
+
 function loadScript({ url, sri }) {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${url}"]`)) return resolve();
@@ -18,7 +23,7 @@ function loadScript({ url, sri }) {
     s.integrity = sri;
     s.crossOrigin = 'anonymous';
     s.onload = resolve;
-    s.onerror = () => reject(new Error(`impossibile caricare ${url}`));
+    s.onerror = () => reject(new ScriptError(url));
     document.head.appendChild(s);
   });
 }
@@ -43,7 +48,22 @@ async function parseSpec(text) {
   }
 }
 
+let lastError = null; // ultimo errore mostrato, ritradotto al cambio di lingua
+
+function showError(ctx, e) {
+  lastError = e;
+  const box = ctx.root.querySelector('[data-role="error"]');
+  box.hidden = !e;
+  if (!e) return;
+  const detail = e instanceof ScriptError ? ctx.t('error.script', { url: e.url }) : e.message;
+  box.textContent = ctx.t('error.load', { error: detail });
+}
+
 export default {
+  languageChanged(ctx) {
+    if (lastError) showError(ctx, lastError);
+  },
+
   mount(ctx) {
     const el = role => ctx.root.querySelector(`[data-role="${role}"]`);
 
@@ -55,7 +75,7 @@ export default {
       input.value = ''; // permette di ricaricare lo stesso file
 
       el('empty').hidden = true;
-      el('error').hidden = true;
+      showError(ctx, null);
       const host = el('host');
       host.hidden = false;
       host.innerHTML = '';
@@ -77,8 +97,7 @@ export default {
         });
       } catch (e) {
         host.hidden = true;
-        el('error').hidden = false;
-        el('error').textContent = `Errore nel caricamento: ${e.message}`;
+        showError(ctx, e);
       }
     });
   },

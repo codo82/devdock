@@ -8,7 +8,8 @@ const SERVICE_TYPES = ['MySQL', 'MongoDB', 'PostgreSQL', 'SQL Server', 'HTTP', '
 
 export default {
   async mount(ctx) {
-    const { esc, js, cssColor, toast, openModal, closeModal, output, formatUptime, toolNotice, notify } = ctx.ui;
+    const { esc, js, cssColor, toast, openModal, closeModal, output, formatUptime, toolNotice, notify, fmt } = ctx.ui;
+    const { t } = ctx;
     const $ = (root, role) => root.querySelector(`[data-role="${role}"]`);
 
     let state = { groups: [], servers: [], tunnels: [] };
@@ -20,7 +21,7 @@ export default {
     const customPorts = new Map(); // porta digitata nelle card, conservata tra un refresh e l'altro
     let logTunnelId = null, logTimer = null;
 
-    const tunnelsOf = g => state.tunnels.filter(t => g.servers.some(s => s.key === t.serverKey));
+    const tunnelsOf = g => state.tunnels.filter(tn => g.servers.some(s => s.key === tn.serverKey));
 
     // ---- dati ----
     async function load() {
@@ -36,15 +37,15 @@ export default {
 
     function notifyChanges(next) {
       if (prevTunnels) {
-        const prev = new Map(prevTunnels.map(t => [t.id, t]));
-        const ids = new Set(next.map(t => t.id));
-        for (const t of next) {
-          const was = prev.get(t.id);
-          if (!was) notify(t.label, `Tunnel connesso su :${t.port}`, '🟢');
-          else if (t.reconnecting && !was.reconnecting) notify(t.label, 'Connessione persa — riconnessione...', '🟡');
-          else if (!t.reconnecting && was.reconnecting) notify(t.label, `Riconnessione riuscita su :${t.port}`, '🟢');
+        const prev = new Map(prevTunnels.map(tn => [tn.id, tn]));
+        const ids = new Set(next.map(tn => tn.id));
+        for (const tn of next) {
+          const was = prev.get(tn.id);
+          if (!was) notify(tn.label, t('notify.connected', { port: tn.port }), '🟢');
+          else if (tn.reconnecting && !was.reconnecting) notify(tn.label, t('notify.lost'), '🟡');
+          else if (!tn.reconnecting && was.reconnecting) notify(tn.label, t('notify.reconnected', { port: tn.port }), '🟢');
         }
-        for (const t of prevTunnels) if (!ids.has(t.id)) notify(t.label, `Tunnel disconnesso da :${t.port}`, '🔴');
+        for (const tn of prevTunnels) if (!ids.has(tn.id)) notify(tn.label, t('notify.disconnected', { port: tn.port }), '🔴');
       }
       prevTunnels = next;
     }
@@ -52,13 +53,13 @@ export default {
     // ---- header ----
     function renderPills() {
       if (!state.tunnels.length) { ctx.setPills(''); return; }
-      ctx.setPills(state.tunnels.map(t => `
-        <span class="pill pill-tunnel ${t.reconnecting ? 'reconnecting' : ''}" onclick="Ext.tunnels.open()"
-              title="${esc(t.label)} :${esc(t.port)}${t.reconnecting ? ' (riconnessione)' : ''}">
+      ctx.setPills(state.tunnels.map(tn => `
+        <span class="pill pill-tunnel ${tn.reconnecting ? 'reconnecting' : ''}" onclick="Ext.tunnels.open()"
+              title="${esc(tn.label)} :${esc(tn.port)}${tn.reconnecting ? ' ' + esc(t('pill.reconnecting')) : ''}">
           <span class="pill-dot"></span>
-          ${esc(t.label)}<span class="pill-port">:${esc(t.port)}</span>
-          <span class="pill-close" onclick="event.stopPropagation();Ext.tunnels.stop(${js(t.id)})">✕</span>
-        </span>`).join('') + `<button class="btn btn-danger btn-sm" onclick="Ext.tunnels.stopAll()">⏹ Stop all</button>`);
+          ${esc(tn.label)}<span class="pill-port">:${esc(tn.port)}</span>
+          <span class="pill-close" onclick="event.stopPropagation();Ext.tunnels.stop(${js(tn.id)})">✕</span>
+        </span>`).join('') + `<button class="btn btn-danger btn-sm" onclick="Ext.tunnels.stopAll()">${esc(t('pill.stopAll'))}</button>`);
     }
 
     // ---- vista tunnel ----
@@ -73,14 +74,14 @@ export default {
     function renderGroups() {
       const list = $(ctx.sidebar, 'groups');
       list.innerHTML = !state.groups.length
-        ? '<p class="tn-muted tn-pad">Nessun gruppo</p>'
+        ? `<p class="tn-muted tn-pad">${esc(t('groups.none'))}</p>`
         : state.groups.map(g => {
             const cnt = tunnelsOf(g).length, color = cssColor(g.color);
             return `<button class="sb-item ${activeGroup === g.key ? 'active' : ''}" onclick="Ext.tunnels.selectGroup(${js(g.key)})">
               <span class="sb-dot" style="background:${color}"></span>
               <span class="tn-grow">${esc(g.label)}</span>
-              ${cnt ? `<span class="sb-count" style="color:${color};border-color:${color}">${cnt}</span>`
-                    : `<span class="sb-count">${g.servers.length}</span>`}
+              ${cnt ? `<span class="sb-count" style="color:${color};border-color:${color}">${fmt.number(cnt)}</span>`
+                    : `<span class="sb-count">${fmt.number(g.servers.length)}</span>`}
             </button>`;
           }).join('');
     }
@@ -89,54 +90,54 @@ export default {
       const main = $(ctx.root, 'main');
       const g = state.groups.find(x => x.key === activeGroup);
       if (!g) {
-        main.innerHTML = '<div class="empty-state"><div class="icon">🔗</div><p>Seleziona un gruppo dalla sidebar</p></div>';
+        main.innerHTML = `<div class="empty-state"><div class="icon">🔗</div><p>${esc(t('main.selectGroup'))}</p></div>`;
         return;
       }
       const color = cssColor(g.color), cnt = tunnelsOf(g).length;
       const autossh = system.platform && !system.tools.autossh
-        ? toolNotice('autossh non installato: i tunnel usano ssh e la riconnessione è gestita da DevDock.',
+        ? toolNotice(t('main.autossh'),
             system.platform === 'darwin' ? 'brew install autossh' : system.platform === 'win32' ? '' : 'sudo apt install autossh',
             'Ext.tunnels.recheck()')
         : '';
       main.innerHTML = `
-        <div class="section-banner" style="border-left:3px solid ${color}">
+        <div class="section-banner" style="border-inline-start:3px solid ${color}">
           <span class="section-banner-dot" style="background:${color}"></span>
           <h2>${esc(g.label)}</h2>
-          ${cnt ? `<span class="section-banner-sub">${cnt} connessi</span>` : ''}
+          ${cnt ? `<span class="section-banner-sub">${esc(t('main.connected', { count: cnt }))}</span>` : ''}
           <div class="tn-banner-actions">
-            ${cnt ? `<button class="btn btn-danger btn-sm" onclick="Ext.tunnels.stopGroup(${js(g.key)})">⏹ Disconnetti tutti</button>` : ''}
+            ${cnt ? `<button class="btn btn-danger btn-sm" onclick="Ext.tunnels.stopGroup(${js(g.key)})">${esc(t('main.disconnectAll'))}</button>` : ''}
           </div>
         </div>
         ${autossh}
         <div class="server-area">
           <div class="server-grid">${g.servers.map(serverCard).join('')}</div>
-          ${g.servers.length ? '' : '<div class="empty-state tn-empty-inline"><div class="icon">🖥</div><p>Nessun server in questo gruppo</p></div>'}
+          ${g.servers.length ? '' : `<div class="empty-state tn-empty-inline"><div class="icon">🖥</div><p>${esc(t('main.noServers'))}</p></div>`}
         </div>`;
     }
 
     function serverCard(s) {
-      const t = state.tunnels.find(x => x.serverKey === s.key);
-      return `<div class="server-card ${t ? 'connected' : ''}">
+      const tn = state.tunnels.find(x => x.serverKey === s.key);
+      return `<div class="server-card ${tn ? 'connected' : ''}">
         <div class="card-top">
           <span class="card-label">${esc(s.label)}</span>
           <span class="type-badge">${esc(s.type || 'TCP')}</span>
         </div>
         <div class="card-meta">
-          <div>alias: <span class="val">${esc(s.alias)}</span></div>
-          <div>remote: <span class="val">${esc(s.remote)}</span></div>
+          <div>${esc(t('card.alias'))} <span class="val">${esc(s.alias)}</span></div>
+          <div>${esc(t('card.remote'))} <span class="val">${esc(s.remote)}</span></div>
         </div>
-        ${t ? `<div class="card-meta tn-card-runtime">
-          <div>pid: <span class="val">${esc(t.pid || '—')}</span></div>
-          <div>uptime: <span class="val" data-uptime="${esc(t.startedAt)}">${formatUptime(t.startedAt)}</span></div>
+        ${tn ? `<div class="card-meta tn-card-runtime">
+          <div>${esc(t('card.pid'))} <span class="val">${esc(tn.pid || '—')}</span></div>
+          <div>${esc(t('card.uptime'))} <span class="val" data-uptime="${esc(tn.startedAt)}">${formatUptime(tn.startedAt)}</span></div>
         </div>` : ''}
         <div class="card-bottom">
-          ${t
-            ? `<span class="connected-status ${t.reconnecting ? 'reconnecting' : ''}">:${esc(t.port)}${t.reconnecting ? ' ↻' : ''}</span>
-               <button class="btn btn-disconnect" onclick="Ext.tunnels.stop(${js(t.id)})">Disconnetti</button>
-               <button class="btn btn-ghost btn-sm" onclick="Ext.tunnels.logs(${js(t.id)},${js(s.label)})">Log</button>`
+          ${tn
+            ? `<span class="connected-status ${tn.reconnecting ? 'reconnecting' : ''}">:${esc(tn.port)}${tn.reconnecting ? ' ↻' : ''}</span>
+               <button class="btn btn-disconnect" onclick="Ext.tunnels.stop(${js(tn.id)})">${esc(t('card.disconnect'))}</button>
+               <button class="btn btn-ghost btn-sm" onclick="Ext.tunnels.logs(${js(tn.id)},${js(s.label)})">${esc(t('card.logs'))}</button>`
             : `<input class="port-input" type="number" min="1" max="65535" value="${esc(customPorts.get(s.key) ?? s.port)}"
                       oninput="Ext.tunnels.setPort(${js(s.key)}, this.value)">
-               <button class="btn btn-connect" onclick="Ext.tunnels.start(${js(s.key)})">Connetti</button>`}
+               <button class="btn btn-connect" onclick="Ext.tunnels.start(${js(s.key)})">${esc(t('card.connect'))}</button>`}
         </div>
       </div>`;
     }
@@ -145,14 +146,14 @@ export default {
     function renderSettingsGroups() {
       const el = $(ctx.sidebar, 'settings-groups');
       el.innerHTML = !state.groups.length
-        ? '<p class="tn-muted tn-pad">Nessun gruppo.<br><br><button class="btn btn-ghost btn-sm" onclick="Ext.tunnels.addGroup()">+ Aggiungi</button></p>'
+        ? `<p class="tn-muted tn-pad">${esc(t('settings.noGroups'))}<br><br><button class="btn btn-ghost btn-sm" onclick="Ext.tunnels.addGroup()">${esc(t('settings.add'))}</button></p>`
         : state.groups.map(g => `
           <div class="gli ${settingsGroup === g.key ? 'active' : ''}" onclick="Ext.tunnels.selectSettingsGroup(${js(g.key)})">
             <span class="gli-dot" style="background:${cssColor(g.color)}"></span>
             <span class="gli-label">${esc(g.label)}</span>
-            <span class="gli-cnt">${g.servers.length}</span>
-            <button class="gli-edit" onclick="event.stopPropagation();Ext.tunnels.editGroup(${js(g.key)})" title="Modifica">✏️</button>
-            <button class="gli-del" onclick="event.stopPropagation();Ext.tunnels.deleteGroup(${js(g.key)})" title="Elimina">🗑</button>
+            <span class="gli-cnt">${fmt.number(g.servers.length)}</span>
+            <button class="gli-edit" onclick="event.stopPropagation();Ext.tunnels.editGroup(${js(g.key)})" title="${esc(t('core.action.edit'))}">✏️</button>
+            <button class="gli-del" onclick="event.stopPropagation();Ext.tunnels.deleteGroup(${js(g.key)})" title="${esc(t('core.action.delete'))}">🗑</button>
           </div>`).join('');
     }
 
@@ -160,7 +161,7 @@ export default {
       const el = $(ctx.root, 'settings-detail');
       const g = state.groups.find(x => x.key === settingsGroup);
       if (!g) {
-        el.innerHTML = '<div class="settings-detail-empty"><div class="icon">←</div><p>Seleziona un gruppo dalla sidebar</p></div>';
+        el.innerHTML = `<div class="settings-detail-empty"><div class="icon">←</div><p>${esc(t('main.selectGroup'))}</p></div>`;
         return;
       }
       const available = state.servers.filter(s => !g.servers.some(x => x.key === s.key));
@@ -168,23 +169,23 @@ export default {
         <div class="settings-detail-header">
           <span class="settings-detail-dot" style="background:${cssColor(g.color)}"></span>
           <h3>${esc(g.label)}</h3>
-          <button class="btn btn-primary btn-sm" onclick="Ext.tunnels.addServer(${js(g.key)})">+ Nuovo server</button>
-          ${available.length ? `<button class="btn btn-ghost btn-sm" onclick="Ext.tunnels.assignServer(${js(g.key)})">+ Aggiungi esistente</button>` : ''}
+          <button class="btn btn-primary btn-sm" onclick="Ext.tunnels.addServer(${js(g.key)})">${esc(t('settings.newServer'))}</button>
+          ${available.length ? `<button class="btn btn-ghost btn-sm" onclick="Ext.tunnels.assignServer(${js(g.key)})">${esc(t('settings.addExisting'))}</button>` : ''}
         </div>
         <div class="settings-detail-body">
           ${!g.servers.length
-            ? '<p class="tn-muted tn-pad-v">Nessun server in questo gruppo.</p>'
+            ? `<p class="tn-muted tn-pad-v">${esc(t('settings.noServers'))}</p>`
             : g.servers.map(s => `
               <div class="sli">
                 <div class="sli-info">
                   <div class="sli-label">${esc(s.label)}</div>
-                  <div class="sli-meta">:${esc(s.port)} → ${esc(s.remote)} · alias: ${esc(s.alias)}</div>
+                  <div class="sli-meta">:${esc(s.port)} → ${esc(s.remote)} · ${esc(t('card.alias'))} ${esc(s.alias)}</div>
                 </div>
                 <span class="sli-type">${esc(s.type || 'TCP')}</span>
                 <div class="sli-actions">
-                  <button class="sli-btn" onclick="Ext.tunnels.editServer(${js(s.key)})" title="Modifica">✏️</button>
-                  <button class="sli-btn danger" onclick="Ext.tunnels.removeFromGroup(${js(g.key)},${js(s.key)})" title="Rimuovi dal gruppo">✕</button>
-                  <button class="sli-btn danger" onclick="Ext.tunnels.deleteServer(${js(s.key)})" title="Elimina definitivamente">🗑</button>
+                  <button class="sli-btn" onclick="Ext.tunnels.editServer(${js(s.key)})" title="${esc(t('core.action.edit'))}">✏️</button>
+                  <button class="sli-btn danger" onclick="Ext.tunnels.removeFromGroup(${js(g.key)},${js(s.key)})" title="${esc(t('settings.removeFromGroup'))}">✕</button>
+                  <button class="sli-btn danger" onclick="Ext.tunnels.deleteServer(${js(s.key)})" title="${esc(t('settings.deleteForever'))}">🗑</button>
                 </div>
               </div>`).join('')}
         </div>`;
@@ -197,15 +198,15 @@ export default {
       const color = cssColor(g.color);
       return `
         <div class="form-row">
-          <label>Chiave (snake_case, non modificabile)</label>
-          <input class="form-input" id="f_key" value="${esc(g.key || '')}" placeholder="es. nuovo_gruppo" ${g.key ? 'disabled' : ''}>
+          <label>${esc(t('form.key'))}</label>
+          <input class="form-input" id="f_key" value="${esc(g.key || '')}" placeholder="${esc(t('form.groupKeyPlaceholder'))}" ${g.key ? 'disabled' : ''}>
         </div>
         <div class="form-row">
-          <label>Nome</label>
-          <input class="form-input" id="f_label" value="${esc(g.label || '')}" placeholder="es. Nuovo Gruppo">
+          <label>${esc(t('form.name'))}</label>
+          <input class="form-input" id="f_label" value="${esc(g.label || '')}" placeholder="${esc(t('form.groupNamePlaceholder'))}">
         </div>
         <div class="form-row">
-          <label>Colore</label>
+          <label>${esc(t('form.color'))}</label>
           <div class="color-row">
             <div class="color-preview" id="colorPreview" style="background:${color}" onclick="document.getElementById('f_color').click()"></div>
             <span id="colorHex" class="tn-hex">${color}</span>
@@ -215,33 +216,33 @@ export default {
     }
 
     function serverForm(s = {}, preGroupKey = '') {
-      const types = SERVICE_TYPES.map(t => `<option ${(s.type || 'MySQL') === t ? 'selected' : ''}>${esc(t)}</option>`).join('');
+      const types = SERVICE_TYPES.map(type => `<option ${(s.type || 'MySQL') === type ? 'selected' : ''}>${esc(type)}</option>`).join('');
       const groupOptions = state.groups.map(g => `<option value="${esc(g.key)}" ${g.key === preGroupKey ? 'selected' : ''}>${esc(g.label)}</option>`).join('');
       return `
         <div class="form-row">
-          <label>Chiave (snake_case, non modificabile)</label>
-          <input class="form-input" id="f_key" value="${esc(s.key || '')}" placeholder="es. db_prod" ${s.key ? 'disabled' : ''}>
+          <label>${esc(t('form.key'))}</label>
+          <input class="form-input" id="f_key" value="${esc(s.key || '')}" placeholder="${esc(t('form.serverKeyPlaceholder'))}" ${s.key ? 'disabled' : ''}>
         </div>
         <div class="form-grid">
-          <div class="form-row"><label>Nome</label><input class="form-input" id="f_label" value="${esc(s.label || '')}" placeholder="es. DB Produzione"></div>
-          <div class="form-row"><label>Tipo</label><select class="form-input" id="f_type">${types}</select></div>
+          <div class="form-row"><label>${esc(t('form.name'))}</label><input class="form-input" id="f_label" value="${esc(s.label || '')}" placeholder="${esc(t('form.serverNamePlaceholder'))}"></div>
+          <div class="form-row"><label>${esc(t('form.type'))}</label><select class="form-input" id="f_type">${types}</select></div>
         </div>
         <div class="form-grid">
-          <div class="form-row"><label>Porta locale</label><input class="form-input" id="f_port" type="number" value="${esc(s.port || 3306)}" min="1" max="65535"></div>
-          <div class="form-row"><label>Remote (host:port)</label><input class="form-input" id="f_remote" value="${esc(s.remote || '')}" placeholder="127.0.0.1:3306"></div>
+          <div class="form-row"><label>${esc(t('form.localPort'))}</label><input class="form-input" id="f_port" type="number" value="${esc(s.port || 3306)}" min="1" max="65535"></div>
+          <div class="form-row"><label>${esc(t('form.remote'))}</label><input class="form-input" id="f_remote" value="${esc(s.remote || '')}" placeholder="127.0.0.1:3306"></div>
         </div>
         <div class="form-row">
-          <label>SSH Alias (da ~/.ssh/config)</label>
-          <input class="form-input" id="f_alias" value="${esc(s.alias || '')}" placeholder="es. MyServer">
+          <label>${esc(t('form.alias'))}</label>
+          <input class="form-input" id="f_alias" value="${esc(s.alias || '')}" placeholder="${esc(t('form.aliasPlaceholder'))}">
         </div>
         ${!s.key ? `<div class="form-row">
-          <label>Gruppo</label>
-          <select class="form-input" id="f_group"><option value="">-- Nessuno --</option>${groupOptions}</select>
+          <label>${esc(t('form.group'))}</label>
+          <select class="form-input" id="f_group"><option value="">${esc(t('form.noGroup'))}</option>${groupOptions}</select>
         </div>` : ''}`;
     }
 
     const modalButtons = (label, call) =>
-      `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button><button class="btn btn-primary" onclick="${esc(call)}">${esc(label)}</button>`;
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button><button class="btn btn-primary" onclick="${esc(call)}">${esc(label)}</button>`;
 
     // Esegue una modifica e ricarica lo stato; gli errori del server diventano toast
     async function mutate(fn, okMsg) {
@@ -261,9 +262,9 @@ export default {
       try {
         const logs = await ctx.api.get(`/tunnels/${encodeURIComponent(logTunnelId)}/logs`);
         output.clear();
-        if (!logs.length) output.append('Nessun output', 'sys');
+        if (!logs.length) output.append(t('logs.empty'), 'sys');
         for (const l of logs) {
-          output.append(`[${new Date(l.ts).toLocaleTimeString('it-IT')}] `, 'sys');
+          output.append(`[${fmt.date(l.ts, { timeStyle: 'medium' })}] `, 'sys');
           output.append(l.text.endsWith('\n') ? l.text : l.text + '\n');
         }
       } catch { stopLogs(); }
@@ -279,20 +280,20 @@ export default {
       start: key => mutate(async () => {
         const port = customPorts.get(key);
         const r = await ctx.api.post('/tunnels', { serverKey: key, port: port === undefined || port === '' ? undefined : Number(port) });
-        toast(`Tunnel avviato su :${r.port}`, 'success');
+        toast(t('toast.started', { port: r.port }), 'success');
       }),
       stop: id => mutate(async () => {
         await ctx.api.del(`/tunnels/${encodeURIComponent(id)}`);
         if (logTunnelId === id) stopLogs();
-      }, 'Tunnel terminato'),
-      stopAll: () => mutate(async () => { await ctx.api.del('/tunnels'); stopLogs(); }, 'Tutti i tunnel terminati'),
+      }, t('toast.stopped')),
+      stopAll: () => mutate(async () => { await ctx.api.del('/tunnels'); stopLogs(); }, t('toast.stoppedAll')),
       stopGroup: key => mutate(async () => {
         const g = state.groups.find(x => x.key === key);
-        for (const t of g ? tunnelsOf(g) : []) await ctx.api.del(`/tunnels/${encodeURIComponent(t.id)}`).catch(() => {});
-      }, 'Tunnel del gruppo disconnessi'),
+        for (const tn of g ? tunnelsOf(g) : []) await ctx.api.del(`/tunnels/${encodeURIComponent(tn.id)}`).catch(() => {});
+      }, t('toast.stoppedGroup')),
       logs(id, label) {
         logTunnelId = id;
-        output.open(`🔗 SSH Log — ${label}`);
+        output.open(t('logs.title', { name: label }));
         pollLogs();
         clearInterval(logTimer);
         logTimer = setInterval(pollLogs, LOG_POLL_MS);
@@ -300,58 +301,58 @@ export default {
 
       // configurazione
       selectSettingsGroup(key) { settingsGroup = key; render(); },
-      addGroup: () => openModal('Nuovo gruppo', groupForm(), modalButtons('Crea', 'Ext.tunnels.saveGroup()')),
+      addGroup: () => openModal(t('modal.newGroup'), groupForm(), modalButtons(t('form.create'), 'Ext.tunnels.saveGroup()')),
       editGroup(key) {
         const g = state.groups.find(x => x.key === key);
-        if (g) openModal('Modifica gruppo', groupForm(g), modalButtons('Salva', `Ext.tunnels.saveGroup(${JSON.stringify(key)})`));
+        if (g) openModal(t('modal.editGroup'), groupForm(g), modalButtons(t('core.action.save'), `Ext.tunnels.saveGroup(${JSON.stringify(key)})`));
       },
       async saveGroup(existingKey) {
         const key = field('f_key'), label = field('f_label'), color = field('f_color') || '#6b7280';
-        if (!key || !label) { toast('Chiave e nome obbligatori', 'error'); return; }
+        if (!key || !label) { toast(t('toast.keyNameRequired'), 'error'); return; }
         const ok = await mutate(() => existingKey
           ? ctx.api.put(`/groups/${encodeURIComponent(existingKey)}`, { label, color })
-          : ctx.api.post('/groups', { key, label, color }), 'Gruppo salvato');
+          : ctx.api.post('/groups', { key, label, color }), t('toast.groupSaved'));
         if (ok) closeModal();
       },
       async deleteGroup(key) {
-        if (!confirm(`Eliminare il gruppo "${key}"?`)) return;
+        if (!confirm(t('confirm.deleteGroup', { name: key }))) return;
         if (settingsGroup === key) settingsGroup = null;
-        await mutate(() => ctx.api.del(`/groups/${encodeURIComponent(key)}`), 'Gruppo eliminato');
+        await mutate(() => ctx.api.del(`/groups/${encodeURIComponent(key)}`), t('toast.groupDeleted'));
       },
-      addServer: groupKey => openModal('Nuovo server', serverForm({}, groupKey), modalButtons('Crea', `Ext.tunnels.saveServer(null, ${JSON.stringify(groupKey || '')})`)),
+      addServer: groupKey => openModal(t('modal.newServer'), serverForm({}, groupKey), modalButtons(t('form.create'), `Ext.tunnels.saveServer(null, ${JSON.stringify(groupKey || '')})`)),
       editServer(key) {
         const s = state.servers.find(x => x.key === key);
-        if (s) openModal('Modifica server', serverForm(s), modalButtons('Salva', `Ext.tunnels.saveServer(${JSON.stringify(key)})`));
+        if (s) openModal(t('modal.editServer'), serverForm(s), modalButtons(t('core.action.save'), `Ext.tunnels.saveServer(${JSON.stringify(key)})`));
       },
       async saveServer(existingKey, forceGroupKey) {
         const body = { key: field('f_key'), label: field('f_label'), port: field('f_port'), remote: field('f_remote'), alias: field('f_alias'), type: field('f_type') || 'TCP' };
-        if (!body.key || !body.label || !body.port || !body.remote || !body.alias) { toast('Compila tutti i campi obbligatori', 'error'); return; }
+        if (!body.key || !body.label || !body.port || !body.remote || !body.alias) { toast(t('toast.fillRequired'), 'error'); return; }
         const ok = await mutate(() => existingKey
           ? ctx.api.put(`/servers/${encodeURIComponent(existingKey)}`, { label: body.label, port: body.port, remote: body.remote, alias: body.alias, type: body.type })
-          : ctx.api.post('/servers', { ...body, groupKey: forceGroupKey || field('f_group') }), 'Server salvato');
+          : ctx.api.post('/servers', { ...body, groupKey: forceGroupKey || field('f_group') }), t('toast.serverSaved'));
         if (ok) closeModal();
       },
       async deleteServer(key) {
-        if (!confirm(`Eliminare definitivamente il server "${key}"?`)) return;
-        await mutate(() => ctx.api.del(`/servers/${encodeURIComponent(key)}`), 'Server eliminato');
+        if (!confirm(t('confirm.deleteServer', { name: key }))) return;
+        await mutate(() => ctx.api.del(`/servers/${encodeURIComponent(key)}`), t('toast.serverDeleted'));
       },
       assignServer(groupKey) {
         const g = state.groups.find(x => x.key === groupKey);
         if (!g) return;
         const available = state.servers.filter(s => !g.servers.some(x => x.key === s.key));
-        openModal('Aggiungi server esistente', `
+        openModal(t('modal.assignServer'), `
           <div class="form-row">
-            <label>Server disponibili</label>
+            <label>${esc(t('form.availableServers'))}</label>
             <select class="form-input" id="f_assign_server" size="8" style="height:auto">${available.map(s =>
               `<option value="${esc(s.key)}">${esc(s.label)} (${esc(s.type || 'TCP')} :${esc(s.port)})</option>`).join('')}</select>
-          </div>`, modalButtons('Aggiungi', `Ext.tunnels.doAssign(${JSON.stringify(groupKey)})`));
+          </div>`, modalButtons(t('core.action.add'), `Ext.tunnels.doAssign(${JSON.stringify(groupKey)})`));
       },
       async doAssign(groupKey) {
         const serverKey = field('f_assign_server');
-        if (!serverKey) { toast('Seleziona un server', 'error'); return; }
+        if (!serverKey) { toast(t('toast.selectServer'), 'error'); return; }
         const g = state.groups.find(x => x.key === groupKey);
         const ok = await mutate(() => ctx.api.put(`/groups/${encodeURIComponent(groupKey)}`,
-          { servers: [...g.servers.map(s => s.key), serverKey] }), 'Server aggiunto al gruppo');
+          { servers: [...g.servers.map(s => s.key), serverKey] }), t('toast.serverAssigned'));
         if (ok) closeModal();
       },
       removeFromGroup(groupKey, serverKey) {
@@ -374,6 +375,7 @@ export default {
     setInterval(load, POLL_MS);
 
     this.render = render;
+    this.renderPills = renderPills;
     this.load = load;
     this.stopLogs = stopLogs;
   },
@@ -381,4 +383,5 @@ export default {
   show() { this.render(); },
   hide() { this.stopLogs(); },
   refresh() { this.load(); },
+  languageChanged() { this.renderPills(); this.render(); },
 };
