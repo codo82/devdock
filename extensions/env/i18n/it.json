@@ -1,0 +1,66 @@
+{
+  "sidebar.title": "File .env",
+  "sidebar.none": "Nessun progetto: aggiungine uno nella sezione NPM.",
+  "issues": {
+    "one": "{count} mancante",
+    "other": "{count} mancanti"
+  },
+  "issuesTitle": {
+    "one": "{count} chiave del modello manca nei file .env",
+    "other": "{count} chiavi del modello mancano nei file .env"
+  },
+  "empty": "Seleziona un progetto dalla sidebar",
+  "newFile": "＋ Nuovo file .env",
+  "templateIs": "Modello: {file}",
+  "noTemplate": "Nessun modello (.env.example): nessun confronto",
+  "noFiles": "Nessun file .env in questo progetto.",
+  "key": "Chiave",
+  "value": "Valore",
+  "template": "modello",
+  "addMissing": {
+    "one": "＋ {count} mancante",
+    "other": "＋ {count} mancanti"
+  },
+  "addKey": "＋ Chiave",
+  "notInTemplate": "non nel modello",
+  "missing": "manca",
+  "add": "Aggiungi",
+  "emptyValue": "(vuota)",
+  "show": "Mostra il valore",
+  "hide": "Nascondi",
+  "edit": "Modifica",
+  "editTitle": "{key} · {file}",
+  "addTitle": "Nuova chiave in {file}",
+  "fileHint": "Il file {file} viene riscritto mantenendo commenti, righe vuote e ordine.",
+  "keyRequired": "Scrivi il nome della chiave",
+  "saved": "{key} salvata in {file}",
+  "deleted": "{key} eliminata da {file}",
+  "confirmDelete": "Eliminare {key} da {file}?",
+  "confirmAddMissing": {
+    "one": "Aggiungere a {file} la chiave che manca, con il valore di {template}?",
+    "other": "Aggiungere a {file} le {count} chiavi che mancano, con i valori di {template}?"
+  },
+  "addedMissing": {
+    "one": "{count} chiave aggiunta a {file}",
+    "other": "{count} chiavi aggiunte a {file}"
+  },
+  "newFileTitle": "Nuovo file .env",
+  "fileName": "Nome del file",
+  "newFileFromTemplate": "Il file viene creato come copia di {template}.",
+  "newFileEmpty": "Il file viene creato vuoto (nessun modello).",
+  "create": "Crea",
+  "created": "{file} creato",
+  "errors.project_not_found": "Progetto non trovato: {id}",
+  "errors.file_invalid": "Nome di file non valido: {name} (deve iniziare con .env)",
+  "errors.file_not_found": "File non trovato: {name}",
+  "errors.file_too_large": "{name} è troppo grande",
+  "errors.file_changed": "{name} è stato modificato fuori da DevDock: ricaricato, riprova",
+  "errors.key_missing": "Chiave non trovata: {key}",
+  "errors.no_template": "Il progetto non ha un modello (.env.example)",
+  "errors.is_template": "È il file modello",
+  "errors.file_exists": "Il file {name} esiste già",
+  "errors.change_invalid": "Modifica non valida",
+  "errors.key_invalid": "Nome di chiave non valido: {key}",
+  "errors.value_invalid": "Valore non valido per {key}",
+  "errors.key_exists": "La chiave {key} esiste già"
+}

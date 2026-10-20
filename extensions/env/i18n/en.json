@@ -1,0 +1,66 @@
+{
+  "sidebar.title": ".env files",
+  "sidebar.none": "No projects: add one in the NPM section.",
+  "issues": {
+    "one": "{count} missing",
+    "other": "{count} missing"
+  },
+  "issuesTitle": {
+    "one": "{count} template key is missing from the .env files",
+    "other": "{count} template keys are missing from the .env files"
+  },
+  "empty": "Select a project in the sidebar",
+  "newFile": "＋ New .env file",
+  "templateIs": "Template: {file}",
+  "noTemplate": "No template (.env.example): no comparison",
+  "noFiles": "No .env files in this project.",
+  "key": "Key",
+  "value": "Value",
+  "template": "template",
+  "addMissing": {
+    "one": "＋ {count} missing",
+    "other": "＋ {count} missing"
+  },
+  "addKey": "＋ Key",
+  "notInTemplate": "not in template",
+  "missing": "missing",
+  "add": "Add",
+  "emptyValue": "(empty)",
+  "show": "Show the value",
+  "hide": "Hide",
+  "edit": "Edit",
+  "editTitle": "{key} · {file}",
+  "addTitle": "New key in {file}",
+  "fileHint": "The file {file} is rewritten keeping comments, blank lines and order.",
+  "keyRequired": "Enter the key name",
+  "saved": "{key} saved in {file}",
+  "deleted": "{key} deleted from {file}",
+  "confirmDelete": "Delete {key} from {file}?",
+  "confirmAddMissing": {
+    "one": "Add the missing key to {file}, with the value from {template}?",
+    "other": "Add the {count} missing keys to {file}, with the values from {template}?"
+  },
+  "addedMissing": {
+    "one": "{count} key added to {file}",
+    "other": "{count} keys added to {file}"
+  },
+  "newFileTitle": "New .env file",
+  "fileName": "File name",
+  "newFileFromTemplate": "The file is created as a copy of {template}.",
+  "newFileEmpty": "The file is created empty (no template).",
+  "create": "Create",
+  "created": "{file} created",
+  "errors.project_not_found": "Project not found: {id}",
+  "errors.file_invalid": "Invalid file name: {name} (must start with .env)",
+  "errors.file_not_found": "File not found: {name}",
+  "errors.file_too_large": "{name} is too large",
+  "errors.file_changed": "{name} was changed outside DevDock: reloaded, try again",
+  "errors.key_missing": "Key not found: {key}",
+  "errors.no_template": "The project has no template (.env.example)",
+  "errors.is_template": "It is the template file",
+  "errors.file_exists": "The file {name} already exists",
+  "errors.change_invalid": "Invalid change",
+  "errors.key_invalid": "Invalid key name: {key}",
+  "errors.value_invalid": "Invalid value for {key}",
+  "errors.key_exists": "The key {key} already exists"
+}

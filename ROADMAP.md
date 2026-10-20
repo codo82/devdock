@@ -243,16 +243,16 @@ Goal: answer "who is using port 3000?" and free it. Minimal version; nothing bey
 - [x] **M9.5** MCP tool `ports_list` (read-only)
 - [x] **M9.6** Tests (a test server listening on a free port is found and stopped), README, CHANGELOG
 
-## M10 — Environment files — new extension `env`
+## M10 — Environment files — new extension `env` ✅ (1.11.0)
 
 Goal: see at a glance which variables a project's `.env` is missing compared with `.env.example`, and fix them from DevDock.
 
-- [ ] **M10.1** Backend: for each npm project, the `.env*` files in the project folder (`.env`, `.env.local`, `.env.development`, `.env.example`, …), parsed with the dotenv syntax (comments, quotes, `export`)
-- [ ] **M10.2** Comparison with the template (`.env.example` or `.env.sample`): keys missing from each file, keys not in the template, empty values
-- [ ] **M10.3** UI: per project, the files side by side with the keys and the differences highlighted; values masked by default and shown one at a time on click. Values never go into the DevDock config or its exports
-- [ ] **M10.4** Editing: change a value, add a key (also "add the missing keys from the template", with the template's default values), rename or remove a key, create a `.env` from the template. The file is rewritten keeping comments, blank lines and the order of the other lines; atomic write; the editor works on the current file content (a file changed on disk in the meantime is detected and the save refused)
-- [ ] **M10.4b** MCP tool `env_check`: files and keys with the differences, **without values** (no write tools)
-- [ ] **M10.5** Tests (fixtures with missing and extra keys, parser edge cases), README, CHANGELOG
+- [x] **M10.1** Backend: for each npm project, the `.env*` files in the project folder (`.env`, `.env.local`, `.env.development`, `.env.example`, …), parsed with the dotenv syntax (comments, quotes, `export`)
+- [x] **M10.2** Comparison with the template (`.env.example` or `.env.sample`): keys missing from each file, keys not in the template, empty values
+- [x] **M10.3** UI: per project, the files side by side with the keys and the differences highlighted; values masked by default and shown one at a time on click. Values never go into the DevDock config or its exports
+- [x] **M10.4** Editing: change a value, add a key (also "add the missing keys from the template", with the template's default values), rename or remove a key, create a `.env` from the template. The file is rewritten keeping comments, blank lines and the order of the other lines; atomic write; the editor works on the current file content (a file changed on disk in the meantime is detected and the save refused)
+- [x] **M10.4b** MCP tool `env_check`: files and keys with the differences, **without values** (no write tools)
+- [x] **M10.5** Tests (fixtures with missing and extra keys, parser edge cases), README, CHANGELOG
 
 ## M11 — HTTP client — new extension `http-client`
 

@@ -1,0 +1,21 @@
+.env-area{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.env-head{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
+.env-head h3{margin:0}
+.env-muted{color:var(--muted);font-size:13px}
+.env-head .btn{margin-inline-start:auto}
+.env-content{overflow:auto;padding:0 16px 16px}
+.env-table th{white-space:nowrap}
+.env-table td{vertical-align:middle}
+.env-key{font-family:var(--font);font-size:12px;font-weight:600}
+.env-cell{display:flex;gap:6px;align-items:center;font-family:var(--font);font-size:12px}
+.env-value{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.env-mask{color:var(--muted);letter-spacing:2px}
+.env-missing{color:var(--danger)}
+.env-empty{color:var(--warning,#d29922)}
+.env-extra{font-size:10px;color:var(--muted);margin-inline-start:6px}
+.env-icon{background:none;border:none;cursor:pointer;color:var(--muted);padding:0 2px}
+.env-icon:hover{color:var(--text)}
+.env-file-head{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.env-template{font-size:10px;color:var(--muted);font-weight:normal}
+.env-error{color:var(--danger);font-size:12px}
+.sb-env-issues{margin-inline-start:auto;font-size:11px;color:var(--danger)}

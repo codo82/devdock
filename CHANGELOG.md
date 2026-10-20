@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-20 — M10 Environment files
+
+### Added
+- `env` extension (🔑 Env): the `.env*` files of each npm project compared with the template (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`) — missing, extra and empty keys, count of missing keys in the sidebar.
+- Values hidden and shown one at a time on request; edit, add, rename and delete keys, add the missing keys with the template values, create a new `.env` file from the template.
+- Files rewritten keeping comments (also inline), blank lines, `export` and order, with atomic writes; a file changed outside DevDock since it was read is not overwritten.
+- MCP tool `env_check` (keys and differences, never values).
+
 ## [1.10.0] - 2026-10-20 — M9 Ports in use
 
 ### Added

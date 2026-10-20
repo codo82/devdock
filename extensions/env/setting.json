@@ -1,0 +1,40 @@
+{
+  "name": { "it": "Env", "en": "Env" },
+  "code": "env",
+  "version": "1.0.0",
+  "description": {
+    "it": "File .env dei progetti: confronto con .env.example, valori nascosti mostrati uno alla volta, modifica che conserva commenti e ordine",
+    "en": "Project .env files: comparison with .env.example, hidden values shown one at a time, editing that keeps comments and order"
+  },
+  "color": "#56d364",
+  "icon": "🔑",
+  "position": "tab",
+  "order": 22,
+  "dependencies": [
+    { "code": "npm", "required": true }
+  ],
+  "backend": {
+    "module": "server.js",
+    "routes": [
+      { "method": "GET",  "path": "/projects",                          "handler": "projects" },
+      { "method": "GET",  "path": "/projects/:id",                      "handler": "project" },
+      { "method": "POST", "path": "/projects/:id/files",                "handler": "create" },
+      { "method": "GET",  "path": "/projects/:id/files/:file/value",    "handler": "value" },
+      { "method": "PUT",  "path": "/projects/:id/files/:file",          "handler": "update" },
+      { "method": "POST", "path": "/projects/:id/files/:file/add-missing", "handler": "addMissing" }
+    ]
+  },
+  "mcp": {
+    "tools": [
+      { "name": "check", "handler": "check", "readOnly": true,
+        "description": "For each npm project (or one), its .env files with their keys, the keys missing compared with the template (.env.example) and the extra and empty ones. Values are never returned.",
+        "inputSchema": { "type": "object", "properties": { "project": { "type": "string", "description": "Project id (default: all)" } } } }
+    ]
+  },
+  "frontend": {
+    "html": "view.html",
+    "sidebar": "sidebar.html",
+    "js": "view.js",
+    "css": "style.css"
+  }
+}
