@@ -1,0 +1,58 @@
+{
+  "sidebar.title": "NPM projects",
+  "sidebar.newProject": "New project",
+  "sidebar.none": "No projects.",
+  "sidebar.add": "+ Add",
+  "sidebar.remove": "Remove",
+
+  "empty": "Select a project in the sidebar",
+  "tab.scripts": "▶ Scripts",
+  "tab.packages": "📦 Packages",
+  "running": "▶ {count} running",
+
+  "script.running": "Running (pid {pid})",
+  "script.exited": "Exited (exit {code})",
+  "script.portInUse": "Port in use",
+  "script.logs": "Show logs",
+  "script.restart": "Restart",
+  "script.stop": "Stop",
+  "script.rerun": "▶ Run again",
+  "script.dismiss": "Remove",
+  "script.run": "▶ Run",
+  "script.pm2": "Start with PM2",
+  "script.none": "No scripts in package.json",
+
+  "packages.loading": "Reading packages...",
+  "packages.package": "Package",
+  "packages.configVersion": "Config version",
+  "packages.installed": "Installed",
+  "packages.update": "Update",
+  "packages.checkUpdates": "🔍 Check for updates",
+  "packages.none": "No dependencies in package.json",
+  "packages.notInstalled": "not installed",
+  "packages.checking": "Checking...",
+  "packages.available": { "one": "{count} update available", "other": "{count} updates available" },
+  "packages.upToDate": "✓ All up to date",
+  "packages.error": "Error: {error}",
+
+  "stream.lost": "[connection lost]",
+
+  "toast.started": "Started: {script}",
+  "toast.stopped": "Process stopped",
+  "toast.restarted": "Process restarted",
+  "toast.updating": "Updating {name}...",
+  "toast.pm2Started": "PM2: {script} started",
+  "toast.pm2Error": "PM2 error: {error}",
+  "toast.allRequired": "All fields are required",
+  "toast.projectAdded": "Project added",
+  "toast.projectRemoved": "Project removed",
+
+  "form.title": "New project",
+  "form.id": "ID (snake_case, cannot be changed)",
+  "form.idPlaceholder": "e.g. my_app",
+  "form.name": "Name",
+  "form.namePlaceholder": "e.g. My App",
+  "form.path": "Absolute folder path",
+
+  "confirm.removeProject": "Remove this project from the list?"
+}

@@ -1,4 +1,4 @@
-<div class="empty-state" data-role="empty"><div class="icon">🌿</div><p>Seleziona un repository dalla sidebar</p></div>
+<div class="empty-state" data-role="empty"><div class="icon">🌿</div><p data-i18n="empty"></p></div>
 <div class="git-area" data-role="repo" hidden>
   <div class="git-repo-header" data-role="header"></div>
   <div class="git-action-bar">
@@ -11,18 +11,18 @@
     <button class="btn btn-ghost btn-sm" data-git="stash" title="git stash">📦 Stash</button>
     <button class="btn btn-ghost btn-sm" data-git="stash_pop" title="git stash pop">📤 Pop</button>
     <div class="git-bar-end">
-      <button class="btn btn-ghost btn-sm" data-action="reload">↻ Ricarica</button>
+      <button class="btn btn-ghost btn-sm" data-action="reload" data-i18n="bar.reload"></button>
     </div>
   </div>
   <div class="git-body">
     <div class="git-status-col">
       <div class="git-col-header">
-        <h4>Modifiche</h4>
-        <button class="btn btn-ghost btn-sm" data-action="toggle-all" data-role="toggle-all" title="Seleziona/deseleziona tutti">☐ All</button>
+        <h4 data-i18n="files.title"></h4>
+        <button class="btn btn-ghost btn-sm" data-action="toggle-all" data-role="toggle-all" data-i18n-title="files.toggleAll"></button>
       </div>
       <div class="git-file-list" data-role="files"></div>
       <div class="git-commit-area">
-        <textarea class="git-commit-msg" data-role="message" rows="2" placeholder="Messaggio di commit..."></textarea>
+        <textarea class="git-commit-msg" data-role="message" rows="2" data-i18n-placeholder="commit.placeholder"></textarea>
         <div class="git-commit-actions">
           <button class="btn btn-git btn-sm" data-action="commit">✓ Commit</button>
           <button class="btn btn-ghost btn-sm" data-action="commit-push">✓ Commit &amp; Push</button>
@@ -31,7 +31,7 @@
     </div>
     <div class="git-log-col">
       <div class="git-col-header">
-        <h4>Git Log</h4>
+        <h4 data-i18n="log.title"></h4>
         <select class="remote-input git-log-limit" data-role="limit">
           <option value="30">30</option>
           <option value="50">50</option>

@@ -2,7 +2,10 @@
   "name": "NPM",
   "code": "npm",
   "version": "1.0.0",
-  "description": "Progetti locali: script di package.json come processi tracciati, porte in ascolto, dipendenze e aggiornamenti",
+  "description": {
+    "it": "Progetti locali: script di package.json come processi tracciati, porte in ascolto, dipendenze e aggiornamenti",
+    "en": "Local projects: package.json scripts as tracked processes, listening ports, dependencies and updates"
+  },
   "color": "#f0883e",
   "icon": "📦",
   "position": "tab",
@@ -13,8 +16,8 @@
   "export": [
     {
       "id": "projects",
-      "label": "Progetti NPM",
-      "description": "Cartelle dei progetti (usate anche da Git)",
+      "label": { "it": "Progetti NPM", "en": "NPM projects" },
+      "description": { "it": "Cartelle dei progetti (usate anche da Git)", "en": "Project folders (also used by Git)" },
       "sections": [
         "projects"
       ]

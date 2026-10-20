@@ -2,7 +2,10 @@
   "name": "Database",
   "code": "db-client",
   "version": "1.0.0",
-  "description": "Client MySQL/MariaDB: connessioni con password cifrate da una master password, query e risultati in tabella",
+  "description": {
+    "it": "Client MySQL/MariaDB: connessioni con password cifrate da una master password, query e risultati in tabella",
+    "en": "MySQL/MariaDB client: connections with passwords encrypted by a master password, queries and results in a table"
+  },
   "color": "#d29922",
   "icon": "🗄️",
   "position": "tab",
@@ -13,7 +16,7 @@
   ],
   "config": ["dbConnections", "vault"],
   "export": [
-    { "id": "connections", "label": "Connessioni database", "description": "Connessioni e password cifrate (servono la stessa master password)", "sections": ["dbConnections", "vault"] }
+    { "id": "connections", "label": { "it": "Connessioni database", "en": "Database connections" }, "description": { "it": "Connessioni e password cifrate (servono la stessa master password)", "en": "Connections and encrypted passwords (the same master password is needed)" }, "sections": ["dbConnections", "vault"] }
   ],
   "backend": {
     "module": "server.js",

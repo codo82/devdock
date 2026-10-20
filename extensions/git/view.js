@@ -164,7 +164,10 @@ function xyLabel(xy) {
 
 export default {
   async mount(ctx) {
-    const { esc, js, toast, openModal, closeModal, output } = ctx.ui;
+    const { esc, js, toast, openModal, closeModal, output, fmt } = ctx.ui;
+    const { t } = ctx;
+    // Data relativa nella lingua attiva, con data completa nel title
+    const when = iso => `<span title="${esc(fmt.date(iso))}">${esc(fmt.relative(iso))}</span>`;
     const $ = role => ctx.root.querySelector(`[data-role="${role}"]`);
 
     let repos = [];
@@ -189,7 +192,7 @@ export default {
     function renderRepos() {
       const el = ctx.sidebar.querySelector('[data-role="repos"]');
       el.innerHTML = !repos.length
-        ? '<p class="git-muted git-pad">Nessun repo git trovato.<br><br>Aggiungi un progetto nella sezione NPM: se è dentro un repository git apparirà qui.</p>'
+        ? `<p class="git-muted git-pad">${esc(t('sidebar.none'))}<br><br>${esc(t('sidebar.noneHint'))}</p>`
         : repos.map(r => `
           <button class="sb-item ${activeRepo === r.id ? 'active' : ''}" onclick="Ext.git.select(${js(r.id)})">
             <span class="sb-icon">🌿</span>
@@ -218,11 +221,11 @@ export default {
       if (!r) return;
       $('header').innerHTML = `
         <h3>🌿 ${esc(r.label)}</h3>
-        ${status ? `<button class="git-branch-badge git-branch-btn" data-action="branches" title="Cambia, crea, unisci o elimina branch">⎇ ${esc(status.branch)} ▾</button>
-          ${status.merging ? '<span class="git-sync-badge git-sync-merge">⑃ merge in corso</span>' : ''}
-          ${status.ahead ? `<span class="git-sync-badge git-sync-ahead">↑${esc(status.ahead)} ahead</span>` : ''}
-          ${status.behind ? `<span class="git-sync-badge git-sync-behind">↓${esc(status.behind)} behind</span>` : ''}
-          ${status.stashCount ? `<span class="git-sync-badge git-sync-stash">📦 ${esc(status.stashCount)} stash</span>` : ''}` : ''}
+        ${status ? `<button class="git-branch-badge git-branch-btn" data-action="branches" title="${esc(t('header.branchTitle'))}">⎇ ${esc(status.branch)} ▾</button>
+          ${status.merging ? `<span class="git-sync-badge git-sync-merge">${esc(t('header.merging'))}</span>` : ''}
+          ${status.ahead ? `<span class="git-sync-badge git-sync-ahead">${esc(t('header.ahead', { count: status.ahead }))}</span>` : ''}
+          ${status.behind ? `<span class="git-sync-badge git-sync-behind">${esc(t('header.behind', { count: status.behind }))}</span>` : ''}
+          ${status.stashCount ? `<span class="git-sync-badge git-sync-stash">${esc(t('header.stash', { count: status.stashCount }))}</span>` : ''}` : ''}
         <span class="git-path">${esc(r.path)}</span>`;
     }
 
@@ -235,12 +238,12 @@ export default {
         $('files').before(banner);
       }
       banner.innerHTML = `
-        <div class="git-merge-title">⑃ Merge in corso${status.conflicts.length ? ` — ${status.conflicts.length} file in conflitto` : ' — conflitti risolti'}</div>
+        <div class="git-merge-title">${esc(t('merge.banner'))} — ${esc(status.conflicts.length ? t('merge.conflicts', { count: status.conflicts.length }) : t('merge.resolved'))}</div>
         ${status.conflicts.length ? `<ul>${status.conflicts.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-          <p class="git-muted">Risolvi i conflitti nell'editor (togli i marcatori &lt;&lt;&lt;&lt;&lt;&lt;&lt; / &gt;&gt;&gt;&gt;&gt;&gt;&gt;), poi concludi.</p>` : ''}
+          <p class="git-muted">${esc(t('merge.hint'))}</p>` : ''}
         <div class="git-merge-actions">
-          <button class="btn btn-ghost btn-sm" data-action="merge-abort">Annulla merge</button>
-          <button class="btn btn-git btn-sm" data-action="merge-continue">Concludi merge</button>
+          <button class="btn btn-ghost btn-sm" data-action="merge-abort">${esc(t('merge.abort'))}</button>
+          <button class="btn btn-git btn-sm" data-action="merge-continue">${esc(t('merge.continue'))}</button>
         </div>`;
     }
 
@@ -248,10 +251,11 @@ export default {
       const el = $('files');
       const toggle = $('toggle-all');
       renderMergeBanner();
-      if (!status) { el.innerHTML = '<div class="git-muted git-pad">Nessun dato</div>'; return; }
+      const allLabel = t('files.all');
+      if (!status) { el.innerHTML = `<div class="git-muted git-pad">${esc(t('files.noData'))}</div>`; toggle.textContent = `☐ ${allLabel}`; return; }
       if (!status.files.length) {
-        el.innerHTML = '<div class="git-clean"><div class="git-clean-icon">✓</div>Working tree pulito</div>';
-        toggle.textContent = '☐ All';
+        el.innerHTML = `<div class="git-clean"><div class="git-clean-icon">✓</div>${esc(t('files.clean'))}</div>`;
+        toggle.textContent = `☐ ${allLabel}`;
         return;
       }
       el.innerHTML = status.files.map(f => {
@@ -265,7 +269,7 @@ export default {
           ${parts.length > 1 ? `<span class="git-file-dir">${esc(parts.slice(0, -1).join('/'))}/</span>` : ''}
         </div>`;
       }).join('');
-      toggle.textContent = status.files.every(f => selected.has(f.name)) ? '☑ All' : '☐ All';
+      toggle.textContent = `${status.files.every(f => selected.has(f.name)) ? '☑' : '☐'} ${allLabel}`;
     }
 
     // ---- log e grafo ----
@@ -277,13 +281,13 @@ export default {
     async function loadLog() {
       const wrap = $('log');
       if (!activeRepo) return;
-      wrap.innerHTML = '<div class="git-muted git-pad">Caricamento...</div>';
+      wrap.innerHTML = `<div class="git-muted git-pad">${esc(t('log.loading'))}</div>`;
       try {
         const data = await ctx.api.get(repoUrl(`/log?limit=${encodeURIComponent($('limit').value)}`));
         const entries = data.entries || [];
         const allRefs = data.refs || {};
         logEntries = entries;
-        if (!entries.length) { wrap.innerHTML = '<div class="git-muted git-pad">Nessun commit</div>'; $('legend').hidden = true; return; }
+        if (!entries.length) { wrap.innerHTML = `<div class="git-muted git-pad">${esc(t('log.none'))}</div>`; $('legend').hidden = true; return; }
 
         const { svgs, width, legend } = buildGraph(entries, allRefs);
         const local = new Set(data.localBranches || []);
@@ -300,18 +304,18 @@ export default {
 
         wrap.innerHTML = `<table class="git-log-table" style="--graph-w:${width}px">
           <colgroup><col class="col-graph"><col class="col-hash"><col class="col-msg"><col class="col-author"><col class="col-date"></colgroup>
-          <thead><tr><th></th><th>SHA</th><th>Messaggio</th><th>Autore</th><th>Data</th></tr></thead>
+          <thead><tr><th></th><th>${esc(t('log.sha'))}</th><th>${esc(t('log.message'))}</th><th>${esc(t('log.author'))}</th><th>${esc(t('log.date'))}</th></tr></thead>
           <tbody>${entries.map((e, i) => `
             <tr class="git-log-row" onclick="Ext.git.showCommit(${i})">
               <td class="git-graph-cell">${svgs[i]}</td>
               <td><span class="git-hash" title="${esc(e.hash)}">${esc(e.short)}</span></td>
               <td class="git-msg-cell"><span class="git-subject">${refBadges(e.refs)}${esc(e.subject)}</span></td>
               <td class="git-author">${esc(e.author)}</td>
-              <td class="git-date">${esc(e.relDate)}</td>
+              <td class="git-date">${when(e.date)}</td>
             </tr>`).join('')}</tbody>
         </table>`;
       } catch (e) {
-        wrap.innerHTML = `<div class="git-error git-pad">Errore: ${esc(e.message)}</div>`;
+        wrap.innerHTML = `<div class="git-error git-pad">${esc(t('log.error', { error: e.message }))}</div>`;
       }
     }
 
@@ -328,12 +332,12 @@ export default {
           <div class="git-drawer-body" data-role="commit-body"></div>
           <div class="git-drawer-meta">
             <span>👤 ${esc(e.author)}</span>
-            <span>🕐 ${esc(e.relDate)}</span>
-            <span class="git-mono">SHA: <span class="git-hash" onclick="navigator.clipboard&&navigator.clipboard.writeText(${js(e.hash)})" title="Click per copiare">${esc(e.hash)}</span></span>
-            ${e.parents?.length ? `<span class="git-mono">Parent: ${e.parents.map(p => `<span class="git-hash">${esc(p.slice(0, 7))}</span>`).join(' ')}</span>` : ''}
+            <span>🕐 ${when(e.date)}</span>
+            <span class="git-mono">${esc(t('drawer.sha'))} <span class="git-hash" onclick="navigator.clipboard&&navigator.clipboard.writeText(${js(e.hash)})" title="${esc(t('drawer.copy'))}">${esc(e.hash)}</span></span>
+            ${e.parents?.length ? `<span class="git-mono">${esc(t('drawer.parent'))} ${e.parents.map(p => `<span class="git-hash">${esc(p.slice(0, 7))}</span>`).join(' ')}</span>` : ''}
           </div>
         </div>
-        <button class="git-drawer-close" title="Chiudi" onclick="this.closest('.git-commit-drawer').remove()">✕</button>`;
+        <button class="git-drawer-close" title="${esc(t('core.action.close'))}" onclick="this.closest('.git-commit-drawer').remove()">✕</button>`;
       ctx.root.querySelector('.git-log-col').appendChild(drawer);
 
       // Corpo completo del commit (git show restituisce subject + riga vuota + body)
@@ -356,12 +360,12 @@ export default {
         exit = await ctx.api.stream(repoUrl('/action'), body, ({ type, data }) => {
           if (type === 'stdout') output.append(data, 'out');
           else if (type === 'stderr') output.append(data, 'err');
-          else if (type === 'error') output.append(`\nErrore: ${data}\n`, 'err');
+          else if (type === 'error') output.append(`\n${t('run.error', { error: data })}\n`, 'err');
           else if (type === 'exit') output.append(`\n[exit ${data}]`, 'sys');
         });
       } catch (e) {
         if (onRefused && e.data?.code) { output.close(); onRefused(e.data); return 'refused'; }
-        output.append(`\nErrore: ${e.message}\n`, 'err');
+        output.append(`\n${t('run.error', { error: e.message })}\n`, 'err');
       }
       setTimeout(reload, 400); // status e log aggiornati dopo ogni operazione
       return exit ?? 1;
@@ -375,12 +379,12 @@ export default {
     async function commit(andPush) {
       const msgEl = $('message');
       const message = msgEl.value.trim();
-      if (!message) { toast('Inserisci un messaggio di commit', 'error'); return; }
+      if (!message) { toast(t('commit.required'), 'error'); return; }
       const branch = status?.branch;
       output.open(andPush ? 'git commit & push' : 'git commit');
       const exit = await run({ action: 'commit', message, files: [...selected], remote: remote(), branch });
       if (andPush) {
-        if (exit !== 0) output.append('\n[push annullato: commit fallito]\n', 'sys');
+        if (exit !== 0) output.append(`\n${t('commit.pushSkipped')}\n`, 'sys');
         else { output.append(`\n$ git push ${remote()} ${branch || ''}\n`, 'sys'); await run({ action: 'push', remote: remote(), branch }); }
       }
       msgEl.value = '';
@@ -395,17 +399,17 @@ export default {
     async function switchTo(branch, stash = false) {
       closeBranchPop();
       await run({ action: 'checkout', branch, stash }, `git checkout ${branch}`, data => {
-        if (data.code === 'dirty') dirtyDialog(data.files, `passare a ${branch}`, () => switchTo(branch, true));
+        if (data.code === 'dirty') dirtyDialog(data.files, t('dirty.switch', { branch }), () => switchTo(branch, true));
         else toast(data.error, 'error');
       });
     }
 
     function dirtyDialog(files, what, onStash) {
-      openModal('Modifiche non committate', `
-        <p>Ci sono ${esc(files.length)} file modificati non committati. Per ${esc(what)} puoi metterli da parte con <code>git stash</code> (li recuperi poi con 📤 Pop).</p>
-        <ul class="git-file-ul">${files.slice(0, 30).map(f => `<li>${esc(f)}</li>`).join('')}${files.length > 30 ? `<li>… e altri ${files.length - 30}</li>` : ''}</ul>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
-         <button class="btn btn-git" onclick="Ext.git.confirmStash()">Stash e continua</button>`);
+      openModal(t('dirty.title'), `
+        <p>${esc(t('dirty.text', { count: files.length, what }))}</p>
+        <ul class="git-file-ul">${files.slice(0, 30).map(f => `<li>${esc(f)}</li>`).join('')}${files.length > 30 ? `<li>${esc(t('dirty.more', { count: files.length - 30 }))}</li>` : ''}</ul>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-git" onclick="Ext.git.confirmStash()">${esc(t('dirty.stash'))}</button>`);
       pendingStash = onStash;
     }
     let pendingStash = null;
@@ -414,20 +418,20 @@ export default {
       closeBranchPop();
       const b = branchData || await loadBranches();
       const opt = (v, label) => `<option value="${esc(v)}" ${v === startPoint ? 'selected' : ''}>${esc(label)}</option>`;
-      openModal('Nuovo branch', `
-        <div class="form-row"><label>Nome</label><input class="form-input" id="f_new_branch" placeholder="es. feature/nuova-funzione"></div>
-        <div class="form-row"><label>Parte da</label><select class="form-input" id="f_new_start">
-          ${opt('', `commit attuale (${b.current || 'HEAD'}) — le modifiche non committate restano`)}
+      openModal(t('newBranch.title'), `
+        <div class="form-row"><label>${esc(t('newBranch.name'))}</label><input class="form-input" id="f_new_branch" placeholder="${esc(t('newBranch.placeholder'))}"></div>
+        <div class="form-row"><label>${esc(t('newBranch.from'))}</label><select class="form-input" id="f_new_start">
+          ${opt('', t('newBranch.current', { branch: b.current || 'HEAD' }))}
           ${b.local.map(x => opt(x.name, x.name)).join('')}
           ${b.remote.map(x => opt(x.name, x.name)).join('')}
         </select></div>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button><button class="btn btn-git" onclick="Ext.git.createBranch()">Crea e passa</button>`);
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button><button class="btn btn-git" onclick="Ext.git.createBranch()">${esc(t('newBranch.create'))}</button>`);
       setTimeout(() => document.getElementById('f_new_branch')?.focus(), 0);
     }
 
     async function createBranch(name, startPoint, stash = false) {
       await run({ action: 'checkout_new', branch: name, startPoint: startPoint || undefined, stash }, `git checkout -b ${name}`, data => {
-        if (data.code === 'dirty') dirtyDialog(data.files, `creare ${name} da ${startPoint}`, () => createBranch(name, startPoint, true));
+        if (data.code === 'dirty') dirtyDialog(data.files, t('dirty.create', { branch: name, start: startPoint }), () => createBranch(name, startPoint, true));
         else toast(data.error, 'error');
       });
     }
@@ -437,43 +441,43 @@ export default {
       closeBranchPop();
       const b = await loadBranches();
       const choices = [...b.local.filter(x => x.name !== b.current).map(x => x.name), ...b.remote.map(x => x.name)];
-      if (!choices.length) { toast('Nessun altro branch da unire', 'info'); return; }
-      openModal(`Merge nel branch ${b.current || 'HEAD'}`, `
-        <div class="form-row"><label>Branch da unire</label><select class="form-input" id="f_merge_branch" onchange="Ext.git.previewMerge(this.value)">
+      if (!choices.length) { toast(t('mergeDialog.nothing'), 'info'); return; }
+      openModal(t('mergeDialog.title', { branch: b.current || 'HEAD' }), `
+        <div class="form-row"><label>${esc(t('mergeDialog.branch'))}</label><select class="form-input" id="f_merge_branch" onchange="Ext.git.previewMerge(this.value)">
           ${choices.map(n => `<option ${n === preselect ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
-        <div id="f_merge_preview" class="git-merge-preview"><span class="git-muted">Caricamento anteprima…</span></div>
-        <div class="form-row"><label>Modalità</label>
-          <label class="git-radio"><input type="radio" name="f_merge_mode" value="ff" checked> Normale (fast-forward se possibile)</label>
-          <label class="git-radio"><input type="radio" name="f_merge_mode" value="no-ff"> Sempre un commit di merge (--no-ff)</label>
-          <label class="git-radio"><input type="radio" name="f_merge_mode" value="squash"> Squash: modifiche nel working tree, commit a mano (--squash)</label>
+        <div id="f_merge_preview" class="git-merge-preview"><span class="git-muted">${esc(t('mergeDialog.loading'))}</span></div>
+        <div class="form-row"><label>${esc(t('mergeDialog.mode'))}</label>
+          <label class="git-radio"><input type="radio" name="f_merge_mode" value="ff" checked> ${esc(t('mergeDialog.ff'))}</label>
+          <label class="git-radio"><input type="radio" name="f_merge_mode" value="no-ff"> ${esc(t('mergeDialog.noff'))}</label>
+          <label class="git-radio"><input type="radio" name="f_merge_mode" value="squash"> ${esc(t('mergeDialog.squash'))}</label>
         </div>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button><button class="btn btn-git" onclick="Ext.git.doMerge()">⑃ Unisci</button>`);
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button><button class="btn btn-git" onclick="Ext.git.doMerge()">${esc(t('mergeDialog.submit'))}</button>`);
       previewMerge(document.getElementById('f_merge_branch').value);
     }
 
     async function previewMerge(branch) {
       const el = document.getElementById('f_merge_preview');
       if (!el) return;
-      el.innerHTML = '<span class="git-muted">Caricamento anteprima…</span>';
+      el.innerHTML = `<span class="git-muted">${esc(t('mergeDialog.loading'))}</span>`;
       try {
         const p = await ctx.api.get(repoUrl(`/merge-preview?branch=${encodeURIComponent(branch)}`));
         if (document.getElementById('f_merge_branch')?.value !== branch) return;
         el.innerHTML = p.upToDate || !p.commits.length
-          ? '<span class="git-muted">✓ Già allineato: niente da unire.</span>'
-          : `<div class="git-muted">${esc(p.commits.length)} commit in arrivo${p.fastForward ? ' · fast-forward possibile' : ''} · ${esc(p.files.length)} file</div>
-             <ul class="git-merge-commits">${p.commits.slice(0, 15).map(c => `<li><span class="git-hash">${esc(c.hash)}</span> ${esc(c.subject)} <span class="git-muted">— ${esc(c.author)}, ${esc(c.relDate)}</span></li>`).join('')}
-               ${p.commits.length > 15 ? `<li class="git-muted">… e altri ${p.commits.length - 15}</li>` : ''}</ul>
+          ? `<span class="git-muted">${esc(t('mergeDialog.upToDate'))}</span>`
+          : `<div class="git-muted">${esc([t('mergeDialog.incoming', { count: p.commits.length }), ...(p.fastForward ? [t('mergeDialog.ffPossible')] : []), t('mergeDialog.files', { count: p.files.length })].join(' · '))}</div>
+             <ul class="git-merge-commits">${p.commits.slice(0, 15).map(c => `<li><span class="git-hash">${esc(c.hash)}</span> ${esc(c.subject)} <span class="git-muted">— ${esc(c.author)}, ${when(c.date)}</span></li>`).join('')}
+               ${p.commits.length > 15 ? `<li class="git-muted">${esc(t('dirty.more', { count: p.commits.length - 15 }))}</li>` : ''}</ul>
              <ul class="git-merge-files">${p.files.slice(0, 20).map(f => `<li><span class="git-file-xy xy-${esc(f.status[0])}">${esc(f.status[0])}</span> ${esc(f.name)}</li>`).join('')}
-               ${p.files.length > 20 ? `<li class="git-muted">… e altri ${p.files.length - 20}</li>` : ''}</ul>`;
+               ${p.files.length > 20 ? `<li class="git-muted">${esc(t('dirty.more', { count: p.files.length - 20 }))}</li>` : ''}</ul>`;
       } catch (e) { el.innerHTML = `<span class="git-error">${esc(e.message)}</span>`; }
     }
 
     async function deleteBranch(name, force = false) {
       closeBranchPop();
-      if (!force && !confirm(`Eliminare il branch locale "${name}"?`)) return;
+      if (!force && !confirm(t('delete.confirm', { name }))) return;
       await run({ action: 'branch_delete', branch: name, force }, `git branch -d ${name}`, data => {
         if (data.code === 'unmerged') {
-          if (confirm(`${data.error}.\n\nEliminarlo comunque? Quei commit non saranno più raggiungibili da nessun branch.`)) deleteBranch(name, true);
+          if (confirm(t('delete.unmerged', { error: data.error }))) deleteBranch(name, true);
         } else toast(data.error, 'error');
       });
     }
@@ -498,30 +502,30 @@ export default {
         const local = b.local.filter(x => x.name.toLowerCase().includes(f));
         const remote = b.remote.filter(x => x.name.toLowerCase().includes(f));
         branchPop.querySelector('.git-pop-list').innerHTML = `
-          <div class="git-pop-section">Locali</div>
-          ${local.map(x => `<div class="git-pop-item ${x.name === b.current ? 'current' : ''}" data-switch="${esc(x.name)}" title="${esc(x.lastCommit.subject)} — ${esc(x.lastCommit.relDate)}">
+          <div class="git-pop-section">${esc(t('pop.local'))}</div>
+          ${local.map(x => `<div class="git-pop-item ${x.name === b.current ? 'current' : ''}" data-switch="${esc(x.name)}" title="${esc(x.lastCommit.subject)} — ${esc(fmt.relative(x.lastCommit.date))}">
             <span class="git-pop-name">${x.name === b.current ? '● ' : ''}${esc(x.name)}</span>
-            <span class="git-pop-meta">${x.ahead ? `↑${x.ahead} ` : ''}${x.behind ? `↓${x.behind} ` : ''}${x.gone ? 'upstream sparito ' : ''}${x.merged && x.name !== b.current ? 'unito' : ''}</span>
-            ${x.name !== b.current ? `<button data-merge="${esc(x.name)}" title="Unisci in ${esc(b.current || 'HEAD')}">⑃</button><button data-delete="${esc(x.name)}" title="Elimina">🗑</button>` : ''}
-          </div>`).join('') || '<div class="git-pop-empty">Nessuno</div>'}
-          <div class="git-pop-section">Remoti</div>
-          ${remote.map(x => `<div class="git-pop-item" data-switch="${esc(x.name)}" title="${x.hasLocal ? 'Passa alla copia locale' : 'Crea la copia locale e passa'} — ${esc(x.lastCommit.subject)}">
-            <span class="git-pop-name">${esc(x.name)}</span><span class="git-pop-meta">${x.hasLocal ? 'locale presente' : ''}</span>
-            <button data-merge="${esc(x.name)}" title="Unisci in ${esc(b.current || 'HEAD')}">⑃</button></div>`).join('') || '<div class="git-pop-empty">Nessuno</div>'}`;
+            <span class="git-pop-meta">${x.ahead ? `↑${fmt.number(x.ahead)} ` : ''}${x.behind ? `↓${fmt.number(x.behind)} ` : ''}${x.gone ? esc(t('pop.gone')) + ' ' : ''}${x.merged && x.name !== b.current ? esc(t('pop.merged')) : ''}</span>
+            ${x.name !== b.current ? `<button data-merge="${esc(x.name)}" title="${esc(t('pop.mergeInto', { branch: b.current || 'HEAD' }))}">⑃</button><button data-delete="${esc(x.name)}" title="${esc(t('pop.delete'))}">🗑</button>` : ''}
+          </div>`).join('') || `<div class="git-pop-empty">${esc(t('pop.none'))}</div>`}
+          <div class="git-pop-section">${esc(t('pop.remote'))}</div>
+          ${remote.map(x => `<div class="git-pop-item" data-switch="${esc(x.name)}" title="${esc(t(x.hasLocal ? 'pop.switchLocal' : 'pop.createLocal'))} — ${esc(x.lastCommit.subject)}">
+            <span class="git-pop-name">${esc(x.name)}</span><span class="git-pop-meta">${x.hasLocal ? esc(t('pop.hasLocal')) : ''}</span>
+            <button data-merge="${esc(x.name)}" title="${esc(t('pop.mergeInto', { branch: b.current || 'HEAD' }))}">⑃</button></div>`).join('') || `<div class="git-pop-empty">${esc(t('pop.none'))}</div>`}`;
       };
-      branchPop.innerHTML = `<input class="form-input git-pop-search" placeholder="Cerca branch…">
+      branchPop.innerHTML = `<input class="form-input git-pop-search" placeholder="${esc(t('pop.search'))}">
         <div class="git-pop-list"></div>
-        <button class="git-pop-new" data-new>＋ Nuovo branch…</button>`;
+        <button class="git-pop-new" data-new>${esc(t('pop.new'))}</button>`;
       render('');
       const search = branchPop.querySelector('input');
       search.addEventListener('input', () => render(search.value));
       search.focus();
       branchPop.addEventListener('click', e => {
-        const t = e.target;
-        if (t.closest('[data-new]')) return newBranchDialog();
-        if (t.dataset.merge) return mergeDialog(t.dataset.merge);
-        if (t.dataset.delete) return deleteBranch(t.dataset.delete);
-        const item = t.closest('[data-switch]');
+        const el = e.target;
+        if (el.closest('[data-new]')) return newBranchDialog();
+        if (el.dataset.merge) return mergeDialog(el.dataset.merge);
+        if (el.dataset.delete) return deleteBranch(el.dataset.delete);
+        const item = el.closest('[data-switch]');
         if (item && item.dataset.switch !== b.current) switchTo(item.dataset.switch);
       });
     }
@@ -562,7 +566,7 @@ export default {
       createBranch() {
         const name = (document.getElementById('f_new_branch')?.value || '').trim();
         const start = document.getElementById('f_new_start')?.value || '';
-        if (!name) { toast('Scrivi il nome del branch', 'error'); return; }
+        if (!name) { toast(t('newBranch.nameRequired'), 'error'); return; }
         closeModal();
         createBranch(name, start);
       },
@@ -581,9 +585,9 @@ export default {
       if (a === 'reload') reload();
       else if (a === 'merge') mergeDialog();
       else if (a === 'branches') openBranchPop(e.target.closest('[data-action]'));
-      else if (a === 'merge-abort') { if (confirm('Annullare il merge in corso? Le modifiche del merge vengono scartate.')) run({ action: 'merge_abort' }, 'git merge --abort'); }
+      else if (a === 'merge-abort') { if (confirm(t('merge.confirmAbort'))) run({ action: 'merge_abort' }, 'git merge --abort'); }
       else if (a === 'merge-continue') run({ action: 'merge_continue' }, 'git commit (merge)', data => {
-        if (data.code === 'conflicts') toast(`Conflitti ancora da risolvere: ${data.files.join(', ')}`, 'error');
+        if (data.code === 'conflicts') toast(t('merge.stillConflicts', { files: fmt.list(data.files) }), 'error');
         else toast(data.error, 'error');
       });
       else if (a === 'commit') commit(false);
@@ -614,5 +618,6 @@ export default {
     };
     this.hide = () => { clearInterval(timer); timer = null; closeBranchPop(); };
     this.refresh = async () => { await loadRepos(); renderRepo(); if (activeRepo) await reload(); };
+    this.languageChanged = () => { closeBranchPop(); renderRepos(); renderHeader(); renderFiles(); if (activeRepo) loadLog(); };
   },
 };

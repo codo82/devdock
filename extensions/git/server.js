@@ -248,14 +248,14 @@ module.exports = function createGit(ctx) {
 
           const r = await gitExec(repo.path, [
             'log', '--all',
-            `--pretty=format:%H%x01%h%x01%P%x01%s%x01%an%x01%ar%x01%d`,
+            `--pretty=format:%H%x01%h%x01%P%x01%s%x01%an%x01%aI%x01%d`,
             `-${limit}`,
           ], { allowFail: true });
 
           const rawLines = r.out.split('\n').filter(Boolean);
           const entries = rawLines.map(line => {
             const parts = line.split('\x01');
-            const [hash, short, parents, subject, author, relDate, refs] = parts;
+            const [hash, short, parents, subject, author, date, refs] = parts;
             // refs dal %d (branch tip nel range) + refs da for-each-ref (branch tip fuori range)
             const refsFromLog = refs ? refs.trim().replace(/[()]/g, '').split(', ').filter(Boolean) : [];
             const refsFromMap = (refMap[hash] || []).filter(n => !refsFromLog.some(r => r === n || r.endsWith(n)));
@@ -265,7 +265,7 @@ module.exports = function createGit(ctx) {
               parents: parents ? parents.trim().split(' ').filter(Boolean) : [],
               subject,
               author,
-              relDate,
+              date, // ISO 8601: il frontend lo formatta nella lingua attiva
               refs: [...refsFromLog, ...refsFromMap],
             };
           });
@@ -282,7 +282,7 @@ module.exports = function createGit(ctx) {
         const repo = getGitRepos().find(r => r.id === req.params.id);
         if (!repo) return res.status(404).json({ error: 'Repo non trovato' });
         const SEP = '\x1f';
-        const fmt = ['%(refname)', '%(refname:short)', '%(upstream:short)', '%(upstream:track)', '%(objectname:short)', '%(committerdate:relative)', '%(subject)'].join(SEP);
+        const fmt = ['%(refname)', '%(refname:short)', '%(upstream:short)', '%(upstream:track)', '%(objectname:short)', '%(committerdate:iso-strict)', '%(subject)'].join(SEP);
         const [refs, current, merged] = await Promise.all([
           gitExec(repo.path, ['for-each-ref', `--format=${fmt}`, '--sort=-committerdate', 'refs/heads/', 'refs/remotes/'], { allowFail: true }),
           gitExec(repo.path, ['branch', '--show-current'], { allowFail: true }),
@@ -291,9 +291,9 @@ module.exports = function createGit(ctx) {
         const mergedSet = new Set(merged.out.split('\n').map(x => x.trim()).filter(Boolean));
         const local = [], remote = [];
         for (const line of refs.out.split('\n').filter(Boolean)) {
-          const [full, name, upstream, track, hash, relDate, subject] = line.split(SEP);
+          const [full, name, upstream, track, hash, date, subject] = line.split(SEP);
           if (full.endsWith('/HEAD')) continue; // origin/HEAD è solo un alias
-          const lastCommit = { hash, relDate, subject };
+          const lastCommit = { hash, date, subject };
           if (full.startsWith('refs/heads/')) {
             const ahead = Number(/ahead (\d+)/.exec(track)?.[1] || 0);
             const behind = Number(/behind (\d+)/.exec(track)?.[1] || 0);
@@ -318,14 +318,14 @@ module.exports = function createGit(ctx) {
         }
         const SEP = '\x1f';
         const [log, diff, ff, upToDate] = await Promise.all([
-          gitExec(repo.path, ['log', `--format=%h${SEP}%s${SEP}%an${SEP}%ar`, '-200', `HEAD..${branch}`, '--'], { allowFail: true }),
+          gitExec(repo.path, ['log', `--format=%h${SEP}%s${SEP}%an${SEP}%aI`, '-200', `HEAD..${branch}`, '--'], { allowFail: true }),
           gitExec(repo.path, ['diff', '--name-status', `HEAD...${branch}`, '--'], { allowFail: true }),
           gitExec(repo.path, ['merge-base', '--is-ancestor', 'HEAD', branch], { allowFail: true }),
           gitExec(repo.path, ['merge-base', '--is-ancestor', branch, 'HEAD'], { allowFail: true }),
         ]);
         res.json({
           branch,
-          commits: log.out.split('\n').filter(Boolean).map(l => { const [hash, subject, author, relDate] = l.split(SEP); return { hash, subject, author, relDate }; }),
+          commits: log.out.split('\n').filter(Boolean).map(l => { const [hash, subject, author, date] = l.split(SEP); return { hash, subject, author, date }; }),
           files: diff.out.split('\n').filter(Boolean).map(l => { const [status, ...rest] = l.split('\t'); return { status, name: rest.join(' → ') }; }),
           fastForward: ff.code === 0,
           upToDate: upToDate.code === 0,

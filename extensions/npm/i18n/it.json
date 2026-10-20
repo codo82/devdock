@@ -1,0 +1,58 @@
+{
+  "sidebar.title": "Progetti NPM",
+  "sidebar.newProject": "Nuovo progetto",
+  "sidebar.none": "Nessun progetto.",
+  "sidebar.add": "+ Aggiungi",
+  "sidebar.remove": "Rimuovi",
+
+  "empty": "Seleziona un progetto dalla sidebar",
+  "tab.scripts": "▶ Scripts",
+  "tab.packages": "📦 Pacchetti",
+  "running": "▶ {count} in esecuzione",
+
+  "script.running": "In esecuzione (pid {pid})",
+  "script.exited": "Terminato (exit {code})",
+  "script.portInUse": "Porta in uso",
+  "script.logs": "Vedi log",
+  "script.restart": "Riavvia",
+  "script.stop": "Ferma",
+  "script.rerun": "▶ Riavvia",
+  "script.dismiss": "Rimuovi",
+  "script.run": "▶ Esegui",
+  "script.pm2": "Avvia con PM2",
+  "script.none": "Nessuno script in package.json",
+
+  "packages.loading": "Lettura pacchetti...",
+  "packages.package": "Pacchetto",
+  "packages.configVersion": "Versione config",
+  "packages.installed": "Installata",
+  "packages.update": "Aggiorna",
+  "packages.checkUpdates": "🔍 Verifica aggiornamenti",
+  "packages.none": "Nessuna dipendenza nel package.json",
+  "packages.notInstalled": "non installato",
+  "packages.checking": "Controllo in corso...",
+  "packages.available": { "one": "{count} aggiornamento disponibile", "other": "{count} aggiornamenti disponibili" },
+  "packages.upToDate": "✓ Tutti aggiornati",
+  "packages.error": "Errore: {error}",
+
+  "stream.lost": "[connessione persa]",
+
+  "toast.started": "Avviato: {script}",
+  "toast.stopped": "Processo fermato",
+  "toast.restarted": "Processo riavviato",
+  "toast.updating": "Aggiornamento {name}...",
+  "toast.pm2Started": "PM2: {script} avviato",
+  "toast.pm2Error": "PM2 errore: {error}",
+  "toast.allRequired": "Tutti i campi sono obbligatori",
+  "toast.projectAdded": "Progetto aggiunto",
+  "toast.projectRemoved": "Progetto rimosso",
+
+  "form.title": "Nuovo progetto",
+  "form.id": "ID (snake_case, non modificabile)",
+  "form.idPlaceholder": "es. my_app",
+  "form.name": "Nome",
+  "form.namePlaceholder": "es. My App",
+  "form.path": "Percorso assoluto cartella",
+
+  "confirm.removeProject": "Rimuovere questo progetto dalla lista?"
+}

@@ -6,7 +6,8 @@ const POLL_MS = 5000;
 
 export default {
   async mount(ctx) {
-    const { esc, js, toast, openModal, closeModal, output, formatUptime } = ctx.ui;
+    const { esc, js, toast, openModal, closeModal, output, formatUptime, fmt } = ctx.ui;
+    const { t } = ctx;
     const $ = (root, role) => root.querySelector(`[data-role="${role}"]`);
 
     let projects = [];
@@ -49,7 +50,7 @@ export default {
     function renderProjects() {
       const el = $(ctx.sidebar, 'projects');
       if (!projects.length) {
-        el.innerHTML = '<p class="npm-muted npm-pad">Nessun progetto.<br><br><button class="btn btn-npm btn-sm" onclick="Ext.npm.addProject()">+ Aggiungi</button></p>';
+        el.innerHTML = `<p class="npm-muted npm-pad">${esc(t('sidebar.none'))}<br><br><button class="btn btn-npm btn-sm" onclick="Ext.npm.addProject()">${esc(t('sidebar.add'))}</button></p>`;
         return;
       }
       el.innerHTML = projects.map(p => {
@@ -57,10 +58,10 @@ export default {
         return `<div class="sb-proj ${activeProject === p.id ? 'active' : ''}" onclick="Ext.npm.select(${js(p.id)})">
           <span class="sb-proj-icon">${n ? '🟠' : '📁'}</span>
           <div class="sb-proj-info">
-            <div class="sb-proj-label">${esc(p.label)}${n ? ` <span class="npm-run-count">▶${n}</span>` : ''}</div>
+            <div class="sb-proj-label">${esc(p.label)}${n ? ` <span class="npm-run-count">▶${fmt.number(n)}</span>` : ''}</div>
             <div class="sb-proj-path">${esc(p.path)}</div>
           </div>
-          <button class="sb-proj-del" onclick="event.stopPropagation();Ext.npm.deleteProject(${js(p.id)})" title="Rimuovi">✕</button>
+          <button class="sb-proj-del" onclick="event.stopPropagation();Ext.npm.deleteProject(${js(p.id)})" title="${esc(t('sidebar.remove'))}">✕</button>
         </div>`;
       }).join('');
     }
@@ -74,7 +75,7 @@ export default {
       $(ctx.root, 'title').textContent = p.label;
       $(ctx.root, 'path').textContent = p.path;
       const n = running(p.id);
-      $(ctx.root, 'running').textContent = n ? `▶ ${n} in esecuzione` : '';
+      $(ctx.root, 'running').textContent = n ? t('running', { count: n }) : '';
       for (const b of ctx.root.querySelectorAll('.npm-tab')) b.classList.toggle('active', b.dataset.tab === tab);
       return true;
     }
@@ -102,24 +103,24 @@ export default {
         const proc = procs.find(pr => pr.script === name);
         const isRunning = proc?.running;
         return `<div class="script-row ${isRunning ? 'running' : ''}">
-          ${isRunning ? `<span class="proc-dot" title="In esecuzione (pid ${esc(proc.pid)})"></span>`
-            : proc ? `<span class="proc-dot dead" title="Terminato (exit ${esc(proc.exitCode)})"></span>` : ''}
+          ${isRunning ? `<span class="proc-dot" title="${esc(t('script.running', { pid: String(proc.pid) }))}"></span>`
+            : proc ? `<span class="proc-dot dead" title="${esc(t('script.exited', { code: String(proc.exitCode) }))}"></span>` : ''}
           <span class="script-name">${esc(name)}</span>
           <span class="script-cmd">${esc(cmd || 'npm ' + name)}</span>
           ${isRunning ? `<span class="proc-uptime" data-uptime="${esc(proc.startedAt)}">${formatUptime(proc.startedAt)}</span>` : ''}
-          ${(isRunning ? proc.ports || [] : []).map(port => `<span class="proc-port" title="Porta in uso">:${esc(port)}</span>`).join('')}
+          ${(isRunning ? proc.ports || [] : []).map(port => `<span class="proc-port" title="${esc(t('script.portInUse'))}">:${esc(port)}</span>`).join('')}
           <div class="script-actions">
             ${proc ? `
-              <button class="btn btn-ghost btn-sm" onclick="Ext.npm.logs(${js(proc.id)},${js(scriptLabel(name))})" title="Vedi log">📋</button>
+              <button class="btn btn-ghost btn-sm" onclick="Ext.npm.logs(${js(proc.id)},${js(scriptLabel(name))})" title="${esc(t('script.logs'))}">📋</button>
               ${isRunning ? `
-                <button class="btn btn-ghost btn-sm" onclick="Ext.npm.restart(${js(proc.id)})" title="Riavvia">↺</button>
-                <button class="btn btn-disconnect btn-sm" onclick="Ext.npm.stop(${js(proc.id)})" title="Ferma">⏹</button>
+                <button class="btn btn-ghost btn-sm" onclick="Ext.npm.restart(${js(proc.id)})" title="${esc(t('script.restart'))}">↺</button>
+                <button class="btn btn-disconnect btn-sm" onclick="Ext.npm.stop(${js(proc.id)})" title="${esc(t('script.stop'))}">⏹</button>
               ` : `
-                <button class="btn btn-npm btn-sm" onclick="Ext.npm.run(${js(p.id)},${js(name)})">▶ Riavvia</button>
-                <button class="btn btn-ghost btn-sm" onclick="Ext.npm.dismiss(${js(proc.id)})" title="Rimuovi">✕</button>
+                <button class="btn btn-npm btn-sm" onclick="Ext.npm.run(${js(p.id)},${js(name)})">${esc(t('script.rerun'))}</button>
+                <button class="btn btn-ghost btn-sm" onclick="Ext.npm.dismiss(${js(proc.id)})" title="${esc(t('script.dismiss'))}">✕</button>
               `}
-            ` : `<button class="btn btn-npm btn-sm" onclick="Ext.npm.run(${js(p.id)},${js(name)})">▶ Esegui</button>`}
-            ${pm2 && name !== 'install' ? `<button class="btn btn-ghost btn-sm" onclick="Ext.npm.pm2(${js(p.id)},${js(name)})" title="Avvia con PM2">PM2</button>` : ''}
+            ` : `<button class="btn btn-npm btn-sm" onclick="Ext.npm.run(${js(p.id)},${js(name)})">${esc(t('script.run'))}</button>`}
+            ${pm2 && name !== 'install' ? `<button class="btn btn-ghost btn-sm" onclick="Ext.npm.pm2(${js(p.id)},${js(name)})" title="${esc(t('script.pm2'))}">PM2</button>` : ''}
           </div>
         </div>`;
       };
@@ -128,14 +129,14 @@ export default {
       content.innerHTML = `<div class="scripts-grid">
         ${row('install', 'npm install')}
         ${scripts.map(([name, cmd]) => row(name, cmd)).join('')}
-        ${scripts.length ? '' : '<p class="npm-muted">Nessuno script in package.json</p>'}
+        ${scripts.length ? '' : `<p class="npm-muted">${esc(t('script.none'))}</p>`}
       </div>`;
     }
 
     async function renderPackages() {
       const p = project();
       const content = $(ctx.root, 'tab-content');
-      content.innerHTML = '<div class="npm-muted">Lettura pacchetti...</div>';
+      content.innerHTML = `<div class="npm-muted">${esc(t('packages.loading'))}</div>`;
       const pkg = await packageOf(p);
       if (project() !== p || tab !== 'packages') return;
       const deps = Object.entries(pkg.dependencies || {});
@@ -143,14 +144,14 @@ export default {
 
       const table = (list, title) => !list.length ? '' : `
         <div class="pkg-section">
-          <div class="pkg-section-title">${title} <span class="pkg-count">${list.length}</span></div>
+          <div class="pkg-section-title">${title} <span class="pkg-count">${fmt.number(list.length)}</span></div>
           <table class="data-table">
-            <thead><tr><th>Pacchetto</th><th>Versione config</th><th>Installata</th><th></th></tr></thead>
+            <thead><tr><th>${esc(t('packages.package'))}</th><th>${esc(t('packages.configVersion'))}</th><th>${esc(t('packages.installed'))}</th><th></th></tr></thead>
             <tbody>${list.map(([name, ver]) => `<tr>
               <td class="pkg-name">${esc(name)}</td>
               <td class="pkg-dim">${esc(ver)}</td>
               <td class="pkg-installed" data-pkg="${esc(name)}"><span class="pkg-dim">—</span></td>
-              <td><button class="btn btn-ghost btn-sm" onclick="Ext.npm.update(${js(p.id)},${js(name)})" title="Aggiorna">↑ update</button></td>
+              <td><button class="btn btn-ghost btn-sm" onclick="Ext.npm.update(${js(p.id)},${js(name)})" title="${esc(t('packages.update'))}">↑ update</button></td>
             </tr>`).join('')}</tbody>
           </table>
         </div>`;
@@ -158,12 +159,12 @@ export default {
       content.innerHTML = `
         <div class="pkg-toolbar">
           <button class="btn btn-npm btn-sm" onclick="Ext.npm.run(${js(p.id)},'install')">↓ npm install</button>
-          <button class="btn btn-ghost btn-sm" onclick="Ext.npm.outdated(${js(p.id)})">🔍 Verifica aggiornamenti</button>
+          <button class="btn btn-ghost btn-sm" onclick="Ext.npm.outdated(${js(p.id)})">${esc(t('packages.checkUpdates'))}</button>
           <span class="pkg-dim" data-role="outdated-status"></span>
         </div>
         ${table(deps, 'dependencies')}
         ${table(devDeps, 'devDependencies')}
-        ${deps.length || devDeps.length ? '' : '<p class="npm-muted">Nessuna dipendenza nel package.json</p>'}`;
+        ${deps.length || devDeps.length ? '' : `<p class="npm-muted">${esc(t('packages.none'))}</p>`}`;
 
       const names = [...deps, ...devDeps].map(([n]) => n);
       if (!names.length) return;
@@ -171,7 +172,7 @@ export default {
         const versions = await ctx.api.post(`/projects/${encodeURIComponent(p.id)}/installed-versions`, { packages: names });
         for (const [name, ver] of Object.entries(versions)) {
           const cell = installedCell(name);
-          if (cell) cell.innerHTML = ver ? `<span class="pkg-ok">${esc(ver)}</span>` : '<span class="pkg-dim">non installato</span>';
+          if (cell) cell.innerHTML = ver ? `<span class="pkg-ok">${esc(ver)}</span>` : `<span class="pkg-dim">${esc(t('packages.notInstalled'))}</span>`;
         }
       } catch {}
     }
@@ -185,7 +186,7 @@ export default {
       closeStream = ctx.api.events(`/processes/${encodeURIComponent(procId)}/stream`, ({ type, data }) => {
         if (type === 'exit') { output.append(data, 'sys'); closeStream?.(); closeStream = null; }
         else output.append(data, type === 'stderr' ? 'err' : 'out');
-      }, () => output.append('\n[connessione persa]', 'err'));
+      }, () => output.append('\n' + t('stream.lost'), 'err'));
     }
 
     async function refreshAll() {
@@ -207,7 +208,7 @@ export default {
       async run(projectId, script) {
         try {
           const r = await ctx.api.post(`/projects/${encodeURIComponent(projectId)}/run`, { script });
-          toast(`Avviato: ${scriptLabel(script)}`, 'success');
+          toast(t('toast.started', { script: scriptLabel(script) }), 'success');
           await refreshAll();
           stream(r.id, scriptLabel(script));
         } catch (e) { toast(e.message, 'error'); }
@@ -215,14 +216,14 @@ export default {
       async stop(procId) {
         try {
           await ctx.api.del(`/processes/${encodeURIComponent(procId)}`);
-          toast('Processo fermato', 'success');
+          toast(t('toast.stopped'), 'success');
           await refreshAll();
         } catch (e) { toast(e.message, 'error'); }
       },
       async restart(procId) {
         try {
           await ctx.api.post(`/processes/${encodeURIComponent(procId)}/restart`);
-          toast('Processo riavviato', 'success');
+          toast(t('toast.restarted'), 'success');
           await refreshAll();
           const pd = processes.find(x => x.id === procId);
           if (pd) stream(procId, scriptLabel(pd.script));
@@ -238,7 +239,7 @@ export default {
 
       async update(projectId, name) {
         try {
-          toast(`Aggiornamento ${name}...`);
+          toast(t('toast.updating', { name }));
           const r = await ctx.api.post(`/projects/${encodeURIComponent(projectId)}/update`, { package: name });
           await loadProcesses();
           stream(r.id, `npm update ${name}`);
@@ -246,52 +247,52 @@ export default {
       },
       async outdated(projectId) {
         const status = $(ctx.root, 'outdated-status');
-        if (status) status.textContent = 'Controllo in corso...';
+        if (status) status.textContent = t('packages.checking');
         try {
           const data = Object.entries(await ctx.api.get(`/projects/${encodeURIComponent(projectId)}/outdated`));
-          if (status) status.textContent = data.length ? `${data.length} aggiornamenti disponibili` : '✓ Tutti aggiornati';
+          if (status) status.textContent = data.length ? t('packages.available', { count: data.length }) : t('packages.upToDate');
           for (const [name, info] of data) {
             const cell = installedCell(name);
             if (cell) cell.innerHTML = `<span class="pkg-warn">${esc(info.current)}</span> → <span class="pkg-ok">${esc(info.latest)}</span>`;
           }
-        } catch (e) { if (status) status.textContent = 'Errore: ' + e.message; }
+        } catch (e) { if (status) status.textContent = t('packages.error', { error: e.message }); }
       },
 
       // Avvio dello script sotto PM2 tramite l'estensione pm2
       async pm2(projectId, script) {
         try {
           await ctx.apiFor('pm2').post('/action', { action: 'start', projectId, script });
-          toast(`PM2: ${script} avviato`, 'success');
-        } catch (e) { toast('PM2 errore: ' + e.message, 'error'); }
+          toast(t('toast.pm2Started', { script }), 'success');
+        } catch (e) { toast(t('toast.pm2Error', { error: e.message }), 'error'); }
       },
 
       addProject() {
-        openModal('Nuovo progetto', `
-          <div class="form-row"><label>ID (snake_case, non modificabile)</label><input class="form-input" id="f_proj_id" placeholder="es. my_app"></div>
-          <div class="form-row"><label>Nome</label><input class="form-input" id="f_proj_label" placeholder="es. My App"></div>
-          <div class="form-row"><label>Percorso assoluto cartella</label><input class="form-input" id="f_proj_path" placeholder="/Users/me/projects/my-app"></div>`,
-          `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
-           <button class="btn btn-npm" onclick="Ext.npm.saveProject()">Aggiungi</button>`);
+        openModal(t('form.title'), `
+          <div class="form-row"><label>${esc(t('form.id'))}</label><input class="form-input" id="f_proj_id" placeholder="${esc(t('form.idPlaceholder'))}"></div>
+          <div class="form-row"><label>${esc(t('form.name'))}</label><input class="form-input" id="f_proj_label" placeholder="${esc(t('form.namePlaceholder'))}"></div>
+          <div class="form-row"><label>${esc(t('form.path'))}</label><input class="form-input" id="f_proj_path" placeholder="/Users/me/projects/my-app"></div>`,
+          `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+           <button class="btn btn-npm" onclick="Ext.npm.saveProject()">${esc(t('core.action.add'))}</button>`);
       },
       async saveProject() {
         const val = id => (document.getElementById(id)?.value || '').trim();
         const body = { id: val('f_proj_id'), label: val('f_proj_label'), path: val('f_proj_path') };
-        if (!body.id || !body.label || !body.path) { toast('Tutti i campi sono obbligatori', 'error'); return; }
+        if (!body.id || !body.label || !body.path) { toast(t('toast.allRequired'), 'error'); return; }
         try {
           await ctx.api.post('/projects', body);
           closeModal();
-          toast('Progetto aggiunto', 'success');
+          toast(t('toast.projectAdded'), 'success');
           await loadProjects();
           renderProjects();
           ctx.bus.emit('npm:projects-changed');
         } catch (e) { toast(e.message, 'error'); }
       },
       async deleteProject(id) {
-        if (!confirm('Rimuovere questo progetto dalla lista?')) return;
+        if (!confirm(t('confirm.removeProject'))) return;
         try {
           await ctx.api.del(`/projects/${encodeURIComponent(id)}`);
           if (activeProject === id) activeProject = null;
-          toast('Progetto rimosso', 'success');
+          toast(t('toast.projectRemoved'), 'success');
           await loadProjects();
           renderProjects(); renderTab();
           ctx.bus.emit('npm:projects-changed');
@@ -303,8 +304,8 @@ export default {
       if (e.target.closest('[data-action="add-project"]')) actions.addProject();
     });
     ctx.root.addEventListener('click', e => {
-      const t = e.target.closest('.npm-tab')?.dataset.tab;
-      if (t && t !== tab) { tab = t; renderTab(); }
+      const next = e.target.closest('.npm-tab')?.dataset.tab;
+      if (next && next !== tab) { tab = next; renderTab(); }
     });
 
     ctx.expose(actions);
@@ -315,5 +316,6 @@ export default {
     this.show = async () => { await loadProjects(); renderProjects(); renderTab(); };
     this.hide = () => { closeStream?.(); closeStream = null; };
     this.refresh = async () => { await loadProjects(); await refreshAll(); };
+    this.languageChanged = () => { renderProjects(); if (ctx.isActive()) renderTab(); };
   },
 };
