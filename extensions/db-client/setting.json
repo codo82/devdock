@@ -24,6 +24,8 @@
       { "method": "PUT",    "path": "/connections/:id",       "handler": "updateConnection" },
       { "method": "DELETE", "path": "/connections/:id",       "handler": "deleteConnection" },
       { "method": "POST",   "path": "/connections/:id/test",  "handler": "testConnection" },
+      { "method": "GET",    "path": "/connections/:id/databases", "handler": "databases" },
+      { "method": "POST",   "path": "/connections/:id/query",  "handler": "query" },
       { "method": "GET",    "path": "/vault",                 "handler": "vaultStatus" },
       { "method": "POST",   "path": "/vault/init",            "handler": "vaultInit" },
       { "method": "POST",   "path": "/vault/unlock",          "handler": "vaultUnlock" },

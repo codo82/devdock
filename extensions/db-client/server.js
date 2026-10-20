@@ -1,7 +1,10 @@
 // Database: connessioni MySQL/MariaDB (sezione "dbConnections"), password cifrate
 // con una master password (sezione "vault"), query con timeout e limite di righe.
+const crypto = require('crypto');
+const mysqlCb = require('mysql2');
 const mysql = require('mysql2/promise');
 const vaultLib = require('./vault');
+const { classify } = require('./sql');
 
 const DEFAULT_LOCK_MINUTES = 30;
 
@@ -9,6 +12,18 @@ const CONNECTION_FIELDS = ['id', 'label', 'type', 'host', 'port', 'database', 'u
 const HOST_RE = /^(\[[0-9a-f:.]+\]|[A-Za-z0-9._-]{1,253})$/i;  // nome host, IPv4 o [IPv6]
 const DB_NAME_RE = /^[^`\\/\x00]{1,64}$/;                       // nome database MySQL (niente backtick, slash, NUL)
 const CONNECT_TIMEOUT_MS = 8000;
+const QUERY_TIMEOUT_MS = 30000;
+const DEFAULT_ROW_LIMIT = 1000;
+const MAX_ROW_LIMIT = 10000;
+
+// Nome del tipo MySQL dal codice numerico del protocollo
+const TYPE_NAMES = Object.fromEntries(Object.entries(mysqlCb.Types).map(([name, code]) => [code, name]));
+
+// Valori pronti per il JSON: i binari diventano esadecimale (troncato)
+function cell(v) {
+  if (Buffer.isBuffer(v)) return v.length <= 64 ? `0x${v.toString('hex')}` : `0x${v.subarray(0, 64).toString('hex')}… (${v.length} byte)`;
+  return v;
+}
 
 module.exports = function createDbClient(ctx) {
   const { ConfigError, pick } = ctx.lib.config;
@@ -23,7 +38,7 @@ module.exports = function createDbClient(ctx) {
   const session = { key: null, lastUse: 0 };
   const lockAfterMs = () => (vault()?.lockAfterMinutes ?? DEFAULT_LOCK_MINUTES) * 60000;
 
-  function lock() { session.key = null; }
+  function lock() { session.key = null; closePools(); } // senza vault niente connessioni aperte
 
   // Chiave di cifratura se il vault è sbloccato e non scaduto per inattività
   function currentKey() {
@@ -128,6 +143,78 @@ module.exports = function createDbClient(ctx) {
 
   const findConnection = id => connections().find(c => c.id === id) || null;
 
+  // ---- pool e query ----
+
+  const pools = new Map(); // "id\0database" → { pool, signature }
+  const confirmSecret = crypto.randomBytes(32); // i token di conferma valgono solo fino al riavvio
+
+  function closePools(id) {
+    for (const [k, p] of pools) {
+      if (id && !k.startsWith(id + '\0')) continue;
+      p.pool.end(() => {});
+      pools.delete(k);
+    }
+  }
+
+  async function poolFor(conn, database) {
+    const k = `${conn.id}\0${database || ''}`;
+    const signature = JSON.stringify(conn);
+    const cached = pools.get(k);
+    if (cached && cached.signature === signature) return cached.pool;
+    if (cached) { cached.pool.end(() => {}); pools.delete(k); }
+    const { options } = await connectionTarget(conn);
+    const pool = mysqlCb.createPool({ ...options, database: database || options.database, connectionLimit: 3, waitForConnections: true });
+    // Sola lettura anche lato server: una scrittura sfuggita al controllo fallisce comunque
+    if (conn.readOnly) pool.on('connection', c => c.query('SET SESSION TRANSACTION READ ONLY'));
+    pools.set(k, { pool, signature });
+    return pool;
+  }
+
+  // Token di conferma legato a connessione, database e testo esatto dell'istruzione
+  const confirmToken = (conn, database, sql) =>
+    crypto.createHmac('sha256', confirmSecret).update(`${conn.id}\0${database || ''}\0${sql}`).digest('hex');
+
+  // Esegue l'istruzione: le righe arrivano in streaming e oltre il limite si interrompe
+  function execute(pool, sql, limit) {
+    return new Promise((resolve, reject) => {
+      pool.getConnection((err, connection) => {
+        if (err) return reject(err);
+        const started = Date.now();
+        let fields = null, header = null, truncated = false, settled = false;
+        const rows = [];
+        const finish = (error, destroy) => {
+          if (settled) return;
+          settled = true;
+          if (destroy) connection.destroy(); else connection.release();
+          if (error) return reject(error);
+          const ms = Date.now() - started;
+          if (fields) {
+            resolve({
+              kind: 'rows', ms, truncated, rowCount: rows.length,
+              columns: fields.map(f => ({ name: f.name, table: f.orgTable || null, type: TYPE_NAMES[f.columnType] || String(f.columnType) })),
+              rows,
+            });
+          } else {
+            resolve({
+              kind: 'result', ms,
+              affectedRows: header?.affectedRows ?? 0, changedRows: header?.changedRows ?? null,
+              insertId: header?.insertId ?? null, warningStatus: header?.warningStatus ?? 0, info: header?.info || '',
+            });
+          }
+        };
+        const q = connection.query({ sql, timeout: QUERY_TIMEOUT_MS, rowsAsArray: true });
+        q.on('error', e => finish(e, true));
+        q.on('fields', f => { fields = f; });
+        q.on('result', r => {
+          if (!fields) { header = r; return; }
+          if (rows.length >= limit) { truncated = true; finish(null, true); return; } // il resto non serve: si chiude la connessione
+          rows.push(r.map(cell));
+        });
+        q.on('end', () => finish(null, false));
+      });
+    });
+  }
+
   // ---- regole delle sezioni di config ----
 
   const config = {
@@ -186,11 +273,13 @@ module.exports = function createDbClient(ctx) {
         if (idx === -1) return res.status(404).json({ error: 'Connessione non trovata' });
         list[idx] = buildConnection(req.body, list[idx]);
         ctx.config.set('dbConnections', list);
+        closePools(req.params.id);
         res.json({ ok: true, connection: publicConnection(list[idx]) });
       },
 
       deleteConnection(req, res) {
         ctx.config.set('dbConnections', connections().filter(c => c.id !== req.params.id));
+        closePools(req.params.id);
         res.json({ ok: true });
       },
 
@@ -209,6 +298,46 @@ module.exports = function createDbClient(ctx) {
           res.status(e.status || 502).json({ error: e.message });
         } finally {
           db?.end().catch(() => {});
+        }
+      },
+
+      // Elenco dei database visibili dalla connessione (per il selettore)
+      async databases(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        try {
+          const r = await execute(await poolFor(conn), 'SHOW DATABASES', MAX_ROW_LIMIT);
+          res.json({ databases: r.rows.map(row => row[0]), default: conn.database || null });
+        } catch (e) {
+          res.status(e.status || 502).json({ error: e.message });
+        }
+      },
+
+      // Esegue una istruzione. Le letture partono subito; tutto ciò che può modificare
+      // dati o schema richiede il token di conferma di quella esatta istruzione (428).
+      async query(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const { sql, confirm } = req.body;
+        const database = req.body.database || conn.database || null;
+        if (database && !DB_NAME_RE.test(database)) return res.status(400).json({ error: 'Nome database non valido' });
+        const limit = Math.min(Math.max(parseInt(req.body.limit) || DEFAULT_ROW_LIMIT, 1), MAX_ROW_LIMIT);
+
+        const c = classify(sql);
+        if (c.kind === 'invalid' || c.kind === 'empty') return res.status(400).json({ error: c.reason });
+        if (c.kind === 'write') {
+          if (conn.readOnly) return res.status(403).json({ error: `Connessione in sola lettura: ${c.verb || 'istruzione'} non consentito` });
+          const token = confirmToken(conn, database, sql);
+          const given = typeof confirm === 'string' ? Buffer.from(confirm) : Buffer.alloc(0);
+          if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
+            return res.status(428).json({ needsConfirmation: true, token, verb: c.verb, reason: c.reason || null, database, sql });
+          }
+        }
+        try {
+          const result = await execute(await poolFor(conn, database), sql, limit);
+          res.json({ ...result, statement: c.kind, database, limit });
+        } catch (e) {
+          res.status(e.status || 400).json({ error: e.message, code: e.code || null });
         }
       },
 
@@ -300,5 +429,7 @@ module.exports = function createDbClient(ctx) {
     },
 
     services: { decryptPassword },
+
+    shutdown() { closePools(); },
   };
 };

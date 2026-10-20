@@ -177,3 +177,76 @@ test('connessioni via tunnel non disponibili se l\'estensione tunnels non è att
     await s.stop();
   }
 });
+
+test('query: letture subito, scritture solo con la conferma della stessa istruzione', async t => {
+  const mysqlDb = await startMysql();
+  if (!mysqlDb) return t.skip('mysqld non installato');
+  const s = await startServer();
+  try {
+    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' || m === 'PUT' ? {} : undefined) });
+    await api('POST', '/vault/init', { password: 'master-password-db' });
+    const base = { label: 'L', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass', database: 'app' };
+    await api('POST', '/connections', { ...base, id: 'rw' });
+    await api('POST', '/connections', { ...base, id: 'ro', readOnly: true });
+    const q = (id, body) => api('POST', `/connections/${id}/query`, body);
+
+    // lettura: colonne, righe come array, NULL conservati
+    let r = await q('rw', { sql: 'SELECT id, nome, note FROM clienti ORDER BY id' });
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.json.kind, 'rows');
+    assert.deepEqual(r.json.columns.map(c => c.name), ['id', 'nome', 'note']);
+    assert.deepEqual(r.json.rows, [[1, 'Rossi', null], [2, 'Bianchi', 'cliente storico'], [3, 'Verdi', '']]);
+    assert.equal(r.json.truncated, false);
+
+    // limite di righe
+    r = await q('rw', { sql: 'SELECT * FROM clienti', limit: 2 });
+    assert.equal(r.json.rowCount, 2);
+    assert.equal(r.json.truncated, true);
+
+    // scrittura: prima risposta 428 con il token, nessuna modifica eseguita
+    const ins = "INSERT INTO clienti (nome) VALUES ('Neri')";
+    r = await q('rw', { sql: ins });
+    assert.equal(r.status, 428);
+    assert.equal(r.json.verb, 'INSERT');
+    const token = r.json.token;
+    assert.equal((await q('rw', { sql: 'SELECT COUNT(*) FROM clienti' })).json.rows[0][0], '3'); // BIGINT come stringa: nessuna perdita di precisione
+
+    // il token non vale per un testo diverso, né per un'altra connessione
+    assert.equal((await q('rw', { sql: ins + ' ', confirm: token })).status, 428);
+    assert.equal((await q('rw', { sql: "INSERT INTO clienti (nome) VALUES ('Altro')", confirm: token })).status, 428);
+    assert.equal((await q('rw', { sql: ins, confirm: 'falso' })).status, 428);
+
+    r = await q('rw', { sql: ins, confirm: token });
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.json.kind, 'result');
+    assert.equal(r.json.affectedRows, 1);
+    assert.equal(r.json.insertId, 4);
+    assert.equal((await q('rw', { sql: 'SELECT COUNT(*) FROM clienti' })).json.rows[0][0], '4');
+
+    // DDL: stessa regola
+    r = await q('rw', { sql: 'CREATE TABLE prova (id INT)' });
+    assert.equal(r.status, 428);
+    assert.equal((await q('rw', { sql: 'CREATE TABLE prova (id INT)', confirm: r.json.token })).json.kind, 'result');
+    assert.equal((await q('rw', { sql: "SHOW TABLES LIKE 'prova'" })).json.rowCount, 1);
+
+    // sola lettura: scritture rifiutate anche con un token
+    r = await q('ro', { sql: 'DELETE FROM clienti' });
+    assert.equal(r.status, 403);
+    assert.equal((await q('ro', { sql: 'SELECT COUNT(*) FROM clienti' })).json.rows[0][0], '4');
+
+    // istruzioni non accettate ed errori del server
+    assert.equal((await q('rw', { sql: 'SELECT 1; DELETE FROM clienti' })).status, 400);
+    assert.equal((await q('rw', { sql: 'USE mysql' })).status, 400);
+    r = await q('rw', { sql: 'SELECT * FROM tabella_inesistente' });
+    assert.equal(r.status, 400);
+    assert.equal(r.json.code, 'ER_NO_SUCH_TABLE');
+
+    // database
+    r = await api('GET', '/connections/rw/databases');
+    assert.ok(r.json.databases.includes('app'));
+    assert.equal(r.json.default, 'app');
+  } finally {
+    await s.stop();
+    await mysqlDb.stop();
+  }
+});
