@@ -179,19 +179,21 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 
 Goal: link a DB connection to a project repository so that **every structural change to the tables (create and alter) ends up in a migration file** in the repository, instead of being written by hand. The main path is capturing the changes made through DevDock itself (table designer and SQL editor); a schema diff covers the changes made outside DevDock. Data changes (`INSERT`/`UPDATE`/`DELETE` on rows) never produce migrations. Depends on M5 (connections per project); the Git extension is an optional dependency.
 
+Migration format (decided): **one SQL file per migration, `NNN_<table>_<operation>.sql`**, where `NNN` is an incremental number (zero-padded to 3 digits, wider when it grows past 999). The next number is always computed from the files that actually exist **before** proposing and again right before writing.
+
 **Linking**
-- [ ] **M7.1** Per-connection `migrations` block in the `db-client` config section: `{ "project": "<project id>", "dir": "database/migrations", "format": "sql" }`. The repository is the project's `path`; `dir` is relative to it and validated (no `..`, no absolute paths, must stay inside the project)
-- [ ] **M7.2** Format auto-detection when linking, proposed to the user and editable: `artisan` → Laravel, `knexfile.*` → Knex, `V<n>__*.sql` files → Flyway, otherwise plain SQL. The detected migrations folder is proposed as `dir`
+- [ ] **M7.1** Linking a connection: the user **selects the repository** (the Git extension's repositories; the npm projects when Git is not active) **and the folder** inside it, through a folder browser that lists the repository's subfolders (hidden folders and `node_modules` excluded) and can create a new one. Stored as a per-connection `migrations` block: `{ "repo": "<repo id>", "dir": "database/migrations" }`; `dir` is relative to the repository root and validated (no `..`, no absolute paths, no symlinks leaving the repository)
+- [ ] **M7.2** Numbering: the current number is the highest `NNN` among the files matching `^\d+_.*\.sql$` in the folder; when the repository has an upstream branch, its tree (`git ls-tree`, after a `fetch` on request) is checked too, and a warning says when it has higher numbers that are not pulled yet (teammates' migrations). The linking dialog shows the files found and the next number; an empty folder starts at `001`. Files whose names don't follow the format are listed and ignored
 
 **Table designer**
-- [ ] **M7.3** UI to **create a table**: name, columns (name, type with length/precision, nullable, default, auto-increment, unsigned, comment), primary key, indexes (unique, composite), foreign keys (referenced table/column, on delete/update), engine, charset/collation
+- [ ] **M7.3** UI to **create a table** (the M5.9 designer, extended): name, columns (name, type with length/precision, nullable, default, auto-increment, unsigned, comment), primary key, indexes (unique, composite), foreign keys (referenced table/column, on delete/update), engine, charset/collation
 - [ ] **M7.4** UI to **alter a table**, starting from its current structure: add/modify/rename/drop columns and reorder them, add/drop indexes and foreign keys, rename the table. Changes are collected as a list of pending operations, not applied one by one
 - [ ] **M7.5** Before applying: preview of the SQL that will run on the DB **and** of the migration file that will be written, side by side; destructive operations (drop column, type narrowing) highlighted with a warning and an explicit confirmation
 
 **Capture into migrations**
-- [ ] **M7.6** Single pipeline for a linked connection: designer operations → **migration file written into the repository** (up and down) → DDL executed on the DB. If the DDL fails, the file is removed, so the repository and the DB stay consistent. For a connection without a linked repository the designer works as a plain DDL tool, with a reminder that no migration is produced
-- [ ] **M7.7** SQL editor: `CREATE TABLE` / `ALTER TABLE` / `RENAME TABLE` / `CREATE|DROP INDEX` statements typed by hand are recognised and, on a linked connection, the UI offers "Run and save as migration" (default) or "Run only". Statements are parsed into the same operation model as the designer; when parsing fails the statement is saved verbatim as raw SQL in the up file, with a `TODO` comment in the down file
-- [ ] **M7.8** Migration name proposed from the operations (`create_orders_table`, `add_status_to_orders_table`), editable and slug-validated; several operations on the same table in one session can be grouped into a single migration
+- [ ] **M7.6** Single pipeline for a linked connection: designer operations → **migration file written into the repository** (`NNN_<table>_<operation>.sql`, the SQL statements with a header comment: connection, database, date) → DDL executed on the DB. If the DDL fails, the file is removed, so the repository and the DB stay consistent. For a connection without a linked repository the designer works as a plain DDL tool, with a reminder that no migration is produced
+- [ ] **M7.7** SQL editor: `CREATE TABLE` / `ALTER TABLE` / `RENAME TABLE` / `CREATE|DROP INDEX` statements typed by hand are recognised and, on a linked connection, the UI offers "Run and save as migration" (default) or "Run only". Statements are parsed into the same operation model as the designer; when parsing fails the statement is saved verbatim in the migration file and the user types table and operation for the name
+- [ ] **M7.8** File name proposed from the operations: `<table>` is the table name, `<operation>` one of `create`, `alter`, `drop`, `rename` or a more precise slug when there is a single change (`add_status`, `drop_status`, `add_index_email`); editable, slug-validated (`[a-z0-9_]`). Several operations on the same table in one session can be grouped into a single migration
 
 **Changes made outside DevDock**
 - [ ] **M7.9** Introspection of the live schema through read-only `INFORMATION_SCHEMA` queries into the same normalised model: tables, columns, primary keys, indexes, foreign keys, engine
@@ -199,13 +201,13 @@ Goal: link a DB connection to a project repository so that **every structural ch
 - [ ] **M7.11** Diff engine (pure function `diff(snapshot, live) → operations`) with deterministic ordering (FKs dropped before and created after the tables they depend on). Ambiguous cases are resolved by the user, never guessed: a dropped column + an added one of a compatible type → "rename or drop + add?". The "Migrations" tab shows the status ("in sync" / "N changes not in a migration" / "snapshot newer than the DB", i.e. teammates' migrations pulled and not applied) and generates the missing migration on request
 
 **Generators**
-- [ ] **M7.12** Pluggable generators, one module per format with the contract `(operations, name) → files[]`, each producing **up and down**: plain SQL first (`<timestamp>_<name>.up.sql` / `.down.sql`), then Laravel (PHP Schema builder), Knex, Flyway. Anything a format can't express falls back to a raw-SQL statement with a comment instead of failing
+- [ ] **M7.12** SQL generator `(operations) → statements`, shared by the DDL executed on the DB and the migration file, so the two are always identical
 
 **Safety and tests**
-- [ ] **M7.13** Never overwrite an existing migration file; file names validated; writes are atomic (temp file + rename); no automatic commit (at the end, link to the Git extension, if present, to review and commit)
-- [ ] **M7.14** Tests: operation model and SQL parser on statement fixtures; diff engine on JSON fixtures (no DB needed); generators on fixed operation lists with expected-file snapshots; rollback of the file when the DDL fails; an integration test against MySQL skipped when `DEVDOCK_TEST_MYSQL` is not set
+- [ ] **M7.13** Never overwrite an existing migration file: the number is recomputed right before writing and the file is created with an exclusive open (a concurrent file with the same number makes the write fail, nothing is lost); file names validated; writes are atomic (temp file + rename); no automatic commit (at the end, link to the Git extension, if present, to review and commit)
+- [ ] **M7.14** Tests: operation model and SQL parser on statement fixtures; diff engine on JSON fixtures (no DB needed); numbering (gaps, wider numbers, names out of format, upstream ahead); the generator on fixed operation lists with expected-file snapshots; rollback of the file when the DDL fails; an integration test against MySQL skipped when `DEVDOCK_TEST_MYSQL` is not set
 - [ ] **M7.15** Later: shadow-database mode (apply all repository migrations to a temporary DB and introspect it) as an alternative reference state; PostgreSQL once M5.7 is done
-- [ ] **M7.16** Docs: README section "DB migrations" and the generator contract, so new formats can be added
+- [ ] **M7.16** Docs: README section "DB migrations" (linking, file format, numbering)
 
 ## M8 — MCP server
 
