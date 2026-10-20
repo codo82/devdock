@@ -116,6 +116,14 @@ Built as an extension on the M3 architecture.
 - [ ] **M5.6** Per-session query history (in memory / `sessionStorage`)
 - [ ] **M5.7** Later: PostgreSQL, since it appears among the configured server types
 
+## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
+
+- [ ] **M4.1** Backend: `GET /api/ext/git/repos/:id/branches` (local + remote, current branch)
+- [ ] **M4.2** Backend: `checkout` action (validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
+- [ ] **M4.3** Pre-check: uncommitted changes → structured response the UI uses to offer "Stash and switch" / "Cancel"
+- [ ] **M4.4** Pre-check: branch already exists → clear error; remote branch not yet local → `checkout --track`
+- [ ] **M4.5** UI: dropdown on the branch badge with search, local/remote sections, "New branch…" entry; SSE output during the operation, status and log refresh at the end
+
 ---
 
 # Future developments
@@ -152,14 +160,6 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 - [ ] **M6.15** Script `npm run i18n:report`: completeness per language and per extension, with the list of missing keys, as a starting point for whoever adds a translation
 - [ ] **M6.16** Check that no hard-coded UI literal is left in `public/` and `extensions/*/view.js` (simple grep-based test with an allowlist)
 - [ ] **M6.17** Docs: README section "Languages" (how to switch, how to add a new language step by step: copy the source catalog, translate, fill `_meta`, run the report), update the M3.10 convention "Italian UI messages" → "UI messages through `t()`, Italian as source language"
-
-## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
-
-- [ ] **M4.1** Backend: `GET /api/ext/git/repos/:id/branches` (local + remote, current branch)
-- [ ] **M4.2** Backend: `checkout` action (validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
-- [ ] **M4.3** Pre-check: uncommitted changes → structured response the UI uses to offer "Stash and switch" / "Cancel"
-- [ ] **M4.4** Pre-check: branch already exists → clear error; remote branch not yet local → `checkout --track`
-- [ ] **M4.5** UI: dropdown on the branch badge with search, local/remote sections, "New branch…" entry; SSE output during the operation, status and log refresh at the end
 
 ---
 
