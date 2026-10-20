@@ -77,6 +77,44 @@ function columnSql(c) {
   return sql;
 }
 
+// Elenco di colonne esistenti (has) per un indice o una chiave: `a`, `b`
+const columnList = has => (list, where) => {
+  if (!Array.isArray(list) || !list.length || !list.every(has)) fail(`columns_${where.what}`, { name: where.name || '' });
+  return list.map(quoteId).join(', ');
+};
+
+// [UNIQUE] KEY `nome` (`a`, `b`) — colList valida le colonne
+function indexSql(ix, colList) {
+  if (ix.name != null && ix.name !== '' && !NAME_RE.test(ix.name)) fail('index_name');
+  return `${ix.unique ? 'UNIQUE ' : ''}KEY ${ix.name ? quoteId(ix.name) + ' ' : ''}(${colList(ix.columns, { what: 'index', name: ix.name })})`;
+}
+
+// CONSTRAINT `nome` FOREIGN KEY (…) REFERENCES `t` (…) ON DELETE … ON UPDATE …
+function fkSql(fk, colList) {
+  if (fk.name != null && fk.name !== '' && !NAME_RE.test(fk.name)) fail('fk_name');
+  if (!NAME_RE.test(fk.refTable || '') || !Array.isArray(fk.refColumns) || !fk.refColumns.every(n => NAME_RE.test(n || ''))) fail('fk_reference');
+  if ((fk.refColumns || []).length !== (fk.columns || []).length) fail('fk_count');
+  const refDb = fk.refDatabase ? `${quoteId(fk.refDatabase)}.` : '';
+  let sql = `${fk.name ? `CONSTRAINT ${quoteId(fk.name)} ` : ''}FOREIGN KEY (${colList(fk.columns, { what: 'foreign_key', name: fk.name })}) REFERENCES ${refDb}${quoteId(fk.refTable)} (${fk.refColumns.map(quoteId).join(', ')})`;
+  for (const [k, label] of [['onDelete', 'ON DELETE'], ['onUpdate', 'ON UPDATE']]) {
+    if (!fk[k]) continue;
+    const action = String(fk[k]).toUpperCase();
+    if (!FK_ACTIONS.has(action)) fail('fk_action', { action: String(fk[k]) });
+    sql += ` ${label} ${action}`;
+  }
+  return sql;
+}
+
+// Opzioni di tabella: ENGINE, charset, collation, commento
+function tableOptionsSql(def) {
+  let options = '';
+  if (def.engine) { if (!ENGINES.has(def.engine)) fail('engine'); options += ` ENGINE=${def.engine}`; }
+  if (def.charset) { if (!CHARSET_RE.test(def.charset)) fail('charset'); options += ` DEFAULT CHARSET=${def.charset}`; }
+  if (def.collation) { if (!CHARSET_RE.test(def.collation)) fail('collation'); options += ` COLLATE=${def.collation}`; }
+  if (def.comment) options += ` COMMENT=${mysql.escape(String(def.comment))}`;
+  return options;
+}
+
 function createTableSql(db, def) {
   if (!def || !NAME_RE.test(def.name || '')) fail('table_name');
   const cols = Array.isArray(def.columns) ? def.columns : [];
@@ -85,10 +123,7 @@ function createTableSql(db, def) {
   if (new Set(names).size !== names.length) fail('duplicate_columns');
   const has = n => names.includes(n);
   // where: { what: 'primary_key' | 'index' | 'foreign_key', name }
-  const colList = (list, where) => {
-    if (!Array.isArray(list) || !list.length || !list.every(has)) fail(`columns_${where.what}`, { name: where.name || '' });
-    return list.map(quoteId).join(', ');
-  };
+  const colList = columnList(has);
 
   const lines = cols.map(columnSql);
   const pk = Array.isArray(def.primaryKey) ? def.primaryKey : [];
@@ -98,32 +133,13 @@ function createTableSql(db, def) {
   if (ai.length && !pk.includes(ai[0].name) && !(def.indexes || []).some(i => i.columns?.[0] === ai[0].name)) {
     fail('auto_increment_key');
   }
-  for (const ix of def.indexes || []) {
-    if (ix.name != null && ix.name !== '' && !NAME_RE.test(ix.name)) fail('index_name');
-    lines.push(`${ix.unique ? 'UNIQUE ' : ''}KEY ${ix.name ? quoteId(ix.name) + ' ' : ''}(${colList(ix.columns, { what: 'index', name: ix.name })})`);
-  }
-  for (const fk of def.foreignKeys || []) {
-    if (fk.name != null && fk.name !== '' && !NAME_RE.test(fk.name)) fail('fk_name');
-    if (!NAME_RE.test(fk.refTable || '') || !Array.isArray(fk.refColumns) || !fk.refColumns.every(n => NAME_RE.test(n || ''))) fail('fk_reference');
-    if ((fk.refColumns || []).length !== (fk.columns || []).length) fail('fk_count');
-    const refDb = fk.refDatabase ? `${quoteId(fk.refDatabase)}.` : '';
-    let sql = `${fk.name ? `CONSTRAINT ${quoteId(fk.name)} ` : ''}FOREIGN KEY (${colList(fk.columns, { what: 'foreign_key', name: fk.name })}) REFERENCES ${refDb}${quoteId(fk.refTable)} (${fk.refColumns.map(quoteId).join(', ')})`;
-    for (const [k, label] of [['onDelete', 'ON DELETE'], ['onUpdate', 'ON UPDATE']]) {
-      if (!fk[k]) continue;
-      const action = String(fk[k]).toUpperCase();
-      if (!FK_ACTIONS.has(action)) fail('fk_action', { action: String(fk[k]) });
-      sql += ` ${label} ${action}`;
-    }
-    lines.push(sql);
-  }
+  for (const ix of def.indexes || []) lines.push(indexSql(ix, colList));
+  for (const fk of def.foreignKeys || []) lines.push(fkSql(fk, colList));
 
-  let options = '';
-  if (def.engine) { if (!ENGINES.has(def.engine)) fail('engine'); options += ` ENGINE=${def.engine}`; }
-  if (def.charset) { if (!CHARSET_RE.test(def.charset)) fail('charset'); options += ` DEFAULT CHARSET=${def.charset}`; }
-  if (def.collation) { if (!CHARSET_RE.test(def.collation)) fail('collation'); options += ` COLLATE=${def.collation}`; }
-  if (def.comment) options += ` COMMENT=${mysql.escape(String(def.comment))}`;
-
-  return `CREATE TABLE ${quoteId(db)}.${quoteId(def.name)} (\n  ${lines.join(',\n  ')}\n)${options}`;
+  return `CREATE TABLE ${quoteId(db)}.${quoteId(def.name)} (\n  ${lines.join(',\n  ')}\n)${tableOptionsSql(def)}`;
 }
 
-module.exports = { createTableSql, DdlError, TYPES: Object.keys(TYPES), FK_ACTIONS: [...FK_ACTIONS], ENGINES: [...ENGINES] };
+module.exports = {
+  createTableSql, columnSql, indexSql, fkSql, columnList, tableOptionsSql, quoteId, fail,
+  DdlError, NAME_RE, TYPE_KINDS: TYPES, TYPES: Object.keys(TYPES), FK_ACTIONS: [...FK_ACTIONS], ENGINES: [...ENGINES],
+};
