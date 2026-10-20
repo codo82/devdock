@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { classify } = require('../extensions/db-client/sql');
+const { classify, schemaChange } = require('../extensions/db-client/sql');
 
 const kind = sql => classify(sql).kind;
 
@@ -36,4 +36,23 @@ test('più istruzioni, USE e testo vuoto vengono rifiutati', () => {
   assert.equal(kind('USE altro_db'), 'invalid');
   assert.equal(kind('   -- solo commento'), 'empty');
   assert.equal(kind(null), 'invalid');
+});
+
+test('istruzioni di schema: tabella e operazione per il nome della migration', () => {
+  const cases = [
+    ['CREATE TABLE IF NOT EXISTS `app`.`ordini` (id INT, x DECIMAL(10,2))', 'ordini', 'create'],
+    ["ALTER TABLE ordini ADD COLUMN stato VARCHAR(20) NOT NULL DEFAULT 'a,b'", 'ordini', 'add_stato'],
+    ['ALTER TABLE ordini ADD stato INT, DROP note', 'ordini', 'alter'],
+    ['alter table app.ordini drop column `note`;', 'ordini', 'drop_note'],
+    ['ALTER TABLE t ADD UNIQUE INDEX ux_mail (mail)', 't', 'add_index_ux_mail'],
+    ['ALTER TABLE t CHANGE a b INT', 't', 'rename_a'],
+    ['ALTER TABLE t MODIFY a BIGINT', 't', 'modify_a'],
+    ['CREATE INDEX ix_a ON t (a)', 't', 'add_index_ix_a'],
+    ['DROP INDEX ix_a ON db.t', 't', 'drop_index_ix_a'],
+    ['RENAME TABLE a TO b', 'a', 'rename'],
+    ['DROP TABLE IF EXISTS vecchia', 'vecchia', 'drop'],
+    ['-- commento\nALTER TABLE t RENAME TO t2', 't', 'rename'],
+  ];
+  for (const [sql, table, operation] of cases) assert.deepEqual(schemaChange(sql), { table, operation }, sql);
+  assert.equal(schemaChange('SELECT 1'), null);
 });

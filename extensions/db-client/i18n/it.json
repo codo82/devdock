@@ -440,5 +440,8 @@
     "other": "{count} istruzioni erano già state eseguite (migration {file})."
   },
   "migrate.doneFile": "Migration {file} scritta e applicata",
-  "migrate.done": "Modifica applicata (nessuna migration)"
+  "migrate.done": "Modifica applicata (nessuna migration)",
+  "confirm.runOnly": "Esegui soltanto",
+  "confirm.saveMigration": "Salva come migration…",
+  "confirm.migrationHint": "È una modifica di schema e la connessione è collegata a una cartella di migration: puoi salvarla come migration (anteprima del file prima di applicarla) o eseguirla soltanto."
 }

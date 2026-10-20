@@ -458,7 +458,7 @@ export default {
     // ---- applicazione delle modifiche di schema: anteprima SQL + file di migration ----
     // body: { operations } o { design }. onDone(result) dopo l'applicazione riuscita.
     let pendingMigrate = null;
-    const fileSlug = v => String(v ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const fileSlug = v => String(v ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
     async function migrateFlow(c, db, body, onDone) {
       const url = `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/migrate`;
@@ -1090,7 +1090,12 @@ export default {
         <p class="db-confirm-text">${text}${data.reason ? ` <span class="db-muted">(${esc(t(`reason.${data.reason}`, { word: data.word || '' }))})</span>` : ''}</p>
         <pre class="db-confirm-sql">${highlightSql(data.sql, esc)}</pre>`,
         `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].cancelConfirm()">${esc(t('core.action.cancel'))}</button>
-         <button class="btn btn-danger" onclick="Ext['db-client'].confirmRun()">${esc(t('confirm.run'))}</button>`);
+         ${data.migration ? `<button class="btn btn-ghost" onclick="Ext['db-client'].confirmRun()">${esc(t('confirm.runOnly'))}</button>
+           <button class="btn btn-primary" onclick="Ext['db-client'].saveAsMigration()">${esc(t('confirm.saveMigration'))}</button>`
+         : `<button class="btn btn-danger" onclick="Ext['db-client'].confirmRun()">${esc(t('confirm.run'))}</button>`}`);
+      if (data.migration) {
+        document.getElementById('modalBody').insertAdjacentHTML('beforeend', `<p class="db-muted">${esc(t('confirm.migrationHint'))}</p>`);
+      }
     }
 
     function renderError(message, sql) {
@@ -1272,6 +1277,23 @@ export default {
         pendingConfirm = null;
         closeModal();
         if (p) p.onConfirm(p.data.token);
+      },
+      // Istruzione di schema dall'editor: stessa anteprima del designer (SQL + file di migration)
+      saveAsMigration() {
+        const p = pendingConfirm;
+        pendingConfirm = null;
+        closeModal();
+        const c = active();
+        if (!p || !c) return;
+        const { sql, database, migration } = p.data;
+        const { table, operation } = migration.proposal;
+        migrateFlow(c, database, { operations: [{ op: 'raw', sql, table, operation }], migration: { table: fileSlug(table) || undefined, operation } }, result => {
+          addHistory({ sql, connId: c.id, db: database, at: Date.now(), ok: true, summary: { affected: 0 } });
+          $(ctx.root, 'results').innerHTML = `<div class="db-ok">✓ ${esc(result.file ? t('migrate.doneFile', { file: result.file }) : t('migrate.done'))}</div>`;
+          cache.delete(nodeKey('d', c.id, database));
+          if (open.has(nodeKey('d', c.id, database))) loadTables(c, database);
+        });
+        if (!p.keepResults) $(ctx.root, 'results').innerHTML = '';
       },
       cancelConfirm() {
         const p = pendingConfirm;

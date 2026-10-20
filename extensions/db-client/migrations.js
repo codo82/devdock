@@ -78,7 +78,7 @@ const pad = (n, width) => String(n).padStart(Math.max(width, MIN_WIDTH), '0');
 
 // Nome del file: NNN_<tabella>_<operazione>.sql (tabella e operazione come slug)
 function slug(text) {
-  return String(text ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  return String(text ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
 }
 

@@ -6,7 +6,7 @@ const path = require('path');
 const mysqlCb = require('mysql2');
 const mysql = require('mysql2/promise');
 const vaultLib = require('./vault');
-const { classify } = require('./sql');
+const { classify, schemaChange } = require('./sql');
 const ddl = require('./ddl');
 const mig = require('./migrations');
 const schemaOps = require('./ops');
@@ -213,7 +213,7 @@ module.exports = function createDbClient(ctx) {
       if (op?.op !== 'raw') continue;
       const c = classify(op.sql);
       if (c.kind !== 'write' || !SCHEMA_VERBS.has(c.verb)) throw ctx.error(400, 'raw_not_schema');
-      if (op.table != null && !DB_NAME_RE.test(op.table)) throw ctx.error(400, 'name_invalid');
+      if (op.table && !DB_NAME_RE.test(op.table)) throw ctx.error(400, 'name_invalid');
     }
   }
 
@@ -785,7 +785,10 @@ module.exports = function createDbClient(ctx) {
           const token = confirmToken(conn, database, sql);
           const given = typeof confirm === 'string' ? Buffer.from(confirm) : Buffer.alloc(0);
           if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
-            return res.status(428).json({ needsConfirmation: true, token, verb: c.verb, reason: c.reason || null, word: c.word || null, database, sql });
+            // istruzione di schema su una connessione collegata: la UI propone di salvarla come migration
+            const migration = SCHEMA_VERBS.has(c.verb) && linkedFolder(conn) && database
+              ? { proposal: schemaChange(sql) || { table: '', operation: 'alter' } } : null;
+            return res.status(428).json({ needsConfirmation: true, token, verb: c.verb, reason: c.reason || null, word: c.word || null, database, sql, migration });
           }
         }
         try {

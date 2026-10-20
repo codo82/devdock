@@ -124,6 +124,12 @@ test('migration: file nel repository, DDL, snapshot, errori e schema letto di nu
     current = (await api('GET', '/connections/c/databases/app/tables/ordini/definition')).json.definition;
     assert.deepEqual(current.columns.map(c => c.name).slice(0, 2), ['id', 'annotazioni']);
 
+    // 6c. editor SQL: un'istruzione di schema su una connessione collegata propone la migration
+    r = await api('POST', '/connections/c/query', { sql: 'ALTER TABLE ordini ADD COLUMN sconto INT', database: 'app' });
+    assert.deepEqual(r.json.migration, { proposal: { table: 'ordini', operation: 'add_sconto' } });
+    r = await api('POST', '/connections/c/query', { sql: 'DELETE FROM ordini', database: 'app' });
+    assert.equal(r.json.migration, null);
+
     // 7. senza repository collegato: solo DDL, nessun file
     await api('DELETE', '/connections/c/migrations');
     const plain = [{ op: 'drop_index', table: 'ordini', name: 'ix_stato' }];

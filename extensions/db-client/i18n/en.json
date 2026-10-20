@@ -440,5 +440,8 @@
     "other": "{count} statements had already run (migration {file})."
   },
   "migrate.doneFile": "Migration {file} written and applied",
-  "migrate.done": "Change applied (no migration)"
+  "migrate.done": "Change applied (no migration)",
+  "confirm.runOnly": "Run only",
+  "confirm.saveMigration": "Save as migration…",
+  "confirm.migrationHint": "This is a schema change and the connection is linked to a migrations folder: you can save it as a migration (with a preview of the file before applying it) or just run it."
 }
