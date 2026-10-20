@@ -1,4 +1,5 @@
-// Helper condivisi della UI (core e estensioni): escape, colori, ANSI, toast, modal, API
+// Helper condivisi della UI (core e estensioni): escape, colori, ANSI, toast, modal, API.
+// Le traduzioni sono in i18n.js (UI.t e UI.fmt rimandano lì).
 window.UI = (() => {
   // ---- UTILS ----
   function esc(t) {
@@ -96,13 +97,10 @@ window.UI = (() => {
     };
   }
 
-  // Durata da una data ISO: "42s", "5m 3s", "2h 10m"
+  // Tempo trascorso da una data ISO, nella lingua attiva ("42 s", "5 min 3 s", "2 h 10 min")
   function formatUptime(startedAt) {
     if (!startedAt) return '—';
-    const secs = Math.floor((Date.now() - new Date(startedAt)) / 1000);
-    if (secs < 60) return `${secs}s`;
-    if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
-    return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
+    return I18n.fmt.duration((Date.now() - new Date(startedAt)) / 1000);
   }
 
   // Gli elementi con data-uptime="<ISO>" si aggiornano da soli ogni secondo
@@ -115,7 +113,7 @@ window.UI = (() => {
     return `<div class="tool-notice">
       <span>⚠️ ${esc(message)}</span>
       ${installCmd ? `<code>${esc(installCmd)}</code>` : ''}
-      ${recheck ? `<button class="btn btn-ghost btn-sm" onclick="${esc(recheck)}">Ricontrolla</button>` : ''}
+      ${recheck ? `<button class="btn btn-ghost btn-sm" onclick="${esc(recheck)}">${esc(I18n.t('core.tools.recheck'))}</button>` : ''}
     </div>`;
   }
 
@@ -151,5 +149,5 @@ window.UI = (() => {
   // click fuori dal modal lo chiude
   document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
-  return { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
+  return { t: I18n.t, fmt: I18n.fmt, esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
 })();

@@ -256,3 +256,5 @@
   .ctx-item.danger{color:var(--danger)}
   .ctx-icon{width:16px;text-align:center;flex-shrink:0}
   .ctx-sep{height:1px;background:var(--border);margin:4px 2px}
+  [hidden]{display:none!important}
+  .lang-code{font-family:var(--font);font-size:11px}

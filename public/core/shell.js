@@ -3,6 +3,8 @@
 // Contratto in docs/EXTENSIONS.md. Navigazione, header e avvio dell'app.
 window.Shell = (() => {
   const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu } = window.UI;
+  const { t, fmt } = window.I18n;
+  const pick = v => window.I18n.pick(v);
 
   const exts = new Map();   // code → { meta, panel, sidebar, tab, module, ctx, loading }
   const bus = new EventTarget();
@@ -14,8 +16,14 @@ window.Shell = (() => {
   // ---- avvio: crea tab/pulsanti per le estensioni con frontend ----
   async function init() {
     let list = [];
+    let failure = null;
     try { list = await apiClient('/api/core').get('/extensions'); }
-    catch (e) { toast('Estensioni non disponibili: ' + e.message, 'error'); return; }
+    catch (e) { failure = e; }
+    // cataloghi del core e delle estensioni attive, prima di creare qualsiasi testo
+    await window.I18n.init(list.filter(e => e.state !== 'disabled'));
+    window.I18n.apply(document);
+    renderLanguageButton();
+    if (failure) { toast(t('core.extensions.unavailable', { error: failure.message }), 'error'); return; }
     extList = list;
 
     for (const meta of list) {
@@ -48,7 +56,7 @@ window.Shell = (() => {
     btn.style.setProperty('--tab-color', cssColor(meta.color));
     btn.innerHTML = `
       <span class="section-tab-icon">${esc(meta.icon || '◆')}</span>
-      <span>${esc(meta.name)}</span>${warningMark(meta)}
+      <span class="section-tab-name">${esc(pick(meta.name))}</span>${warningMark(meta)}
       <span class="section-tab-badge" style="display:none"></span>`;
     btn.dataset.order = meta.order;
     btn.addEventListener('click', () => open(meta.code));
@@ -63,9 +71,9 @@ window.Shell = (() => {
     const btn = document.createElement('button');
     btn.className = 'btn btn-ghost ext-header-btn';
     btn.id = `ext-tab-${meta.code}`;
-    btn.title = meta.name;
+    btn.title = pick(meta.name);
     btn.style.setProperty('--tab-color', cssColor(meta.color));
-    btn.innerHTML = `${esc(meta.icon || meta.name)}${warningMark(meta)}<span class="section-tab-badge" style="display:none"></span>`;
+    btn.innerHTML = `${esc(meta.icon || pick(meta.name))}${warningMark(meta)}<span class="section-tab-badge" style="display:none"></span>`;
     btn.addEventListener('click', () => open(meta.code));
     const actions = document.querySelector('.header-actions');
     actions.insertBefore(btn, actions.querySelector('#stopAllBtn'));
@@ -78,18 +86,20 @@ window.Shell = (() => {
     panel.id = `ext-panel-${meta.code}`;
     panel.style.display = 'none';
     panel.style.setProperty('--ext-color', cssColor(meta.color));
+    panel.dataset.i18nNs = meta.code;
     panel.innerHTML = `
       <div class="ext-root"></div>
       <div class="sse-panel">
         <div class="sse-panel-header">
-          <span class="sse-title">Output</span>
+          <span class="sse-title" data-i18n="core.output.title"></span>
           <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-ghost btn-sm" data-sse="clear" title="Pulisci">🗑</button>
-            <button class="btn btn-ghost btn-sm" data-sse="close">✕</button>
+            <button class="btn btn-ghost btn-sm" data-sse="clear" data-i18n-title="core.output.clear">🗑</button>
+            <button class="btn btn-ghost btn-sm" data-sse="close" data-i18n-aria-label="core.action.close">✕</button>
           </div>
         </div>
         <div class="sse-body"></div>
       </div>`;
+    window.I18n.apply(panel);
     document.querySelector('main.main').appendChild(panel);
     return panel;
   }
@@ -100,6 +110,7 @@ window.Shell = (() => {
     sb.id = `ext-sidebar-${meta.code}`;
     sb.style.display = 'none';
     sb.style.setProperty('--ext-color', cssColor(meta.color));
+    sb.dataset.i18nNs = meta.code;
     document.getElementById('sidebar').appendChild(sb);
     return sb;
   }
@@ -131,8 +142,9 @@ window.Shell = (() => {
       const root = entry.panel.querySelector('.ext-root');
       const [html, sidebar] = await Promise.all([meta.frontend.html, meta.frontend.sidebar]
         .map(f => f ? fetch(base + f).then(r => r.ok ? r.text() : Promise.reject(new Error(`${f}: HTTP ${r.status}`))) : null));
-      if (html !== null) root.innerHTML = html;
-      if (sidebar !== null) entry.sidebar.innerHTML = sidebar;
+      // markup statico tradotto con le chiavi dell'estensione (data-i18n…)
+      if (html !== null) { root.innerHTML = html; window.I18n.apply(root, meta.code); }
+      if (sidebar !== null) { entry.sidebar.innerHTML = sidebar; window.I18n.apply(entry.sidebar, meta.code); }
       const mod = await import(base + meta.frontend.js);
       entry.module = mod.default || mod;
       entry.ctx = makeContext(entry);
@@ -141,7 +153,7 @@ window.Shell = (() => {
     entry.loading.catch(e => {
       entry.loading = null;
       entry.panel.querySelector('.ext-root').innerHTML =
-        `<div class="empty-state"><div class="icon">⚠</div><p>Errore nel caricamento di ${esc(meta.name)}: ${esc(e.message)}</p></div>`;
+        `<div class="empty-state"><div class="icon">⚠</div><p>${esc(t('core.extensions.loadError', { name: pick(meta.name), error: e.message }))}</p></div>`;
     });
     return entry.loading;
   }
@@ -195,7 +207,10 @@ window.Shell = (() => {
       box: panel.querySelector('.sse-panel'),
     };
     const output = {
-      open(title) { sse.title.textContent = title; sse.body.innerHTML = ''; sse.box.classList.add('open'); },
+      open(title) {
+        delete sse.title.dataset.i18n; // titolo scelto dall'estensione: il cambio di lingua non lo sovrascrive
+        sse.title.textContent = title; sse.body.innerHTML = ''; sse.box.classList.add('open');
+      },
       append(text, cls = 'out') {
         const el = document.createElement('span');
         if (cls === 'sys') { el.className = 'ansi-sys'; el.textContent = text; }
@@ -216,7 +231,14 @@ window.Shell = (() => {
       sidebar,
       api,
       core: apiClient('/api/core'),
-      ui: { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, output, formatUptime, toolNotice, notify, contextMenu },
+      // traduzioni: chiavi relative all'estensione ("core." per quelle del core)
+      t: window.I18n.scoped(meta.code),
+      i18n: {
+        get lang() { return window.I18n.lang; },
+        pick,
+        apply: (root) => window.I18n.apply(root, meta.code),
+      },
+      ui: { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, output, formatUptime, toolNotice, notify, contextMenu, t, fmt },
       bus: {
         on(name, fn) { const h = e => fn(e.detail); bus.addEventListener(name, h); return () => bus.removeEventListener(name, h); },
         emit(name, detail) { bus.dispatchEvent(new CustomEvent(name, { detail })); },
@@ -250,15 +272,16 @@ window.Shell = (() => {
     const btn = document.getElementById('notifBtn');
     if (notificationsEnabled) {
       notificationsEnabled = false;
-      toast('Notifiche disattivate');
+      toast(t('core.notifications.off'));
     } else {
-      if (!('Notification' in window)) { toast('Notifiche non supportate dal browser', 'error'); return; }
-      if (await Notification.requestPermission() !== 'granted') { toast('Permesso notifiche negato', 'error'); return; }
+      if (!('Notification' in window)) { toast(t('core.notifications.unsupported'), 'error'); return; }
+      if (await Notification.requestPermission() !== 'granted') { toast(t('core.notifications.denied'), 'error'); return; }
       notificationsEnabled = true;
-      toast('Notifiche attivate', 'success');
+      toast(t('core.notifications.on'), 'success');
     }
     btn.classList.toggle('active', notificationsEnabled);
-    btn.title = notificationsEnabled ? 'Notifiche attive — clicca per disattivare' : 'Attiva notifiche desktop';
+    btn.dataset.i18nTitle = notificationsEnabled ? 'core.notifications.activeTitle' : 'core.notifications.enable';
+    window.I18n.apply(btn);
   }
 
   // ---- export / import: caselle dichiarate dalle estensioni (setting.json → export) ----
@@ -272,7 +295,7 @@ window.Shell = (() => {
     <label class="export-item">
       <input type="checkbox" value="${esc(item.sections.join(','))}" checked>
       <div>
-        <div class="export-name">${esc(item.label)} <span class="export-keys">· ${esc(ext.icon ? ext.icon + ' ' : '')}${esc(ext.name)}</span></div>
+        <div class="export-name">${esc(pick(item.label))} <span class="export-keys">· ${esc(ext.icon ? ext.icon + ' ' : '')}${esc(pick(ext.name))}</span></div>
         <div class="export-keys">${esc(detail(item))}</div>
       </div>
     </label>`).join('');
@@ -281,19 +304,19 @@ window.Shell = (() => {
 
   function exportConfig() {
     const entries = exportItems();
-    if (!entries.length) { toast('Nessuna estensione ha dati da esportare', 'info'); return; }
-    openModal('Esporta configurazione', `
+    if (!entries.length) { toast(t('core.export.nothing'), 'info'); return; }
+    openModal(t('core.export.title'), `
       <div class="export-list">
-        <p class="export-hint">Scegli cosa includere nel file:</p>
-        ${checkboxList(entries, item => item.description || item.sections.join(', '))}
+        <p class="export-hint">${esc(t('core.export.hint'))}</p>
+        ${checkboxList(entries, item => pick(item.description) || item.sections.join(', '))}
       </div>`,
-      `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
-       <button class="btn btn-primary" onclick="Shell.doExport()">↓ Esporta</button>`);
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+       <button class="btn btn-primary" onclick="Shell.doExport()">↓ ${esc(t('core.export.submit'))}</button>`);
   }
 
   function doExport() {
     const keys = checkedKeys();
-    if (!keys.length) { toast('Seleziona almeno una voce', 'error'); return; }
+    if (!keys.length) { toast(t('core.export.selectOne'), 'error'); return; }
     const all = !document.querySelector('.export-list input[type=checkbox]:not(:checked)');
     closeModal();
     window.location.href = `/api/core/config/export?name=${all ? 'all' : 'partial'}&sections=${encodeURIComponent(keys.join(','))}`;
@@ -310,37 +333,68 @@ window.Shell = (() => {
       const cfg = JSON.parse(await file.text());
       // Caselle dichiarate dalle estensioni di cui il file contiene i dati
       const entries = exportItems().filter(({ item }) => item.sections.some(k => cfg[k] !== undefined));
-      if (!entries.length) { toast('Il file non contiene dati delle estensioni installate', 'error'); return; }
+      if (!entries.length) { toast(t('core.import.nothing'), 'error'); return; }
       pendingImport = cfg;
-      const count = k => Array.isArray(cfg[k]) ? ` (${cfg[k].length})` : '';
-      openModal('Importa configurazione', `
+      const count = k => Array.isArray(cfg[k]) ? ` (${fmt.number(cfg[k].length)})` : '';
+      openModal(t('core.import.title'), `
         <div class="export-list">
-          <p class="export-hint">${esc(file.name)} — scegli cosa importare:</p>
+          <p class="export-hint">${esc(t('core.import.hint', { file: file.name }))}</p>
           ${checkboxList(entries, item => item.sections.filter(k => cfg[k] !== undefined).map(k => k + count(k)).join(', '))}
-          <p class="export-hint">Modalità:</p>
+          <p class="export-hint">${esc(t('core.import.mode'))}</p>
           <label class="export-item"><input type="radio" name="importMode" value="merge" checked>
-            <div><div class="export-name">Unisci</div><div class="export-keys">aggiunge gli elementi nuovi, quelli esistenti restano invariati</div></div></label>
+            <div><div class="export-name">${esc(t('core.import.merge'))}</div><div class="export-keys">${esc(t('core.import.mergeHint'))}</div></div></label>
           <label class="export-item"><input type="radio" name="importMode" value="replace">
-            <div><div class="export-name">Sostituisci</div><div class="export-keys">i dati delle voci selezionate prendono il posto di quelli attuali</div></div></label>
+            <div><div class="export-name">${esc(t('core.import.replace'))}</div><div class="export-keys">${esc(t('core.import.replaceHint'))}</div></div></label>
         </div>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
-         <button class="btn btn-primary" onclick="Shell.doImport()">↑ Importa</button>`);
-    } catch (e) { toast('Errore import: ' + e.message, 'error'); }
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" onclick="Shell.doImport()">↑ ${esc(t('core.import.submit'))}</button>`);
+    } catch (e) { toast(t('core.import.error', { error: e.message }), 'error'); }
   }
 
   async function doImport() {
     const keys = checkedKeys();
-    if (!keys.length) { toast('Seleziona almeno una voce', 'error'); return; }
+    if (!keys.length) { toast(t('core.export.selectOne'), 'error'); return; }
     const mode = document.querySelector('input[name="importMode"]:checked')?.value || 'merge';
     const config = Object.fromEntries(keys.filter(k => pendingImport[k] !== undefined).map(k => [k, pendingImport[k]]));
     try {
       await apiClient('/api/core').post('/config/import', { config, mode });
       closeModal();
       pendingImport = null;
-      toast(`Import completato (${mode === 'replace' ? 'sostituzione' : 'unione'})`, 'success');
+      toast(t(mode === 'replace' ? 'core.import.doneReplace' : 'core.import.doneMerge'), 'success');
       refresh();
-    } catch (e) { toast('Errore import: ' + e.message, 'error'); }
+    } catch (e) { toast(t('core.import.error', { error: e.message }), 'error'); }
   }
+
+  // ---- lingua: pulsante nell'header (solo con più di una lingua) e cambio senza ricaricare ----
+  function renderLanguageButton() {
+    const btn = document.getElementById('langBtn');
+    if (!btn) return;
+    const langs = window.I18n.languages;
+    btn.hidden = langs.length < 2;
+    btn.querySelector('.lang-code').textContent = window.I18n.lang.toUpperCase();
+  }
+
+  function chooseLanguage(event) {
+    const r = event.currentTarget.getBoundingClientRect();
+    contextMenu(r.left, r.bottom + 4, window.I18n.languages.map(l => ({
+      icon: l.tag === window.I18n.lang ? '●' : '',
+      label: l.completeness < 100 ? `${l.nativeName} · ${fmt.number(l.completeness / 100, { style: 'percent' })}` : l.nativeName,
+      action: () => window.I18n.setLanguage(l.tag),
+    })));
+  }
+
+  // Testi creati dalla shell e moduli montati, di nuovo nella lingua attiva
+  window.I18n.onChange(() => {
+    renderLanguageButton();
+    for (const e of exts.values()) {
+      const name = pick(e.meta.name);
+      const label = e.tab?.querySelector('.section-tab-name');
+      if (label) label.textContent = name;
+      else if (e.tab) e.tab.title = name;
+      if (!e.module || !e.ctx) continue;
+      try { (e.module.languageChanged || e.module.refresh)?.call(e.module, e.ctx); } catch (err) { console.error(err); }
+    }
+  });
 
   // ---- aggiornamento manuale (pulsante ↻): estensioni montate + sezioni del core ----
   function refresh() {
@@ -388,8 +442,8 @@ window.Shell = (() => {
     const first = firstSection();
     if (first) activate(first);
     else document.querySelector('main.main').innerHTML =
-      '<div class="empty-state"><div class="icon">🧩</div><p>Nessuna estensione disponibile</p></div>';
+      `<div class="empty-state"><div class="icon">🧩</div><p>${esc(t('core.extensions.none'))}</p></div>`;
   })();
 
-  return { has, activate, open, refresh, toggleNotifications, exportConfig, doExport, importConfig, doImport };
+  return { has, activate, open, refresh, toggleNotifications, exportConfig, doExport, importConfig, doImport, chooseLanguage };
 })();

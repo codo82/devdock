@@ -1,4 +1,53 @@
 {
   "_meta": { "name": "Italian", "nativeName": "Italiano", "dir": "ltr" },
-  "core.language.label": "Lingua"
+
+  "core.action.add": "Aggiungi",
+  "core.action.cancel": "Annulla",
+  "core.action.close": "Chiudi",
+  "core.action.confirm": "Conferma",
+  "core.action.delete": "Elimina",
+  "core.action.edit": "Modifica",
+  "core.action.refresh": "Aggiorna",
+  "core.action.save": "Salva",
+
+  "core.extensions.unavailable": "Estensioni non disponibili: {error}",
+  "core.extensions.loadError": "Errore nel caricamento di {name}: {error}",
+  "core.extensions.none": "Nessuna estensione disponibile",
+
+  "core.language.choose": "Lingua",
+
+  "core.output.title": "Output",
+  "core.output.clear": "Pulisci",
+
+  "core.notifications.enable": "Attiva notifiche desktop",
+  "core.notifications.activeTitle": "Notifiche attive — clicca per disattivare",
+  "core.notifications.on": "Notifiche attivate",
+  "core.notifications.off": "Notifiche disattivate",
+  "core.notifications.unsupported": "Notifiche non supportate dal browser",
+  "core.notifications.denied": "Permesso notifiche negato",
+
+  "core.export.button": "Export",
+  "core.export.buttonTitle": "Esporta la configurazione",
+  "core.export.title": "Esporta configurazione",
+  "core.export.hint": "Scegli cosa includere nel file:",
+  "core.export.submit": "Esporta",
+  "core.export.nothing": "Nessuna estensione ha dati da esportare",
+  "core.export.selectOne": "Seleziona almeno una voce",
+
+  "core.import.button": "Import",
+  "core.import.buttonTitle": "Importa una configurazione",
+  "core.import.title": "Importa configurazione",
+  "core.import.hint": "{file} — scegli cosa importare:",
+  "core.import.mode": "Modalità:",
+  "core.import.merge": "Unisci",
+  "core.import.mergeHint": "aggiunge gli elementi nuovi, quelli esistenti restano invariati",
+  "core.import.replace": "Sostituisci",
+  "core.import.replaceHint": "i dati delle voci selezionate prendono il posto di quelli attuali",
+  "core.import.submit": "Importa",
+  "core.import.nothing": "Il file non contiene dati delle estensioni installate",
+  "core.import.error": "Errore import: {error}",
+  "core.import.doneMerge": "Import completato (unione)",
+  "core.import.doneReplace": "Import completato (sostituzione)",
+
+  "core.tools.recheck": "Ricontrolla"
 }
