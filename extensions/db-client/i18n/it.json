@@ -397,5 +397,17 @@
   "mig.fetch": "↻ Controlla il remoto (fetch)",
   "mig.linked": "Migration collegate a {dir}",
   "mig.confirmUnlink": "Scollegare la cartella delle migration? I file restano nel repository.",
-  "mig.unlinked": "Migration scollegate"
+  "mig.unlinked": "Migration scollegate",
+  "errors.ddl_name": "Nome non valido: {name}",
+  "errors.ddl_no_operations": "Nessuna modifica da applicare",
+  "errors.ddl_too_many_operations": "Troppe modifiche in una volta (massimo 500)",
+  "errors.ddl_operation": "Operazione non riconosciuta: {op}",
+  "errors.ddl_raw_sql": "Istruzione mancante",
+  "errors.ddl_nothing": "Nessuna opzione da modificare",
+  "errors.raw_not_schema": "Si possono salvare come migration solo istruzioni CREATE, ALTER, RENAME o DROP",
+  "errors.warnings_not_acknowledged": {
+    "one": "C'è {count} modifica che può perdere dati: va confermata esplicitamente",
+    "other": "Ci sono {count} modifiche che possono perdere dati: vanno confermate esplicitamente"
+  },
+  "errors.file_exists": "Esiste già un file {name}: riprova, il numero viene ricalcolato"
 }

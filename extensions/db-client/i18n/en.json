@@ -397,5 +397,17 @@
   "mig.fetch": "↻ Check the remote (fetch)",
   "mig.linked": "Migrations linked to {dir}",
   "mig.confirmUnlink": "Unlink the migrations folder? The files stay in the repository.",
-  "mig.unlinked": "Migrations unlinked"
+  "mig.unlinked": "Migrations unlinked",
+  "errors.ddl_name": "Invalid name: {name}",
+  "errors.ddl_no_operations": "No changes to apply",
+  "errors.ddl_too_many_operations": "Too many changes at once (500 at most)",
+  "errors.ddl_operation": "Unknown operation: {op}",
+  "errors.ddl_raw_sql": "Missing statement",
+  "errors.ddl_nothing": "No options to change",
+  "errors.raw_not_schema": "Only CREATE, ALTER, RENAME or DROP statements can be saved as migrations",
+  "errors.warnings_not_acknowledged": {
+    "one": "There is {count} change that may lose data: it must be confirmed explicitly",
+    "other": "There are {count} changes that may lose data: they must be confirmed explicitly"
+  },
+  "errors.file_exists": "A file {name} already exists: try again, the number is recomputed"
 }

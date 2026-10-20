@@ -196,15 +196,15 @@ Migration format (decided): **one SQL file per migration, `NNN_<table>_<operatio
 - [ ] **M7.8** File name proposed from the operations: `<table>` is the table name, `<operation>` one of `create`, `alter`, `drop`, `rename` or a more precise slug when there is a single change (`add_status`, `drop_status`, `add_index_email`); editable, slug-validated (`[a-z0-9_]`). Several operations on the same table in one session can be grouped into a single migration
 
 **Changes made outside DevDock**
-- [ ] **M7.9** Introspection of the live schema through read-only `INFORMATION_SCHEMA` queries into the same normalised model: tables, columns, primary keys, indexes, foreign keys, engine
+- [x] **M7.9** Introspection of the live schema through read-only `INFORMATION_SCHEMA` queries into the same normalised model: tables, columns, primary keys, indexes, foreign keys, engine
 - [ ] **M7.10** Reference state: a **schema snapshot** committed in the repository (`<dir>/.devdock-schema.json`), rewritten by every migration DevDock generates. A "Baseline" action takes the current schema as the starting point for projects with an existing DB (optionally generating an initial migration with the full schema)
 - [ ] **M7.11** Diff engine (pure function `diff(snapshot, live) → operations`) with deterministic ordering (FKs dropped before and created after the tables they depend on). Ambiguous cases are resolved by the user, never guessed: a dropped column + an added one of a compatible type → "rename or drop + add?". The "Migrations" tab shows the status ("in sync" / "N changes not in a migration" / "snapshot newer than the DB", i.e. teammates' migrations pulled and not applied) and generates the missing migration on request
 
 **Generators**
-- [ ] **M7.12** SQL generator `(operations) → statements`, shared by the DDL executed on the DB and the migration file, so the two are always identical
+- [x] **M7.12** SQL generator `(operations) → statements`, shared by the DDL executed on the DB and the migration file, so the two are always identical
 
 **Safety and tests**
-- [ ] **M7.13** Never overwrite an existing migration file: the number is recomputed right before writing and the file is created with an exclusive open (a concurrent file with the same number makes the write fail, nothing is lost); file names validated; writes are atomic (temp file + rename); no automatic commit (at the end, link to the Git extension, if present, to review and commit)
+- [x] **M7.13** Never overwrite an existing migration file: the number is recomputed right before writing and the file is created with an exclusive open (a concurrent file with the same number makes the write fail, nothing is lost); file names validated; writes are atomic (temp file + rename); no automatic commit (at the end, link to the Git extension, if present, to review and commit)
 - [ ] **M7.14** Tests: operation model and SQL parser on statement fixtures; diff engine on JSON fixtures (no DB needed); numbering (gaps, wider numbers, names out of format, upstream ahead); the generator on fixed operation lists with expected-file snapshots; rollback of the file when the DDL fails; an integration test against MySQL skipped when `DEVDOCK_TEST_MYSQL` is not set
 - [ ] **M7.15** Later: shadow-database mode (apply all repository migrations to a temporary DB and introspect it) as an alternative reference state; PostgreSQL once M5.7 is done
 - [ ] **M7.16** Docs: README section "DB migrations" (linking, file format, numbering)

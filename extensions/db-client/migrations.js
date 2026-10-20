@@ -101,3 +101,44 @@ module.exports = {
   FILE_RE, MIN_WIDTH, MigrationError,
   isValidDir, resolveInside, listFolders, createFolder, scan, pad, slug, fileName, folderFiles,
 };
+
+// ---- scrittura dei file ----
+
+// Scrittura atomica (file temporaneo + rename): chi legge vede il vecchio o il nuovo contenuto
+function writeAtomic(abs, content) {
+  const tmp = `${abs}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, content);
+  fs.renameSync(tmp, abs);
+}
+
+// Nuovo file name nella cartella, mai sovrascritto: il contenuto va in un file temporaneo
+// che poi viene collegato con il nome finale (link fallisce se il nome esiste già)
+function writeExclusive(dirAbs, name, content) {
+  const final = path.join(dirAbs, name);
+  const tmp = path.join(dirAbs, `.${name}.${process.pid}.${Date.now()}.tmp`);
+  fs.writeFileSync(tmp, content, { flag: 'wx' });
+  try { fs.linkSync(tmp, final); }
+  catch (e) { if (e.code === 'EEXIST') throw new MigrationError('file_exists', { name }); throw e; }
+  finally { fs.rmSync(tmp, { force: true }); }
+  return final;
+}
+
+const SNAPSHOT = '.devdock-schema.json';
+
+// Snapshot dello schema nel repository: chiavi ordinate, così i diff in git restano leggibili
+function snapshotContent(database, lastMigration, schema) {
+  const tables = Object.fromEntries(Object.keys(schema.tables).sort().map(t => [t, schema.tables[t]]));
+  return JSON.stringify({ version: 1, database, lastMigration, tables }, null, 2) + '\n';
+}
+
+function readSnapshot(dirAbs) {
+  try { return JSON.parse(fs.readFileSync(path.join(dirAbs, SNAPSHOT), 'utf8')); } catch { return null; }
+}
+
+// Contenuto del file di migration: intestazione e istruzioni separate da ";"
+function migrationContent(name, { connection, database, date = new Date() }, statements) {
+  const header = [`-- ${name}`, `-- DevDock · ${connection} · ${database} · ${date.toISOString()}`, ''];
+  return header.join('\n') + '\n' + statements.map(s => `${s};`).join('\n\n') + '\n';
+}
+
+Object.assign(module.exports, { writeAtomic, writeExclusive, SNAPSHOT, snapshotContent, readSnapshot, migrationContent });

@@ -2,12 +2,15 @@
 // con una master password (sezione "vault"), query con timeout e limite di righe.
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
 const mysqlCb = require('mysql2');
 const mysql = require('mysql2/promise');
 const vaultLib = require('./vault');
 const { classify } = require('./sql');
 const ddl = require('./ddl');
 const mig = require('./migrations');
+const schemaOps = require('./ops');
+const { introspect } = require('./introspect');
 
 const DEFAULT_LOCK_MINUTES = 30;
 
@@ -124,8 +127,10 @@ module.exports = function createDbClient(ctx) {
     if (c.readOnly != null && typeof c.readOnly !== 'boolean') throw bad('read_only');
     if (c.migrations != null) {
       const m = c.migrations;
-      if (typeof m !== 'object' || Array.isArray(m) || Object.keys(m).some(k => k !== 'repo' && k !== 'dir')
-          || !KEY_RE.test(m.repo || '') || !mig.isValidDir(m.dir)) throw bad('migrations');
+      // applied: ultima migration applicata da questa installazione (per "snapshot più nuovo del DB")
+      if (typeof m !== 'object' || Array.isArray(m) || Object.keys(m).some(k => !['repo', 'dir', 'applied'].includes(k))
+          || !KEY_RE.test(m.repo || '') || !mig.isValidDir(m.dir)
+          || (m.applied != null && !mig.FILE_RE.test(m.applied))) throw bad('migrations');
     }
   }
 
@@ -182,6 +187,38 @@ module.exports = function createDbClient(ctx) {
       exists: !!mig.resolveInside(repo.path, dir) && fs.existsSync(mig.resolveInside(repo.path, dir)),
       ...local, upstream, current, width, next: current + 1, nextPrefix: mig.pad(current + 1, width),
     };
+  }
+
+  // Repository e cartella collegati alla connessione (null se non collegata o repository sparito)
+  function linkedFolder(conn) {
+    if (!conn.migrations) return null;
+    const repo = migrationRepos().repos.find(r => r.id === conn.migrations.repo);
+    if (!repo) return null;
+    const abs = mig.resolveInside(repo.path, conn.migrations.dir);
+    return abs ? { repo, dir: conn.migrations.dir, abs } : null;
+  }
+
+  // Errori del modello di schema (ddl.js / ops.js) → errori con codice
+  const ddlCall = fn => {
+    try { return fn(); } catch (e) {
+      if (e instanceof ddl.DdlError) throw ctx.error(400, `ddl_${e.key}`, e.params);
+      throw e;
+    }
+  };
+
+  // Le istruzioni scritte a mano (raw) devono essere una sola istruzione di schema
+  const SCHEMA_VERBS = new Set(['CREATE', 'ALTER', 'RENAME', 'DROP']);
+  function checkRaw(operations) {
+    for (const op of operations || []) {
+      if (op?.op !== 'raw') continue;
+      const c = classify(op.sql);
+      if (c.kind !== 'write' || !SCHEMA_VERBS.has(c.verb)) throw ctx.error(400, 'raw_not_schema');
+      if (op.table != null && !DB_NAME_RE.test(op.table)) throw ctx.error(400, 'name_invalid');
+    }
+  }
+
+  function setApplied(connId, file) {
+    ctx.config.set('dbConnections', connections().map(c => c.id === connId && c.migrations ? { ...c, migrations: { ...c.migrations, applied: file } } : c));
   }
 
   const connectionOr404 = id => {
@@ -757,6 +794,94 @@ module.exports = function createDbClient(ctx) {
         } catch (e) {
           sendFailure(res, e);
         }
+      },
+
+      // Definizione di una tabella nel modello del designer (per modificarla)
+      async tableDefinition(req, res) {
+        const conn = connectionOr404(req.params.id);
+        const { db, table } = req.params;
+        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) throw ctx.error(400, 'name_invalid');
+        try {
+          const schema = await introspect((await poolFor(conn)).promise(), db, [table]);
+          if (!schema.tables[table]) throw ctx.error(404, 'table_not_found', { table });
+          res.json({ table, definition: schema.tables[table] });
+        } catch (e) { sendFailure(res, e, 502); }
+      },
+
+      // Modifica di schema da un elenco di operazioni (designer, istruzioni dell'editor, confronto).
+      // Senza conferma: 428 con l'SQL, gli avvisi e l'anteprima del file di migration.
+      // Con la conferma (token dello stesso SQL): file nel repository (se collegato e richiesto),
+      // poi le istruzioni sul DB; se nessuna istruzione riesce il file viene tolto.
+      async migrate(req, res) {
+        const conn = connectionOr404(req.params.id);
+        const { db } = req.params;
+        if (!DB_NAME_RE.test(db)) throw ctx.error(400, 'database_invalid');
+        if (conn.readOnly) throw ctx.error(403, 'read_only');
+        const { operations, migration = {}, confirm, acknowledgeWarnings } = req.body;
+        checkRaw(operations);
+        const statements = ddlCall(() => schemaOps.statements(db, operations));
+        const sql = statements.join(';\n\n');
+        const folder = linkedFolder(conn);
+        const save = !!folder && migration.save !== false;
+
+        try {
+          const q = (await poolFor(conn, db)).promise();
+          const tables = [...new Set(operations.map(o => o.table).filter(Boolean))];
+          const before = await introspect(q, db, tables);
+          const warnings = schemaOps.destructive(operations, before);
+          const proposal = schemaOps.proposeName(operations);
+          const table = migration.table || proposal.table;
+          const operation = migration.operation || proposal.operation;
+          const fileFor = async () => {
+            const n = await numbering(folder.repo, folder.dir);
+            return { n, name: migCall(() => mig.fileName(n.next, n.width, table, operation)) };
+          };
+          const content = name => mig.migrationContent(name, { connection: conn.label, database: db }, statements);
+
+          const token = confirmToken(conn, db, sql);
+          const given = typeof confirm === 'string' ? Buffer.from(confirm) : Buffer.alloc(0);
+          if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
+            const preview = save ? await fileFor() : null;
+            return res.status(428).json({
+              needsConfirmation: true, token, verb: 'DDL', database: db, sql, statements, warnings,
+              linked: !!folder, proposal: { table, operation },
+              migration: preview && {
+                file: preview.name, dir: folder.dir, repo: folder.repo.label, content: content(preview.name),
+                behind: preview.n.upstream?.missing?.map(f => f.name) || [],
+              },
+            });
+          }
+          if (warnings.length && acknowledgeWarnings !== true) throw ctx.error(409, 'warnings_not_acknowledged', { count: warnings.length });
+
+          // 1. file nel repository (numero ricalcolato ora, mai sovrascritto)
+          let file = null, abs = null;
+          if (save) {
+            if (!fs.existsSync(folder.abs)) throw ctx.error(404, 'dir_not_found', { dir: folder.dir });
+            file = (await fileFor()).name;
+            abs = migCall(() => mig.writeExclusive(folder.abs, file, content(file)));
+          }
+          // 2. istruzioni sul DB, una alla volta
+          const executed = [];
+          for (const statement of statements) {
+            try {
+              await execute(await poolFor(conn, db), statement, 1);
+              executed.push(statement);
+            } catch (e) {
+              // repository coerente con il DB: niente file se non è cambiato nulla,
+              // altrimenti solo le istruzioni eseguite davvero
+              if (abs && !executed.length) fs.rmSync(abs, { force: true });
+              else if (abs) mig.writeAtomic(abs, mig.migrationContent(file, { connection: conn.label, database: db }, executed));
+              return sendFailure(res, e, 400, { executed, failed: statement, file: executed.length ? file : null });
+            }
+          }
+          // 3. snapshot dello schema accanto alle migration
+          if (save) {
+            const schema = await introspect(q, db);
+            mig.writeAtomic(path.join(folder.abs, mig.SNAPSHOT), mig.snapshotContent(db, file, schema));
+            setApplied(conn.id, file);
+          }
+          res.json({ ok: true, executed, file, dir: save ? folder.dir : null, sql });
+        } catch (e) { sendFailure(res, e); }
       },
 
       // ---- migration ----
