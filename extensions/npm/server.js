@@ -116,7 +116,19 @@ module.exports = function createNpm(ctx) {
 
   return {
     config,
-    services: { getProjects, getProject, readPackage },
+    services: {
+      getProjects, getProject, readPackage,
+      // per l'estensione ports: processi avviati da DevDock (pid = process group) e arresto
+      processes: () => [...processes.values()].filter(pd => pd.running).map(pd => ({ id: pd.id, pid: pd.pid, project: pd.projectLabel, script: pd.script })),
+      stopProcess(id) {
+        const pd = processes.get(id);
+        if (!pd) return false;
+        killGroup(pd);
+        pd.running = false;
+        processes.delete(pd.id);
+        return true;
+      },
+    },
 
     // Strumenti MCP: lettura, più avvio e arresto degli script (come dall'interfaccia)
     mcp: {

@@ -28,6 +28,19 @@ module.exports = function createPm2(ctx) {
   }));
 
   return {
+    // per l'estensione ports: processi PM2 (pid) e arresto
+    services: {
+      async processes() {
+        const r = await runPm2(['jlist']);
+        try { return r.code === null ? [] : processList(r.out).filter(p => p.pid).map(p => ({ name: p.name, pid: p.pid })); }
+        catch { return []; }
+      },
+      async stop(name) {
+        if (!PM2_TARGET_RE.test(String(name))) return false;
+        return (await runPm2(['stop', String(name)])).code === 0;
+      },
+    },
+
     // Strumenti MCP (sola lettura)
     mcp: {
       async list() {

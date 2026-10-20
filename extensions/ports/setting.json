@@ -1,0 +1,37 @@
+{
+  "name": { "it": "Porte", "en": "Ports" },
+  "code": "ports",
+  "version": "1.0.0",
+  "description": {
+    "it": "Porte TCP in ascolto con il processo che le usa, collegate a script npm, PM2 e tunnel; arresto del processo che occupa una porta",
+    "en": "Listening TCP ports with the process using them, linked to npm scripts, PM2 and tunnels; stop the process that holds a port"
+  },
+  "color": "#f778ba",
+  "icon": "🔌",
+  "position": "tab",
+  "order": 35,
+  "dependencies": [
+    { "code": "npm",     "required": false },
+    { "code": "pm2",     "required": false },
+    { "code": "tunnels", "required": false }
+  ],
+  "backend": {
+    "module": "server.js",
+    "routes": [
+      { "method": "GET",  "path": "/list", "handler": "list" },
+      { "method": "POST", "path": "/stop", "handler": "stop" }
+    ]
+  },
+  "mcp": {
+    "tools": [
+      { "name": "list", "handler": "list", "readOnly": true,
+        "description": "List the listening TCP ports of this machine with the process (pid, name, user, command line) and, when known, what started it in DevDock (npm project and script, PM2 process, SSH tunnel). Optional filter by port.",
+        "inputSchema": { "type": "object", "properties": { "port": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "Only this port" } } } }
+    ]
+  },
+  "frontend": {
+    "html": "view.html",
+    "js": "view.js",
+    "css": "style.css"
+  }
+}

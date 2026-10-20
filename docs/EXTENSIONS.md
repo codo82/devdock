@@ -11,9 +11,10 @@ Every feature that can be added or removed is an **extension**: a folder under `
 | `npm` | tab | 20 | `projects` | Progetti NPM | — | yes |
 | `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `npm`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | `npm` (required) | no |
+| `ports` | tab | 35 | — | — | `npm`, `pm2`, `tunnels` (optional) | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
-Services offered to other extensions (`ctx.require(code)`): `npm` → `getProjects()`, `getProject(id)`, `readPackage(project)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
+Services offered to other extensions (`ctx.require(code)`): `npm` → `getProjects()`, `getProject(id)`, `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
 
 ## Folder layout
 
@@ -149,7 +150,7 @@ Only `handlers` is needed when the manifest declares routes (and `mcp` when it d
 | `ctx.lib.config` | `ConfigError` (400 without a code; prefer `ctx.error.config`) and `pick(obj, fields)` |
 | `ctx.lib.errors` | `ApiError` (the class of `ctx.error`) and `errorBody(err)`, for handlers that build the response themselves |
 | `ctx.lib.system` | `hasCommand(cmd)`, `getTools()` (installed external tools) |
-| `ctx.lib.ports` | `getPortsForPgid(pid)`: TCP ports listened on by a process group |
+| `ctx.lib.ports` | `getPortsForPgid(pid)`: TCP ports listened on by a process group; `listListeningPorts()`: every listening TCP port of the machine with pid, process name, user and command line |
 | `ctx.log.info/warn/error(...)` | Console log prefixed with `[ext:<code>]` |
 
 ### MCP tools
@@ -193,7 +194,7 @@ Steps to enable MCP for an extension:
 3. Restart DevDock: the tools appear in the 🤖 *MCP server* dialog of the header and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
 4. Try them from a client: copy the setup from the panel (for Claude Code `claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"`), or in a test with the SDK client as in `tests/mcp.test.js`.
 
-The extensions shipped with DevDock expose: `tunnels_list`; `pm2_list`, `pm2_logs`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI).
+The extensions shipped with DevDock expose: `tunnels_list`; `ports_list`; `pm2_list`, `pm2_logs`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI).
 
 Keep tools read-only unless the user asked otherwise, never return secrets (passwords, tokens, vault data), and limit long outputs with a parameter (`limit`, `lines`) and a `truncated` flag. A missing handler disables the extension like a missing route handler.
 

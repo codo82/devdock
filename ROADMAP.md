@@ -232,16 +232,16 @@ First version (agreed scope): **read-only** tools for every extension, plus runn
 - [ ] **M8.13** stdio bridge (`npx devdock-mcp`) for clients that only support stdio; MCP resources and `list_changed` notifications
 - [ ] **M8.14** Swagger tools (needs specs stored on the server, today they are only loaded in the browser)
 
-## M9 — Ports in use — new extension `ports`
+## M9 — Ports in use — new extension `ports` ✅ (1.10.0)
 
 Goal: answer "who is using port 3000?" and free it. Minimal version; nothing beyond this list.
 
-- [ ] **M9.1** Backend: listening TCP ports of the machine with PID, process name, command line and owner user (`lsof` on macOS/Linux, `ss` as fallback on Linux, `netstat -ano` + `tasklist` on Windows); the core `lib/ports.js` is extended rather than duplicated
-- [ ] **M9.2** Each port linked to what DevDock knows: npm process started by DevDock (project and script), PM2 process, SSH tunnel (only when those extensions are active)
-- [ ] **M9.3** UI: table of ports with search by port, process or project; refresh button
-- [ ] **M9.4** Stop the process that holds a port: only processes of the current user, after a confirmation that shows PID and command; `SIGTERM`, then optionally a forced stop. Processes started by DevDock are stopped through their extension (npm process group, PM2, tunnel) so its state stays consistent
-- [ ] **M9.5** MCP tool `ports_list` (read-only)
-- [ ] **M9.6** Tests (a test server listening on a free port is found and stopped), README, CHANGELOG
+- [x] **M9.1** Backend: listening TCP ports of the machine with PID, process name, command line and owner user (`lsof` on macOS/Linux, `ss` as fallback on Linux, `netstat -ano` + `tasklist` on Windows); the core `lib/ports.js` is extended rather than duplicated
+- [x] **M9.2** Each port linked to what DevDock knows: npm process started by DevDock (project and script), PM2 process, SSH tunnel (only when those extensions are active)
+- [x] **M9.3** UI: table of ports with search by port, process or project; refresh button
+- [x] **M9.4** Stop the process that holds a port: only processes of the current user, after a confirmation that shows PID and command; `SIGTERM`, then optionally a forced stop. Processes started by DevDock are stopped through their extension (npm process group, PM2, tunnel) so its state stays consistent
+- [x] **M9.5** MCP tool `ports_list` (read-only)
+- [x] **M9.6** Tests (a test server listening on a free port is found and stopped), README, CHANGELOG
 
 ## M10 — Environment files — new extension `env`
 

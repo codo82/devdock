@@ -315,7 +315,18 @@ module.exports = function createTunnels(ctx) {
       },
     },
 
-    services: { getServer, ensureTunnel },
+    services: {
+      getServer, ensureTunnel,
+      // per l'estensione ports: tunnel attivi (pid di ssh/autossh) e arresto
+      activeTunnels: () => [...active].map(([id, t]) => ({ id, pid: t.pid, label: t.label, port: t.port })),
+      stopTunnel(id) {
+        const t = active.get(id);
+        if (!t) return false;
+        stop(t);
+        active.delete(id);
+        return true;
+      },
+    },
 
     // Strumenti MCP (sola lettura)
     mcp: {

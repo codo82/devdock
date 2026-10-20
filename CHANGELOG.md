@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-20 — M9 Ports in use
+
+### Added
+- `ports` extension (🔌 Ports): listening TCP ports of the machine with process, PID, user and command line (`lsof`/`ss` on macOS and Linux, `netstat` on Windows), linked to the npm scripts, PM2 processes and SSH tunnels started by DevDock; search and "only my processes" filter.
+- Stop the process that holds a port after a confirmation showing PID and command: processes started by DevDock are stopped through their extension, the others with SIGTERM (optionally forced); only processes of the current user, never DevDock itself.
+- MCP tool `ports_list`.
+- Core `lib/ports.js`: `listListeningPorts()`; services `processes`/`stopProcess` (npm), `processes`/`stop` (PM2), `activeTunnels`/`stopTunnel` (tunnels).
+
 ## [1.9.1] - 2026-10-20
 
 ### Changed
