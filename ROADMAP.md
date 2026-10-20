@@ -1,6 +1,6 @@
 # DevDock — Roadmap
 
-Milestones are ordered by dependency: first secure and stabilise the existing code, then refactor, and only then build new features on the new structure (so they don't have to be rewritten twice).
+Milestones are ordered by dependency (M5 is done before M4 by choice): first secure and stabilise the existing code, then refactor, and only then build new features on the new structure (so they don't have to be rewritten twice).
 
 Status legend: `[ ]` to do · `[~]` in progress · `[x]` done
 
@@ -83,14 +83,6 @@ Every feature becomes an extension with its own manifest, backend routes, HTML, 
 - [x] **M3.11** Publish on GitHub
 - [x] **M3.12** Export/import checkboxes declared by the extensions (`setting.json → export`, each covering some of the extension's config sections); the Export and Import dialogs show only those, Import lets you pick the checkboxes found in the file and the mode (merge/replace)
 
-## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
-
-- [ ] **M4.1** Backend: `GET /api/ext/git/repos/:id/branches` (local + remote, current branch)
-- [ ] **M4.2** Backend: `checkout` action (validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
-- [ ] **M4.3** Pre-check: uncommitted changes → structured response the UI uses to offer "Stash and switch" / "Cancel"
-- [ ] **M4.4** Pre-check: branch already exists → clear error; remote branch not yet local → `checkout --track`
-- [ ] **M4.5** UI: dropdown on the branch badge with search, local/remote sections, "New branch…" entry; SSE output during the operation, status and log refresh at the end
-
 ## M5 — Integrated DB client *(Backlog #4)* — first new extension
 
 Built as an extension on the M3 architecture.
@@ -161,6 +153,14 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 - [ ] **M6.16** Check that no hard-coded UI literal is left in `public/` and `extensions/*/view.js` (simple grep-based test with an allowlist)
 - [ ] **M6.17** Docs: README section "Languages" (how to switch, how to add a new language step by step: copy the source catalog, translate, fill `_meta`, run the report), update the M3.10 convention "Italian UI messages" → "UI messages through `t()`, Italian as source language"
 
+## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
+
+- [ ] **M4.1** Backend: `GET /api/ext/git/repos/:id/branches` (local + remote, current branch)
+- [ ] **M4.2** Backend: `checkout` action (validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
+- [ ] **M4.3** Pre-check: uncommitted changes → structured response the UI uses to offer "Stash and switch" / "Cancel"
+- [ ] **M4.4** Pre-check: branch already exists → clear error; remote branch not yet local → `checkout --track`
+- [ ] **M4.5** UI: dropdown on the branch badge with search, local/remote sections, "New branch…" entry; SSE output during the operation, status and log refresh at the end
+
 ---
 
 ## Suggested order and size
@@ -172,6 +172,6 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 | M1 Security | M | done on the current `server.js`, moved into modules in M3 |
 | M2 Bugs | M | M2.4 required reproducing the case before fixing it |
 | M3 Extension architecture | L | the largest; sections migrated one at a time, covered by tests |
-| M4 Branch switch | S | first feature built inside an extension |
-| M5 DB client | L | first new extension; includes the master password vault |
+| M5 DB client | L | first new extension; includes the master password vault — done before M4 |
+| M4 Branch switch | S | inside the Git extension |
 | M6 i18n | M | language-agnostic: languages discovered from catalogs; core first, then extensions one at a time; structured API errors |
