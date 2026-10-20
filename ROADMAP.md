@@ -79,7 +79,7 @@ Every feature becomes an extension with its own manifest, backend routes, HTML, 
 - [x] **M3.7** Migrate the sections one at a time, keeping the tests green: Swagger ✓ → PM2 ✓ → Tunnels ✓ (with their settings) → npm ✓ → Git ✓
 - [x] **M3.8** Unify the push logic (`push`, fetch-error fallback, `pull_push`) in the Git extension into a single pipeline of sequential SSE commands
 - [x] **M3.9** npm workspaces: `"workspaces": ["extensions/*"]`, a single `node_modules`
-- [ ] **M3.10** *(Backlog #5)* `CLAUDE.md`: purpose, structure, extension pattern, conventions (Italian UI messages, vanilla JS, no build step), how to run and test, reference to this roadmap
+- [x] **M3.10** *(Backlog #5)* `CLAUDE.md`: purpose, structure, extension pattern, conventions (Italian UI messages, vanilla JS, no build step), how to run and test, reference to this roadmap
 - [x] **M3.11** Publish on GitHub
 - [x] **M3.12** Export/import checkboxes declared by the extensions (`setting.json → export`, each covering some of the extension's config sections); the Export and Import dialogs show only those, Import lets you pick the checkboxes found in the file and the mode (merge/replace)
 
