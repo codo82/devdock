@@ -24,9 +24,9 @@ module.exports = function createTunnels(ctx) {
   const servers = () => ctx.config.get('servers');
 
   // Salva entrambe le sezioni insieme (i gruppi fanno riferimento ai server)
+  // Gruppi e server insieme in un'unica scrittura (i gruppi citano i server: validati insieme)
   function save(nextGroups, nextServers) {
-    if (nextServers) ctx.config.set('servers', nextServers);
-    if (nextGroups) ctx.config.set('groups', nextGroups);
+    ctx.config.update({ ...(nextGroups ? { groups: nextGroups } : {}), ...(nextServers ? { servers: nextServers } : {}) });
   }
 
   function normalizeServer(srv) {
@@ -223,6 +223,11 @@ module.exports = function createTunnels(ctx) {
 
   const getServer = key => servers().find(s => s.key === key) || null;
 
+  // Chiude i tunnel attivi di un server (prima di eliminarlo)
+  function stopTunnelsOf(serverKey) {
+    for (const [id, t] of active) if (t.serverKey === serverKey) { stop(t); active.delete(id); }
+  }
+
   return {
     config,
 
@@ -280,9 +285,17 @@ module.exports = function createTunnels(ctx) {
         res.json({ ok: true });
       },
 
+      // Elimina il gruppo e i suoi server che non stanno in altri gruppi (con i loro tunnel)
       deleteGroup(req, res) {
-        save(groups().filter(g => g.key !== req.params.key));
-        res.json({ ok: true });
+        const list = groups();
+        const g = list.find(x => x.key === req.params.key);
+        if (!g) throw ctx.error(404, 'group_not_found', { key: req.params.key });
+        const rest = list.filter(x => x.key !== g.key);
+        const elsewhere = new Set(rest.flatMap(x => x.servers));
+        const orphans = g.servers.filter(k => !elsewhere.has(k));
+        orphans.forEach(stopTunnelsOf);
+        save(rest, servers().filter(srv => !orphans.includes(srv.key)));
+        res.json({ ok: true, deletedServers: orphans });
       },
 
       createServer(req, res) {
@@ -309,8 +322,8 @@ module.exports = function createTunnels(ctx) {
       // Elimina il server e lo toglie dai gruppi (prima i gruppi, poi i server: i riferimenti restano validi)
       deleteServer(req, res) {
         const key = req.params.key;
-        save(groups().map(g => ({ ...g, servers: g.servers.filter(k => k !== key) })), null);
-        save(null, servers().filter(s => s.key !== key));
+        stopTunnelsOf(key);
+        save(groups().map(g => ({ ...g, servers: g.servers.filter(k => k !== key) })), servers().filter(s => s.key !== key));
         res.json({ ok: true });
       },
     },

@@ -98,5 +98,12 @@
   "errors.fields_required": "Required fields are missing",
   "errors.log_connecting": "Connecting to {alias} → 127.0.0.1:{port} ↔ {remote} [{command}, pid {pid}]",
   "errors.log_spawn_error": "Start error: {error}",
-  "errors.log_closed": "Tunnel closed (exit {code}). Reconnecting in {seconds} s..."
+  "errors.log_closed": "Tunnel closed (exit {code}). Reconnecting in {seconds} s...",
+  "confirm.deleteGroupServers": {
+    "one": "Delete the group \"{name}\"? Its server {servers}, which is in no other group, is deleted too.",
+    "other": "Delete the group \"{name}\"? Its {count} servers that are in no other group are deleted too: {servers}."
+  },
+  "settings.orphans": "Servers without a group",
+  "settings.orphansHint": "These servers belong to no group: delete them here or add them to a group with \"+ Add existing\".",
+  "settings.noOrphans": "No servers without a group."
 }

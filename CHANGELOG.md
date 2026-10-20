@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-10-20
+
+### Fixed
+- SSH tunnels: deleting a group left its servers in the configuration, invisible in the Tunnels section but still offered by the Database connection form. Deleting a group now deletes its servers that are in no other group (the confirmation lists them) and closes their tunnels; deleting a server closes its tunnel; groups and servers are saved together.
+- SSH tunnels: servers without a group (left by earlier deletions or removed from every group) are listed under "Servers without a group" in the settings, where they can be edited or deleted.
+- Database: a connection whose SSH tunnel was deleted is flagged (badge, ⚠ in the tree, "deleted" entry in the form) and gives a clear error instead of looking valid.
+- Database: after editing a connection, errors and data of the old settings are no longer shown in the tree (connection refused, wrong database…): its nodes are reloaded.
+- Database: when the default database of a connection does not exist, the list of databases is still shown, with a warning.
+
+### Changed
+- Database tree: arrows that point right when a node is closed and down when it is open, instead of the small triangles.
+
 ## [1.11.0] - 2026-10-20 — M10 Environment files
 
 ### Added

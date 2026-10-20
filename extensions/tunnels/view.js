@@ -143,9 +143,20 @@ export default {
     }
 
     // ---- vista configurazione ----
+    // Server che non stanno in nessun gruppo (es. tolti da un gruppo): visibili solo qui
+    const orphanServers = () => state.servers.filter(s => !state.groups.some(g => g.servers.some(x => x.key === s.key)));
+    const ORPHANS = '\u0000orphans';
+
     function renderSettingsGroups() {
       const el = $(ctx.sidebar, 'settings-groups');
-      el.innerHTML = !state.groups.length
+      const orphans = orphanServers();
+      const orphanItem = orphans.length ? `
+          <div class="gli ${settingsGroup === ORPHANS ? 'active' : ''}" onclick="Ext.tunnels.selectSettingsGroup(${js(ORPHANS)})">
+            <span class="gli-dot" style="background:transparent;border:1px dashed var(--muted)"></span>
+            <span class="gli-label">${esc(t('settings.orphans'))}</span>
+            <span class="gli-cnt">${fmt.number(orphans.length)}</span>
+          </div>` : '';
+      el.innerHTML = (!state.groups.length
         ? `<p class="tn-muted tn-pad">${esc(t('settings.noGroups'))}<br><br><button class="btn btn-ghost btn-sm" onclick="Ext.tunnels.addGroup()">${esc(t('settings.add'))}</button></p>`
         : state.groups.map(g => `
           <div class="gli ${settingsGroup === g.key ? 'active' : ''}" onclick="Ext.tunnels.selectSettingsGroup(${js(g.key)})">
@@ -154,11 +165,32 @@ export default {
             <span class="gli-cnt">${fmt.number(g.servers.length)}</span>
             <button class="gli-edit" onclick="event.stopPropagation();Ext.tunnels.editGroup(${js(g.key)})" title="${esc(t('core.action.edit'))}">✏️</button>
             <button class="gli-del" onclick="event.stopPropagation();Ext.tunnels.deleteGroup(${js(g.key)})" title="${esc(t('core.action.delete'))}">🗑</button>
-          </div>`).join('');
+          </div>`).join('')) + orphanItem;
     }
 
     function renderSettingsDetail() {
       const el = $(ctx.root, 'settings-detail');
+      if (settingsGroup === ORPHANS) {
+        const orphans = orphanServers();
+        el.innerHTML = `
+          <div class="settings-detail-header"><h3>${esc(t('settings.orphans'))}</h3></div>
+          <div class="settings-detail-body">
+            <p class="tn-muted tn-pad-v">${esc(t(orphans.length ? 'settings.orphansHint' : 'settings.noOrphans'))}</p>
+            ${orphans.map(s => `
+              <div class="sli">
+                <div class="sli-info">
+                  <div class="sli-label">${esc(s.label)}</div>
+                  <div class="sli-meta">:${esc(s.port)} → ${esc(s.remote)} · ${esc(t('card.alias'))} ${esc(s.alias)}</div>
+                </div>
+                <span class="sli-type">${esc(s.type || 'TCP')}</span>
+                <div class="sli-actions">
+                  <button class="sli-btn" onclick="Ext.tunnels.editServer(${js(s.key)})" title="${esc(t('core.action.edit'))}">✏️</button>
+                  <button class="sli-btn danger" onclick="Ext.tunnels.deleteServer(${js(s.key)})" title="${esc(t('settings.deleteForever'))}">🗑</button>
+                </div>
+              </div>`).join('')}
+          </div>`;
+        return;
+      }
       const g = state.groups.find(x => x.key === settingsGroup);
       if (!g) {
         el.innerHTML = `<div class="settings-detail-empty"><div class="icon">←</div><p>${esc(t('main.selectGroup'))}</p></div>`;
@@ -316,7 +348,11 @@ export default {
         if (ok) closeModal();
       },
       async deleteGroup(key) {
-        if (!confirm(t('confirm.deleteGroup', { name: key }))) return;
+        // i server del gruppo che non stanno in altri gruppi vengono eliminati con lui
+        const g = state.groups.find(x => x.key === key);
+        const others = new Set(state.groups.filter(x => x.key !== key).flatMap(x => x.servers.map(s => s.key)));
+        const gone = (g?.servers || []).filter(s => !others.has(s.key));
+        if (!confirm(gone.length ? t('confirm.deleteGroupServers', { name: g?.label || key, count: gone.length, servers: fmt.list(gone.map(s => s.label)) }) : t('confirm.deleteGroup', { name: g?.label || key }))) return;
         if (settingsGroup === key) settingsGroup = null;
         await mutate(() => ctx.api.del(`/groups/${encodeURIComponent(key)}`), t('toast.groupDeleted'));
       },

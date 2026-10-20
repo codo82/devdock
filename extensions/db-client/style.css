@@ -57,8 +57,15 @@
 .db-row{display:flex;align-items:center;gap:5px;padding-block:3px;padding-inline:8px 10px;cursor:pointer;white-space:nowrap;border-inline-start:2px solid transparent;user-select:none}
 .db-row:hover{background:var(--surface2)}
 .db-row.active{border-inline-start-color:var(--ext-color);color:var(--ext-color);background:color-mix(in srgb,var(--ext-color) 8%,transparent)}
-.db-caret{width:14px;flex-shrink:0;text-align:center;color:var(--muted);font-size:10px}
-.db-caret[data-act]:hover{color:var(--text)}
+.db-caret{width:16px;height:16px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);border-radius:3px}
+.db-caret[data-act]{cursor:pointer}
+.db-caret[data-act]:hover{color:var(--text);background:var(--surface2)}
+.db-chevron{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.db-chevron.open{transform:rotate(90deg)}
+[dir=rtl] .db-chevron{transform:scaleX(-1)}
+[dir=rtl] .db-chevron.open{transform:rotate(90deg)}
+.db-row-warn{color:var(--danger);font-size:12px;margin-inline-start:4px}
+.db-badge-danger{color:var(--danger);border-color:var(--danger)}
 .db-row-icon{width:16px;flex-shrink:0;text-align:center;font-size:11px}
 .db-row-label{overflow:hidden;text-overflow:ellipsis}
 .db-children{padding-inline-start:12px}

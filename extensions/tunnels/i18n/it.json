@@ -98,5 +98,12 @@
   "errors.fields_required": "Campi obbligatori mancanti",
   "errors.log_connecting": "Connessione a {alias} → 127.0.0.1:{port} ↔ {remote} [{command}, pid {pid}]",
   "errors.log_spawn_error": "Errore di avvio: {error}",
-  "errors.log_closed": "Tunnel chiuso (exit {code}). Riconnessione tra {seconds} s..."
+  "errors.log_closed": "Tunnel chiuso (exit {code}). Riconnessione tra {seconds} s...",
+  "confirm.deleteGroupServers": {
+    "one": "Eliminare il gruppo \"{name}\"? Viene eliminato anche il suo server {servers}, che non sta in altri gruppi.",
+    "other": "Eliminare il gruppo \"{name}\"? Vengono eliminati anche i suoi {count} server che non stanno in altri gruppi: {servers}."
+  },
+  "settings.orphans": "Server senza gruppo",
+  "settings.orphansHint": "Questi server non appartengono a nessun gruppo: si possono eliminare qui o aggiungere a un gruppo con \"+ Aggiungi esistente\".",
+  "settings.noOrphans": "Nessun server senza gruppo."
 }

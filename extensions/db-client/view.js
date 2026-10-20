@@ -98,8 +98,13 @@ export default {
         ${groups.get(g).map(connNode).join('')}`).join('')}</div>`;
     }
 
-    const caret = (key, leaf) => leaf ? '<span class="db-caret"></span>'
-      : `<span class="db-caret" data-act="toggle">${open.has(key) ? '▾' : '▸'}</span>`;
+    // Freccia del nodo: punta a destra se chiuso, in basso se aperto
+    const caret = (key, leaf) => {
+      if (leaf) return '<span class="db-caret"></span>';
+      const isOpen = open.has(key);
+      return `<span class="db-caret" data-act="toggle" title="${esc(t(isOpen ? 'tree.collapse' : 'tree.expand'))}">
+        <svg class="db-chevron ${isOpen ? 'open' : ''}" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1.5 7 5 3.5 8.5" /></svg></span>`;
+    };
     const loading = entry => !entry || entry.loading ? `<div class="db-tree-msg">${esc(t('tree.loading'))}</div>`
       : entry.error ? `<div class="db-tree-msg db-tree-err">${esc(entry.error)}</div>` : '';
     const attrs = (kind, c, db, table) =>
@@ -111,8 +116,12 @@ export default {
       return `<div class="db-node">
         <div class="db-row db-row-conn ${c.id === activeId ? 'active' : ''}" ${attrs('conn', c)} title="${esc(target(c))}">
           ${caret(k)}<span class="db-row-icon">${c.readOnly ? '🔒' : '🗄️'}</span><span class="db-row-label">${esc(c.label)}</span>
+          ${c.tunnelMissing ? `<span class="db-row-warn" title="${esc(t('conn.tunnelMissing', { tunnel: c.tunnel }))}">⚠</span>` : ''}
         </div>
-        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.map(db => dbNode(c, db)).join('') || `<div class="db-tree-msg">${esc(t('tree.noDatabases'))}</div>`}</div>` : ''}
+        ${open.has(k) ? `<div class="db-children">${loading(entry) || [
+          entry.defaultMissing ? `<div class="db-tree-msg db-tree-err">${esc(t('conn.dbMissing', { db: entry.default }))}</div>` : '',
+          entry.map(db => dbNode(c, db)).join('') || `<div class="db-tree-msg">${esc(t('tree.noDatabases'))}</div>`,
+        ].join('')}</div>` : ''}
       </div>`;
     }
 
@@ -153,7 +162,21 @@ export default {
       renderConnections();
     }
 
-    const loadDatabases = c => loadNode(nodeKey('c', c.id), `/connections/${encodeURIComponent(c.id)}/databases`, r => r.databases);
+    const loadDatabases = c => loadNode(nodeKey('c', c.id), `/connections/${encodeURIComponent(c.id)}/databases`,
+      r => Object.assign(r.databases, { default: r.default, defaultMissing: r.defaultMissing }));
+
+    // Dopo una modifica della connessione: via i nodi in cache (anche gli errori), poi si
+    // ricaricano quelli aperti con i dati nuovi
+    function forgetConnection(id) {
+      for (const k of [...cache.keys()]) if (k.split('|')[1] === id) cache.delete(k);
+      const c = connections.find(x => x.id === id);
+      if (!c) { for (const k of [...open]) if (k.split('|')[1] === id) open.delete(k); return; }
+      for (const k of open) {
+        const [kind, cid, db, table] = k.split('|');
+        if (cid !== id) continue;
+        if (kind === 'c') loadDatabases(c); else if (kind === 'd') loadTables(c, db); else loadColumns(c, db, table);
+      }
+    }
     const loadTables = (c, db) => loadNode(nodeKey('d', c.id, db), `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/tables`, r => r.tables);
     const tableUrl = (c, db, t) => `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(t)}`;
     const loadColumns = (c, db, t) => loadNode(nodeKey('t', c.id, db, t), tableUrl(c, db, t));
@@ -793,6 +816,7 @@ export default {
         <span class="db-conn-meta">${esc(c.user)}@${esc(target(c))}${c.database ? ` / ${esc(c.database)}` : ''}</span>
         ${c.readOnly ? `<span class="db-badge">${esc(t('conn.readOnly'))}</span>` : ''}
         ${c.hasPassword ? '' : `<span class="db-badge db-badge-warn">${esc(t('conn.noPassword'))}</span>`}
+        ${c.tunnelMissing ? `<span class="db-badge db-badge-danger">${esc(t('conn.tunnelMissing', { tunnel: c.tunnel }))}</span>` : ''}
         <span class="db-mig-badge" data-role="mig-badge"></span>
         <div class="db-conn-actions">
           <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].migrationsDialog(${js(c.id)})" title="${esc(t('mig.buttonTitle'))}">${esc(t('mig.button'))}</button>
@@ -951,6 +975,7 @@ export default {
         ${tunnelsAvailable ? `<div class="form-row"><label>${esc(t('form.link'))}</label>
           <select class="form-input" id="f_db_tunnel" onchange="document.getElementById('f_db_direct').hidden=!!this.value">
             ${opt('', t('form.direct'), !c.tunnel)}
+            ${c.tunnelMissing ? opt(c.tunnel, t('form.tunnelDeleted', { tunnel: c.tunnel }), true) : ''}
             ${tunnelServers.map(s => opt(s.key, t('form.tunnel', { name: s.label, remote: s.remote }), c.tunnel === s.key)).join('')}
           </select></div>` : ''}
         <div class="form-grid" id="f_db_direct" ${c.tunnel ? 'hidden' : ''}>
@@ -1306,7 +1331,11 @@ export default {
           closeModal();
           toast(t('connections.saved'), 'success');
           activeId = r.connection.id;
+          if (existingId) activeDb.delete(existingId); // riparte dal database predefinito (forse cambiato)
           await loadConnections();
+          // errori e dati vecchi della connessione non valgono più
+          forgetConnection(r.connection.id);
+          if (existingId && existingId === activeId && $(ctx.root, 'results').querySelector('.db-error')) $(ctx.root, 'results').innerHTML = '';
         } catch (e) { toast(e.message, 'error'); }
       },
       async deleteConnection(id) {
@@ -1317,6 +1346,7 @@ export default {
           if (activeId === id) activeId = null;
           toast(t('connections.deleted'), 'success');
           await loadConnections();
+          forgetConnection(id);
         } catch (e) { toast(e.message, 'error'); }
       },
       async testConnection(id) {

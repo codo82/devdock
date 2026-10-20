@@ -134,7 +134,12 @@ module.exports = function createDbClient(ctx) {
   }
 
   // Ciò che vede il frontend: mai la password, solo se c'è
-  const publicConnection = c => ({ ...pick(c, CONNECTION_FIELDS.filter(f => f !== 'password')), hasPassword: !!c.password });
+  // Ciò che vede il frontend; tunnelMissing: il server tunnel usato è stato eliminato (o l'estensione non c'è)
+  const tunnelMissing = c => !!c.tunnel && (!tunnels || !tunnels.getServer(c.tunnel));
+  const publicConnection = c => ({
+    ...pick(c, CONNECTION_FIELDS.filter(f => f !== 'password')), hasPassword: !!c.password,
+    ...(tunnelMissing(c) ? { tunnelMissing: true } : {}),
+  });
 
   // Risposta di errore: gli errori con codice (anche di altre estensioni, es. tunnel non
   // pronto) passano com'erano; quelli di MySQL o di sistema diventano db-client.mysql
@@ -254,6 +259,7 @@ module.exports = function createDbClient(ctx) {
     let host = conn.host, port = conn.port, via = null;
     if (conn.tunnel) {
       if (!tunnels) throw ctx.error(400, 'tunnels_unavailable');
+      if (!tunnels.getServer(conn.tunnel)) throw ctx.error(400, 'tunnel_deleted', { tunnel: conn.tunnel });
       const t = await tunnels.ensureTunnel(conn.tunnel);
       host = '127.0.0.1'; port = t.port; via = t.label;
     }
@@ -285,14 +291,16 @@ module.exports = function createDbClient(ctx) {
     }
   }
 
+  // database: quello da usare; false = nessuno, nemmeno quello predefinito della connessione
   async function poolFor(conn, database) {
-    const k = `${conn.id}\0${database || ''}`;
+    const k = `${conn.id}\0${database === false ? '\0none' : database || ''}`;
     const signature = JSON.stringify(conn);
     const cached = pools.get(k);
     if (cached && cached.signature === signature) return cached.pool;
     if (cached) { cached.pool.end(() => {}); pools.delete(k); }
     const { options } = await connectionTarget(conn);
-    const pool = mysqlCb.createPool({ ...options, database: database || options.database, connectionLimit: 3, waitForConnections: true });
+    const db = database === false ? undefined : database || options.database;
+    const pool = mysqlCb.createPool({ ...options, database: db, connectionLimit: 3, waitForConnections: true });
     // Sola lettura anche lato server: una scrittura sfuggita al controllo fallisce comunque
     if (conn.readOnly) pool.on('connection', c => c.query('SET SESSION TRANSACTION READ ONLY'));
     pools.set(k, { pool, signature });
@@ -546,8 +554,10 @@ module.exports = function createDbClient(ctx) {
       async databases(req, res) {
         const conn = connectionOr404(req.params.id);
         try {
-          const r = await execute(await poolFor(conn), 'SHOW DATABASES', MAX_ROW_LIMIT);
-          res.json({ databases: r.rows.map(row => row[0]), default: conn.database || null });
+          // senza database predefinito: l'elenco arriva anche se quello della connessione non esiste
+          const r = await execute(await poolFor(conn, false), 'SHOW DATABASES', MAX_ROW_LIMIT);
+          const databases = r.rows.map(row => row[0]);
+          res.json({ databases, default: conn.database || null, defaultMissing: !!conn.database && !databases.includes(conn.database) });
         } catch (e) {
           sendFailure(res, e, 502);
         }

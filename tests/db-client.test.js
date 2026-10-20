@@ -554,3 +554,39 @@ test('import di connessioni cifrate con un\'altra master password', async () => 
     await b.stop();
   }
 });
+
+test('connessione con un tunnel eliminato: segnalata, errore chiaro', async () => {
+  const s = await startServer({
+    groups: [], projects: [],
+    servers: [{ key: 'due', label: 'Due', port: 46120, remote: 'db:3306', alias: 'devdock-test.invalid' }],
+    dbConnections: [{ id: 'c', label: 'C', type: 'mysql', tunnel: 'uno', user: 'u', password: null }],
+  });
+  try {
+    const list = (await s.request('GET', '/api/ext/db-client/connections')).json.connections;
+    assert.equal(list[0].tunnelMissing, true);
+    const r = await s.request('GET', '/api/ext/db-client/connections/c/databases');
+    assert.equal(r.json.code, 'db-client.tunnel_deleted');
+    assert.equal(r.json.params.tunnel, 'uno');
+  } finally { await s.stop(); }
+});
+
+test('database predefinito inesistente: l\'elenco dei database arriva comunque', async t => {
+  const mysqlDb = await startMysql();
+  if (!mysqlDb) return t.skip('mysqld non installato');
+  const s = await startServer();
+  try {
+    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    await api('POST', '/vault/init', { password: 'master-password-db' });
+    await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, database: 'nonesiste', user: 'devdock', password: 'devdock-pass' });
+    let r = await api('GET', '/connections/c/databases');
+    assert.equal(r.status, 200, r.text);
+    assert.ok(r.json.databases.includes('app'));
+    assert.equal(r.json.defaultMissing, true);
+    await api('PUT', '/connections/c', { label: 'C', database: 'app' });
+    r = await api('GET', '/connections/c/databases');
+    assert.equal(r.json.defaultMissing, false);
+  } finally {
+    await s.stop();
+    await mysqlDb.stop();
+  }
+});

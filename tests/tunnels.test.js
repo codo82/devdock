@@ -81,3 +81,25 @@ test('CRUD server e gruppi con validazione', async () => {
   assert.deepEqual(srv.readConfig().groups.find(g => g.key === 'grp').servers, []);
 });
 
+
+test('eliminare un gruppo elimina i suoi server che non stanno in altri gruppi', async () => {
+  const srv2 = await startServer({
+    groups: [
+      { key: 'a', label: 'A', color: '#336699', servers: ['solo_a', 'condiviso'] },
+      { key: 'b', label: 'B', color: '#336699', servers: ['condiviso'] },
+    ],
+    servers: [
+      { key: 'solo_a', label: 'Solo A', port: 46201, remote: 'db:3306', alias: 'a.invalid' },
+      { key: 'condiviso', label: 'Condiviso', port: 46202, remote: 'db:3306', alias: 'c.invalid' },
+    ],
+    projects: [],
+  });
+  try {
+    const r = await srv2.request('DELETE', '/api/ext/tunnels/groups/a');
+    assert.deepEqual(r.json, { ok: true, deletedServers: ['solo_a'] });
+    const state = (await srv2.request('GET', '/api/ext/tunnels/state')).json;
+    assert.deepEqual(state.servers.map(s => s.key), ['condiviso']);
+    assert.deepEqual(state.groups.map(g => g.key), ['b']);
+    assert.equal((await srv2.request('DELETE', '/api/ext/tunnels/groups/a')).status, 404);
+  } finally { await srv2.stop(); }
+});
