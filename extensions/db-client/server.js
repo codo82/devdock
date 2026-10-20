@@ -60,6 +60,7 @@ module.exports = function createDbClient(ctx) {
   const tunnels = ctx.require('tunnels'); // opzionale: senza, niente connessioni via tunnel
 
   const vault = () => ctx.config.get('vault');
+  let allowVaultSwitch = false; // vero solo durante il cambio della master password
   const connections = () => ctx.config.get('dbConnections');
 
   // ---- sessione del vault: la chiave vive solo in memoria ----
@@ -340,8 +341,21 @@ module.exports = function createDbClient(ctx) {
   const config = {
     vault: {
       empty: null,
+      // Import in modalità unione: lo stesso vault (stesso verificatore) o nessuno attuale
+      merge(current, incoming) {
+        if (current && incoming && current.verifier !== incoming.verifier) {
+          throw new ConfigError("Il file contiene connessioni cifrate con un'altra master password: importale dalla sezione Database (Importa connessioni)");
+        }
+        return current ?? incoming;
+      },
       validate(record) {
         try { vaultLib.validateRecord(record); } catch (e) { throw new ConfigError(e.message); }
+        // Un'altra master password renderebbe illeggibili le password salvate: si cambia
+        // solo con /vault/change (che ri-cifra tutto) o si importa con /connections/import
+        const current = vault();
+        if (current && record && current.verifier !== record.verifier && !allowVaultSwitch) {
+          throw new ConfigError("Il file contiene connessioni cifrate con un'altra master password: importale dalla sezione Database (Importa connessioni)");
+        }
         if (record && record.lockAfterMinutes != null
             && !(Number.isInteger(record.lockAfterMinutes) && record.lockAfterMinutes >= 1 && record.lockAfterMinutes <= 1440)) {
           throw new ConfigError('vault: lockAfterMinutes deve essere tra 1 e 1440');
@@ -750,13 +764,49 @@ module.exports = function createDbClient(ctx) {
           ? { ...c, password: vaultLib.encrypt(created.encKey, vaultLib.decrypt(oldKey, c.password)) }
           : c);
         const lockAfterMinutes = record.lockAfterMinutes;
-        ctx.config.update({
-          vault: lockAfterMinutes ? { ...created.record, lockAfterMinutes } : created.record,
-          dbConnections: reencrypted,
-        });
+        allowVaultSwitch = true;
+        try {
+          ctx.config.update({
+            vault: lockAfterMinutes ? { ...created.record, lockAfterMinutes } : created.record,
+            dbConnections: reencrypted,
+          });
+        } finally { allowVaultSwitch = false; }
         session.key = created.encKey;
         session.lastUse = Date.now();
         res.json({ ok: true, reencrypted: reencrypted.filter(c => c.password).length });
+      },
+
+      // Connessioni da un file esportato altrove: le password vengono decifrate con la
+      // master password di quel file e ri-cifrate con la chiave attuale (vault sbloccato)
+      async importConnections(req, res) {
+        const key = currentKey();
+        if (!key) return vaultError(res, 423, 'Vault bloccato: inserisci la master password');
+        const { config: file, password, mode } = req.body;
+        if (mode !== 'merge' && mode !== 'replace') return res.status(400).json({ error: 'Modalità non valida' });
+        const incoming = file?.dbConnections;
+        if (!Array.isArray(incoming)) return res.status(400).json({ error: 'Il file non contiene connessioni database' });
+        const withPassword = incoming.filter(c => c?.password);
+        let fileKey = null;
+        if (withPassword.length) {
+          try { vaultLib.validateRecord(file.vault); } catch { return res.status(400).json({ error: 'Il file non contiene il blocco vault delle password' }); }
+          if (!file.vault) return res.status(400).json({ error: 'Il file non contiene il blocco vault delle password' });
+          fileKey = await vaultLib.openVault(file.vault, password);
+          if (!fileKey) { registerFailure(); return vaultError(res, 401, 'Master password del file errata'); }
+        }
+        let converted;
+        try {
+          converted = incoming.map(c => {
+            const conn = pick(c || {}, CONNECTION_FIELDS);
+            conn.password = c?.password ? vaultLib.encrypt(key, vaultLib.decrypt(fileKey, c.password)) : null;
+            return conn;
+          });
+        } catch { return res.status(400).json({ error: 'Password del file non leggibili con questa master password' }); }
+        const current = connections();
+        const ids = new Set(current.map(c => c.id));
+        const next = mode === 'replace' ? converted : [...current, ...converted.filter(c => !ids.has(c.id))];
+        ctx.config.set('dbConnections', next); // valida tutte le connessioni
+        closePools();
+        res.json({ ok: true, imported: mode === 'replace' ? converted.length : next.length - current.length, skipped: mode === 'replace' ? 0 : converted.filter(c => ids.has(c.id)).length });
       },
 
       // Password dimenticata: si cancellano vault e password salvate (le connessioni restano)

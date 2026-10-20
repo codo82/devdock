@@ -505,3 +505,52 @@ test('creazione tabella da definizione strutturata, solo dopo conferma', async t
     await mysqlDb.stop();
   }
 });
+
+test('import di connessioni cifrate con un\'altra master password', async () => {
+  // installazione A: crea vault e una connessione con password, poi esporta
+  const a = await startServer();
+  const b = await startServer();
+  try {
+    const apiA = (m, p, body) => a.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const apiB = (m, p, body) => b.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    await apiA('POST', '/vault/init', { password: 'master-di-A-123' });
+    await apiA('POST', '/connections', { id: 'prod', label: 'Prod', host: 'db.local', port: 3306, user: 'u', password: 'segreto-prod' });
+    const exported = (await a.request('GET', '/api/core/config/export?name=x&sections=dbConnections,vault')).json;
+
+    // installazione B con un vault diverso e una connessione propria
+    await apiB('POST', '/vault/init', { password: 'master-di-B-456' });
+    await apiB('POST', '/connections', { id: 'locale', label: 'Locale', host: '127.0.0.1', port: 3306, user: 'u', password: 'segreto-locale' });
+
+    // l'import generale rifiuta il vault diverso (le password diventerebbero illeggibili)
+    let r = await b.request('POST', '/api/core/config/import', { body: { mode: 'merge', config: exported } });
+    assert.equal(r.status, 400);
+    assert.match(r.json.error, /un'altra master password/);
+    r = await b.request('POST', '/api/core/config/import', { body: { mode: 'replace', config: exported } });
+    assert.equal(r.status, 400);
+
+    // import dedicato: password del file errata, poi giusta
+    assert.equal((await apiB('POST', '/connections/import', { config: exported, password: 'sbagliata-xx', mode: 'merge' })).status, 401);
+    await new Promise(res => setTimeout(res, 50));
+    r = await apiB('POST', '/connections/import', { config: exported, password: 'master-di-A-123', mode: 'merge' });
+    assert.deepEqual(r.json, { ok: true, imported: 1, skipped: 0 });
+
+    // la password importata è ora cifrata con la chiave di B
+    const cfg = b.readConfig();
+    const keyB = await vaultLib.openVault(cfg.vault, 'master-di-B-456');
+    const prod = cfg.dbConnections.find(c => c.id === 'prod');
+    assert.equal(vaultLib.decrypt(keyB, prod.password), 'segreto-prod');
+    assert.deepEqual(cfg.dbConnections.map(c => c.id), ['locale', 'prod']);
+    assert.doesNotMatch(fs.readFileSync(b.configPath, 'utf8'), /segreto-prod/);
+
+    // di nuovo in merge: già presente, saltata
+    r = await apiB('POST', '/connections/import', { config: exported, password: 'master-di-A-123', mode: 'merge' });
+    assert.deepEqual(r.json, { ok: true, imported: 0, skipped: 1 });
+
+    // con il vault bloccato non si importa
+    await apiB('POST', '/vault/lock');
+    assert.equal((await apiB('POST', '/connections/import', { config: exported, password: 'master-di-A-123', mode: 'merge' })).status, 423);
+  } finally {
+    await a.stop();
+    await b.stop();
+  }
+});

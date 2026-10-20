@@ -23,6 +23,7 @@
       { "method": "POST",   "path": "/connections",           "handler": "createConnection" },
       { "method": "PUT",    "path": "/connections/:id",       "handler": "updateConnection" },
       { "method": "DELETE", "path": "/connections/:id",       "handler": "deleteConnection" },
+      { "method": "POST",   "path": "/connections/import",   "handler": "importConnections" },
       { "method": "POST",   "path": "/connections/:id/test",  "handler": "testConnection" },
       { "method": "GET",    "path": "/connections/:id/databases", "handler": "databases" },
       { "method": "GET",    "path": "/connections/:id/databases/:db/tables", "handler": "tables" },

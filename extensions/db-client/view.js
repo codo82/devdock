@@ -53,6 +53,7 @@ export default {
       $(ctx.root, 'main').hidden = !unlocked;
       $(ctx.sidebar, 'vault-btn').hidden = !unlocked;
       $(ctx.sidebar, 'add-btn').hidden = !unlocked;
+      $(ctx.sidebar, 'import-btn').hidden = !unlocked;
       if (!unlocked) {
         $(ctx.sidebar, 'connections').innerHTML = '<p class="db-muted db-pad">🔒 Sblocca la master password per vedere le connessioni.</p>';
         renderGate();
@@ -897,6 +898,28 @@ export default {
     const actions = {
       lock, saveVault,
       run: () => run(),
+      importConnections() {
+        openModal('Importa connessioni', `
+          <p class="db-muted">File .json esportato da DevDock (casella "Connessioni database"). Le password vengono ri-cifrate con la tua master password.</p>
+          <div class="form-row"><label>File</label><input class="form-input" type="file" accept=".json" id="f_imp_file"></div>
+          <div class="form-row"><label>Master password del file</label><input class="form-input" type="password" id="f_imp_password" autocomplete="off"></div>
+          <label class="db-check"><input type="radio" name="f_imp_mode" value="merge" checked> Unisci: aggiunge le connessioni nuove</label>
+          <label class="db-check"><input type="radio" name="f_imp_mode" value="replace"> Sostituisci tutte le connessioni</label>`,
+          `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button><button class="btn btn-primary" onclick="Ext['db-client'].doImportConnections()">Importa</button>`);
+      },
+      async doImportConnections() {
+        const file = document.getElementById('f_imp_file')?.files[0];
+        if (!file) { toast('Scegli un file', 'error'); return; }
+        try {
+          const config = JSON.parse(await file.text());
+          const mode = document.querySelector('input[name="f_imp_mode"]:checked')?.value || 'merge';
+          if (mode === 'replace' && !confirm('Sostituire tutte le connessioni con quelle del file?')) return;
+          const r = await ctx.api.post('/connections/import', { config, password: document.getElementById('f_imp_password').value, mode });
+          closeModal();
+          toast(`${r.imported} connessioni importate${r.skipped ? `, ${r.skipped} già presenti` : ''}`, 'success');
+          await loadConnections();
+        } catch (e) { toast(e instanceof SyntaxError ? 'File non valido' : e.message, 'error'); }
+      },
       useHistory(i) {
         const h = readHistory()[i];
         if (!h) return;
@@ -1029,6 +1052,7 @@ export default {
     ctx.sidebar.addEventListener('click', e => {
       if (e.target.closest('[data-action="vault-menu"]')) vaultMenu();
       else if (e.target.closest('[data-action="add-connection"]')) actions.addConnection();
+      else if (e.target.closest('[data-action="import-connections"]')) actions.importConnections();
     });
     ctx.bus.on('npm:projects-changed', () => { if (vault.state === 'unlocked') renderConnections(); });
     ctx.expose(actions);
