@@ -1,0 +1,2 @@
+# Testi nel codice ammessi dal controllo dei testi non tradotti (tests/i18n-catalogs.test.js).
+# Una riga per voce: "<file>: <parte del testo>". Righe vuote e commenti (#) ignorati.

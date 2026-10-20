@@ -169,9 +169,9 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 - [x] **M6.13** Output of external commands (`git`, `npm`, `pm2`, `ssh`) is **not** translated: it is shown as is in the SSE panel
 
 **Quality**
-- [ ] **M6.14** Tests on the catalogs, for the core and for each extension: the source language is complete; no other catalog has keys that don't exist in the source (stale keys); `{param}` placeholders match the source; every plural key has `other`; `_meta` is valid. Missing translations are **not** a failure: they are reported as completeness %
-- [ ] **M6.15** Script `npm run i18n:report`: completeness per language and per extension, with the list of missing keys, as a starting point for whoever adds a translation
-- [ ] **M6.16** Check that no hard-coded UI literal is left in `public/` and `extensions/*/view.js` (simple grep-based test with an allowlist)
+- [x] **M6.14** Tests on the catalogs, for the core and for each extension: the source language is complete; no other catalog has keys that don't exist in the source (stale keys); `{param}` placeholders match the source; every plural key has `other`; `_meta` is valid. Missing translations are **not** a failure: they are reported as completeness %
+- [x] **M6.15** Script `npm run i18n:report`: completeness per language and per extension, with the list of missing keys, as a starting point for whoever adds a translation
+- [x] **M6.16** Check that no hard-coded UI literal is left in `public/` and `extensions/*/view.js` (simple grep-based test with an allowlist)
 - [ ] **M6.17** Docs: README section "Languages" (how to switch, how to add a new language step by step: copy the source catalog, translate, fill `_meta`, run the report), update the M3.10 convention "Italian UI messages" → "UI messages through `t()`, Italian as source language"
 
 
