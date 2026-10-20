@@ -55,7 +55,8 @@ function cell(v) {
 }
 
 module.exports = function createDbClient(ctx) {
-  const { ConfigError, pick } = ctx.lib.config;
+  const { pick } = ctx.lib.config;
+  const { ApiError, errorBody } = ctx.lib.errors;
   const { KEY_RE, isPort, isText } = ctx.lib.validate;
   const tunnels = ctx.require('tunnels'); // opzionale: senza, niente connessioni via tunnel
 
@@ -94,35 +95,48 @@ module.exports = function createDbClient(ctx) {
   function decryptPassword(conn) {
     if (!conn.password) return '';
     const key = currentKey();
-    if (!key) throw Object.assign(new Error('Vault bloccato: inserisci la master password'), { status: 423 });
+    if (!key) throw ctx.error(423, 'vault_locked');
     return vaultLib.decrypt(key, conn.password);
   }
 
   // ---- connessioni ----
 
   function validateConnection(c) {
-    const where = `connessione "${c?.id}"`;
-    if (!c || typeof c !== 'object') throw new ConfigError('Connessione non valida');
-    if (!KEY_RE.test(c.id || '')) throw new ConfigError(`${where}: id non valido (lettere, numeri, _ e -)`);
-    if (!isText(c.label)) throw new ConfigError(`${where}: nome obbligatorio`);
-    if ((c.type ?? 'mysql') !== 'mysql') throw new ConfigError(`${where}: tipo non supportato`);
+    if (!c || typeof c !== 'object') throw ctx.error.config('connection_invalid');
+    const bad = field => ctx.error.config(`connection_${field}`, { id: String(c.id ?? '') });
+    if (!KEY_RE.test(c.id || '')) throw bad('id');
+    if (!isText(c.label)) throw bad('label');
+    if ((c.type ?? 'mysql') !== 'mysql') throw bad('type');
     if (c.tunnel != null) {
-      if (!KEY_RE.test(c.tunnel)) throw new ConfigError(`${where}: tunnel non valido`);
+      if (!KEY_RE.test(c.tunnel)) throw bad('tunnel');
     } else {
-      if (!HOST_RE.test(c.host || '')) throw new ConfigError(`${where}: host non valido`);
-      if (!isPort(c.port)) throw new ConfigError(`${where}: porta non valida (1-65535)`);
+      if (!HOST_RE.test(c.host || '')) throw bad('host');
+      if (!isPort(c.port)) throw bad('port');
     }
-    if (c.database != null && c.database !== '' && !DB_NAME_RE.test(c.database)) throw new ConfigError(`${where}: nome database non valido`);
-    if (!isText(c.user, 80)) throw new ConfigError(`${where}: utente obbligatorio`);
-    if (c.password != null && !vaultLib.isBox(c.password)) throw new ConfigError(`${where}: password non cifrata`);
-    if (c.projectId != null && !KEY_RE.test(c.projectId)) throw new ConfigError(`${where}: progetto non valido`);
-    if (c.readOnly != null && typeof c.readOnly !== 'boolean') throw new ConfigError(`${where}: readOnly deve essere true o false`);
+    if (c.database != null && c.database !== '' && !DB_NAME_RE.test(c.database)) throw bad('database');
+    if (!isText(c.user, 80)) throw bad('user');
+    if (c.password != null && !vaultLib.isBox(c.password)) throw bad('password');
+    if (c.projectId != null && !KEY_RE.test(c.projectId)) throw bad('project');
+    if (c.readOnly != null && typeof c.readOnly !== 'boolean') throw bad('read_only');
   }
 
   // Ciò che vede il frontend: mai la password, solo se c'è
   const publicConnection = c => ({ ...pick(c, CONNECTION_FIELDS.filter(f => f !== 'password')), hasPassword: !!c.password });
 
-  const fail = (message, status = 400) => Object.assign(new Error(message), { status });
+  // Risposta di errore: gli errori con codice (anche di altre estensioni, es. tunnel non
+  // pronto) passano com'erano; quelli di MySQL o di sistema diventano db-client.mysql
+  // con il messaggio originale (non tradotto) e il codice MySQL in params.mysqlCode
+  function sendFailure(res, e, status = 400, extra = {}) {
+    if (e instanceof ApiError) return res.status(e.status).json({ ...errorBody(e), ...extra });
+    if (e?.key) e = ctx.error(400, e.key, e.params); // vault.js
+    else e = ctx.error(e?.status || status, 'mysql', { error: e?.message || String(e), ...(e?.code ? { mysqlCode: e.code } : {}) });
+    return res.status(e.status).json({ ...errorBody(e), ...extra });
+  }
+  const connectionOr404 = id => {
+    const conn = findConnection(id);
+    if (!conn) throw ctx.error(404, 'connection_not_found', { id: String(id) });
+    return conn;
+  };
 
   // Dati dal form → connessione da salvare. password: stringa = nuova (cifrata subito),
   // '' o assente = invariata, null = rimossa
@@ -134,13 +148,13 @@ module.exports = function createDbClient(ctx) {
     for (const k of ['database', 'projectId', 'tunnel']) if (c[k] === '') c[k] = null;
     c.readOnly = !!c.readOnly;
     if (c.tunnel) {
-      if (!tunnels) throw fail('Estensione Tunnels SSH non attiva: connessione via tunnel non disponibile');
-      if (!tunnels.getServer(c.tunnel)) throw fail(`Server tunnel inesistente: ${c.tunnel}`);
+      if (!tunnels) throw ctx.error(400, 'tunnels_unavailable');
+      if (!tunnels.getServer(c.tunnel)) throw ctx.error(400, 'tunnel_unknown', { tunnel: String(c.tunnel) });
       delete c.host; delete c.port; // host e porta vengono dal tunnel
     }
     if (typeof body.password === 'string' && body.password !== '') {
       const key = currentKey();
-      if (!key) throw fail('Vault bloccato: inserisci la master password', 423);
+      if (!key) throw ctx.error(423, 'vault_locked');
       c.password = vaultLib.encrypt(key, body.password);
     } else if (body.password === null) {
       c.password = null;
@@ -154,7 +168,7 @@ module.exports = function createDbClient(ctx) {
   async function connectionTarget(conn) {
     let host = conn.host, port = conn.port, via = null;
     if (conn.tunnel) {
-      if (!tunnels) throw fail('Estensione Tunnels SSH non attiva: connessione via tunnel non disponibile');
+      if (!tunnels) throw ctx.error(400, 'tunnels_unavailable');
       const t = await tunnels.ensureTunnel(conn.tunnel);
       host = '127.0.0.1'; port = t.port; via = t.label;
     }
@@ -203,12 +217,12 @@ module.exports = function createDbClient(ctx) {
   // Parti comuni di anteprima ed export di una tabella: colonne verificate, WHERE con
   // parametri (ricerca su tutte le colonne + filtri), ORDER BY su una colonna esistente
   async function tableQuery(q, db, table, { search, filters, sort } = {}) {
-    if (!DB_NAME_RE.test(db || '') || !DB_NAME_RE.test(table || '')) throw fail('Nome non valido');
+    if (!DB_NAME_RE.test(db || '') || !DB_NAME_RE.test(table || '')) throw ctx.error(400, 'name_invalid');
     const [cols] = await q.query(
       `SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, DATA_TYPE AS dataType, IS_NULLABLE = 'YES' AS nullable,
               COLUMN_KEY AS \`key\`, COLUMN_DEFAULT AS \`default\`, EXTRA AS extra
          FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]);
-    if (!cols.length) throw fail('Tabella non trovata', 404);
+    if (!cols.length) throw ctx.error(404, 'table_not_found', { table });
     const columns = cols.map(c => ({ ...c, nullable: !!Number(c.nullable) }));
     const names = new Set(columns.map(c => c.name));
     const where = [], params = [];
@@ -219,13 +233,13 @@ module.exports = function createDbClient(ctx) {
     }
     for (const f of Array.isArray(filters) ? filters : []) {
       const op = FILTER_OPS[f?.op];
-      if (!op || !names.has(f.column)) throw fail(`Filtro non valido: ${f?.column} ${f?.op}`);
+      if (!op || !names.has(f.column)) throw ctx.error(400, 'filter_invalid', { column: String(f?.column), op: String(f?.op) });
       where.push(`${quoteId(f.column)} ${op.sql}`);
       if (!op.noValue) params.push(op.like ? op.like(escapeLike(f.value ?? '')) : f.value ?? '');
     }
     let orderSql = '';
     if (sort?.column) {
-      if (!names.has(sort.column)) throw fail(`Colonna sconosciuta: ${sort.column}`);
+      if (!names.has(sort.column)) throw ctx.error(400, 'column_unknown', { columns: String(sort.column) });
       orderSql = ` ORDER BY ${quoteId(sort.column)} ${sort.dir === 'desc' ? 'DESC' : 'ASC'}`;
     }
     return { columns, from: `${quoteId(db)}.${quoteId(table)}`, whereSql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params, orderSql };
@@ -247,7 +261,7 @@ module.exports = function createDbClient(ctx) {
         if (spec.withCreate) {
           try {
             const [[row]] = await connection.promise().query(`SHOW CREATE TABLE ${quoteId(spec.db)}.${quoteId(spec.table)}`);
-            header = `-- Struttura\nDROP TABLE IF EXISTS ${quoteId(spec.table)};\n${row['Create Table']};\n\n`;
+            header = `-- Structure\nDROP TABLE IF EXISTS ${quoteId(spec.table)};\n${row['Create Table']};\n\n`;
           } catch (e) { connection.release(); return reject(e); }
         }
         res.setHeader('Content-Type', EXPORT_FORMATS[format].type);
@@ -281,7 +295,7 @@ module.exports = function createDbClient(ctx) {
         stream.on('error', e => { connection.destroy(); res.destroy(e); reject(e); });
         stream.on('end', async () => {
           if (format === 'json') res.write(count ? '\n]\n' : ']\n');
-          if (format === 'sql') { await flushSql(); res.write(`-- ${count} righe\n`); }
+          if (format === 'sql') { await flushSql(); res.write(`-- ${count} rows\n`); }
           connection.release();
           res.end();
           resolve(count);
@@ -344,21 +358,21 @@ module.exports = function createDbClient(ctx) {
       // Import in modalità unione: lo stesso vault (stesso verificatore) o nessuno attuale
       merge(current, incoming) {
         if (current && incoming && current.verifier !== incoming.verifier) {
-          throw new ConfigError("Il file contiene connessioni cifrate con un'altra master password: importale dalla sezione Database (Importa connessioni)");
+          throw ctx.error.config('vault_other_password');
         }
         return current ?? incoming;
       },
       validate(record) {
-        try { vaultLib.validateRecord(record); } catch (e) { throw new ConfigError(e.message); }
+        try { vaultLib.validateRecord(record); } catch (e) { throw ctx.error.config(e.key || 'vault_record_invalid'); }
         // Un'altra master password renderebbe illeggibili le password salvate: si cambia
         // solo con /vault/change (che ri-cifra tutto) o si importa con /connections/import
         const current = vault();
         if (current && record && current.verifier !== record.verifier && !allowVaultSwitch) {
-          throw new ConfigError("Il file contiene connessioni cifrate con un'altra master password: importale dalla sezione Database (Importa connessioni)");
+          throw ctx.error.config('vault_other_password');
         }
         if (record && record.lockAfterMinutes != null
             && !(Number.isInteger(record.lockAfterMinutes) && record.lockAfterMinutes >= 1 && record.lockAfterMinutes <= 1440)) {
-          throw new ConfigError('vault: lockAfterMinutes deve essere tra 1 e 1440');
+          throw ctx.error.config('vault_lock_minutes');
         }
       },
     },
@@ -366,19 +380,18 @@ module.exports = function createDbClient(ctx) {
       empty: [], idField: 'id',
       normalize: v => (Array.isArray(v) ? v.map(c => pick(c || {}, CONNECTION_FIELDS)) : v),
       validate(list, cfg) {
-        if (!Array.isArray(list)) throw new ConfigError('Config non valida: "dbConnections" deve essere una lista');
+        if (!Array.isArray(list)) throw ctx.error.config('not_a_list', { section: 'dbConnections' });
         const seen = new Set();
         for (const c of list) {
           validateConnection(c);
-          if (seen.has(c.id)) throw new ConfigError(`Connessione duplicata: ${c.id}`);
+          if (seen.has(c.id)) throw ctx.error.config('duplicate_connection', { id: c.id });
           seen.add(c.id);
-          if (c.password != null && !cfg.vault) throw new ConfigError(`connessione "${c.id}": password cifrata senza vault`);
+          if (c.password != null && !cfg.vault) throw ctx.error.config('password_without_vault', { id: c.id });
         }
       },
     },
   };
 
-  const vaultError = (res, status, error) => res.status(status).json({ error });
 
   return {
     config,
@@ -398,7 +411,7 @@ module.exports = function createDbClient(ctx) {
       },
 
       createConnection(req, res) {
-        if (findConnection(req.body.id)) return res.status(409).json({ error: 'ID già esistente' });
+        if (findConnection(req.body.id)) throw ctx.error(409, 'id_exists', { id: String(req.body.id) });
         const c = buildConnection(req.body);
         ctx.config.set('dbConnections', [...connections(), c]);
         res.json({ ok: true, connection: publicConnection(c) });
@@ -407,7 +420,7 @@ module.exports = function createDbClient(ctx) {
       updateConnection(req, res) {
         const list = connections();
         const idx = list.findIndex(c => c.id === req.params.id);
-        if (idx === -1) return res.status(404).json({ error: 'Connessione non trovata' });
+        if (idx === -1) throw ctx.error(404, 'connection_not_found', { id: req.params.id });
         list[idx] = buildConnection(req.body, list[idx]);
         ctx.config.set('dbConnections', list);
         closePools(req.params.id);
@@ -422,8 +435,7 @@ module.exports = function createDbClient(ctx) {
 
       // Prova di connessione: versione del server e utente effettivo
       async testConnection(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const conn = connectionOr404(req.params.id);
         let db;
         try {
           const { options, via } = await connectionTarget(conn);
@@ -432,7 +444,7 @@ module.exports = function createDbClient(ctx) {
           const [[row]] = await db.query('SELECT VERSION() AS version, CURRENT_USER() AS user, DATABASE() AS db');
           res.json({ ok: true, ...row, via, ms: Date.now() - started });
         } catch (e) {
-          res.status(e.status || 502).json({ error: e.message });
+          sendFailure(res, e, 502);
         } finally {
           db?.end().catch(() => {});
         }
@@ -440,37 +452,34 @@ module.exports = function createDbClient(ctx) {
 
       // Elenco dei database visibili dalla connessione (per il selettore)
       async databases(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const conn = connectionOr404(req.params.id);
         try {
           const r = await execute(await poolFor(conn), 'SHOW DATABASES', MAX_ROW_LIMIT);
           res.json({ databases: r.rows.map(row => row[0]), default: conn.database || null });
         } catch (e) {
-          res.status(e.status || 502).json({ error: e.message });
+          sendFailure(res, e, 502);
         }
       },
 
       // Tabelle e viste di un database (letture su information_schema, con parametri)
       async tables(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
-        if (!DB_NAME_RE.test(req.params.db)) return res.status(400).json({ error: 'Nome database non valido' });
+        const conn = connectionOr404(req.params.id);
+        if (!DB_NAME_RE.test(req.params.db)) throw ctx.error(400, 'database_invalid');
         try {
           const [rows] = await (await poolFor(conn)).promise().query(
             `SELECT TABLE_NAME AS name, TABLE_TYPE AS type, ENGINE AS engine, TABLE_ROWS AS rowsEstimate, TABLE_COMMENT AS comment
                FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME`, [req.params.db]);
           res.json({ tables: rows.map(t => ({ ...t, view: t.type === 'VIEW' })) });
         } catch (e) {
-          res.status(e.status || 502).json({ error: e.message });
+          sendFailure(res, e, 502);
         }
       },
 
       // Struttura di una tabella: colonne, indici, chiavi esterne
       async tableInfo(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const conn = connectionOr404(req.params.id);
         const { db, table } = req.params;
-        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) return res.status(400).json({ error: 'Nome non valido' });
+        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) throw ctx.error(400, 'name_invalid');
         try {
           const q = (await poolFor(conn)).promise();
           const [[columns], [indexes], [foreignKeys]] = await Promise.all([
@@ -486,7 +495,7 @@ module.exports = function createDbClient(ctx) {
                       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
                       GROUP BY CONSTRAINT_NAME, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME`, [db, table]),
           ]);
-          if (!columns.length) return res.status(404).json({ error: 'Tabella non trovata' });
+          if (!columns.length) throw ctx.error(404, 'table_not_found', { table });
           const split = list => list.map(x => ({ ...x, columns: String(x.columns).split(','), ...(x.refColumns ? { refColumns: String(x.refColumns).split(',') } : {}) }));
           res.json({
             columns: columns.map(c => ({ ...c, nullable: !!Number(c.nullable) })),
@@ -494,15 +503,14 @@ module.exports = function createDbClient(ctx) {
             foreignKeys: split(foreignKeys),
           });
         } catch (e) {
-          res.status(e.status || 502).json({ error: e.message });
+          sendFailure(res, e, 502);
         }
       },
 
       // Anteprima dei dati di una tabella: pagina, ricerca, filtri, ordinamento.
       // Colonne e operatori sono verificati, i valori passano come parametri.
       async rows(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const conn = connectionOr404(req.params.id);
         const { db, table } = req.params;
         const pageSize = PAGE_SIZES.includes(Number(req.body.pageSize)) ? Number(req.body.pageSize) : 50;
         const page = Math.max(1, parseInt(req.body.page) || 1);
@@ -519,16 +527,15 @@ module.exports = function createDbClient(ctx) {
             total: Number(total), page, pageSize, pageSizes: PAGE_SIZES,
           });
         } catch (e) {
-          res.status(e.status || 400).json({ error: e.message, code: e.code || null });
+          sendFailure(res, e);
         }
       },
 
       // Export (passo 1): valida sorgente e formato e restituisce un id usa e getta
       async createExport(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const conn = connectionOr404(req.params.id);
         const { format, source } = req.body;
-        if (!EXPORT_FORMATS[format]) return res.status(400).json({ error: 'Formato non valido (csv, json, sql)' });
+        if (!EXPORT_FORMATS[format]) throw ctx.error(400, 'format_invalid');
         try {
           let spec, name;
           if (source?.type === 'table') {
@@ -539,20 +546,20 @@ module.exports = function createDbClient(ctx) {
             name = source.table;
           } else if (source?.type === 'query') {
             const c = classify(source.sql);
-            if (c.kind !== 'read') return res.status(400).json({ error: 'Si possono esportare solo letture (SELECT, SHOW, …)' });
+            if (c.kind !== 'read') throw ctx.error(400, 'export_read_only');
             const database = source.database || conn.database || null;
-            if (database && !DB_NAME_RE.test(database)) return res.status(400).json({ error: 'Nome database non valido' });
-            spec = { sql: source.sql, params: [], database, table: 'risultato', db: null, withCreate: false };
+            if (database && !DB_NAME_RE.test(database)) throw ctx.error(400, 'database_invalid');
+            spec = { sql: source.sql, params: [], database, table: 'result', db: null, withCreate: false };
             name = 'query';
           } else {
-            return res.status(400).json({ error: 'Sorgente non valida' });
+            throw ctx.error(400, 'source_invalid');
           }
           const id = crypto.randomUUID();
           const filename = `${String(name).replace(/[^A-Za-z0-9_.-]+/g, '_')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.${format}`;
           pendingExports.set(id, { connId: conn.id, format, spec, filename, expires: Date.now() + 60000 });
           res.json({ id, filename });
         } catch (e) {
-          res.status(e.status || 400).json({ error: e.message });
+          sendFailure(res, e);
         }
       },
 
@@ -560,14 +567,13 @@ module.exports = function createDbClient(ctx) {
       async downloadExport(req, res) {
         const job = pendingExports.get(req.params.exportId);
         pendingExports.delete(req.params.exportId);
-        if (!job || job.expires < Date.now()) return res.status(404).json({ error: 'Export scaduto: riprova' });
-        const conn = findConnection(job.connId);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        if (!job || job.expires < Date.now()) throw ctx.error(404, 'export_expired');
+        const conn = connectionOr404(job.connId);
         try {
           const pool = await poolFor(conn, job.spec.database);
           await streamExport(pool, job, res);
         } catch (e) {
-          if (!res.headersSent) res.status(e.status || 400).json({ error: e.message });
+          if (!res.headersSent) sendFailure(res, e);
           else res.destroy(e);
         }
       },
@@ -576,44 +582,43 @@ module.exports = function createDbClient(ctx) {
       // (valori escapati da mysql2) e, come ogni modifica, eseguita solo dopo la conferma
       // del testo esatto: la prima risposta è 428 con l'SQL e il token.
       async row(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const conn = connectionOr404(req.params.id);
         const { db, table } = req.params;
-        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) return res.status(400).json({ error: 'Nome non valido' });
+        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) throw ctx.error(400, 'name_invalid');
         const { op, key, keys, values, confirm } = req.body;
-        if (!['insert', 'update', 'delete', 'delete-many'].includes(op)) return res.status(400).json({ error: 'Operazione non valida' });
-        if (conn.readOnly) return res.status(403).json({ error: 'Connessione in sola lettura' });
+        if (!['insert', 'update', 'delete', 'delete-many'].includes(op)) throw ctx.error(400, 'operation_invalid');
+        if (conn.readOnly) throw ctx.error(403, 'read_only');
         try {
           const q = (await poolFor(conn, db)).promise();
           const [columns] = await q.query(
             `SELECT COLUMN_NAME AS name, COLUMN_KEY AS \`key\` FROM information_schema.COLUMNS
               WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]);
-          if (!columns.length) return res.status(404).json({ error: 'Tabella non trovata' });
+          if (!columns.length) throw ctx.error(404, 'table_not_found', { table });
           const names = new Set(columns.map(c => c.name));
           const pk = columns.filter(c => c.key === 'PRI').map(c => c.name);
           const from = `${quoteId(db)}.${quoteId(table)}`;
 
           const vals = values && typeof values === 'object' ? values : {};
           const unknown = Object.keys(vals).filter(k => !names.has(k));
-          if (unknown.length) return res.status(400).json({ error: `Colonne sconosciute: ${unknown.join(', ')}` });
+          if (unknown.length) throw ctx.error(400, 'column_unknown', { columns: unknown.join(', ') });
           const scalar = v => v === null || ['string', 'number', 'boolean'].includes(typeof v);
-          if (!Object.values(vals).every(scalar)) return res.status(400).json({ error: 'Valori non validi' });
+          if (!Object.values(vals).every(scalar)) throw ctx.error(400, 'values_invalid');
 
           // WHERE sulla chiave primaria completa (niente modifiche senza)
           let whereSql = '', whereParams = [];
           if (op === 'delete-many') {
-            if (!pk.length) return res.status(400).json({ error: 'La tabella non ha una chiave primaria: modifica non disponibile' });
-            if (!Array.isArray(keys) || !keys.length || keys.length > 1000) return res.status(400).json({ error: 'Seleziona da 1 a 1000 righe' });
+            if (!pk.length) throw ctx.error(400, 'no_primary_key');
+            if (!Array.isArray(keys) || !keys.length || keys.length > 1000) throw ctx.error(400, 'rows_range');
             const valid = k => k && typeof k === 'object' && pk.every(c => c in k && scalar(k[c]) && k[c] !== null);
-            if (!keys.every(valid)) return res.status(400).json({ error: `Chiave primaria mancante: ${pk.join(', ')}` });
+            if (!keys.every(valid)) throw ctx.error(400, 'primary_key_missing', { columns: pk.join(', ') });
             const tuple = pk.length > 1 ? `(${pk.map(quoteId).join(', ')})` : quoteId(pk[0]);
             const one = pk.length > 1 ? `(${pk.map(() => '?').join(', ')})` : '?';
             whereSql = `${tuple} IN (${keys.map(() => one).join(', ')})`;
             whereParams = keys.flatMap(k => pk.map(c => k[c]));
           } else if (op !== 'insert') {
-            if (!pk.length) return res.status(400).json({ error: 'La tabella non ha una chiave primaria: modifica non disponibile' });
+            if (!pk.length) throw ctx.error(400, 'no_primary_key');
             if (!key || typeof key !== 'object' || pk.some(k => !(k in key) || !scalar(key[k]) || key[k] === null)) {
-              return res.status(400).json({ error: `Chiave primaria mancante: ${pk.join(', ')}` });
+              throw ctx.error(400, 'primary_key_missing', { columns: pk.join(', ') });
             }
             whereSql = pk.map(k => `${quoteId(k)} = ?`).join(' AND ');
             whereParams = pk.map(k => key[k]);
@@ -627,7 +632,7 @@ module.exports = function createDbClient(ctx) {
               : `INSERT INTO ${from} () VALUES ()`;
             params = cols.map(c => vals[c]);
           } else if (op === 'update') {
-            if (!cols.length) return res.status(400).json({ error: 'Nessun valore da modificare' });
+            if (!cols.length) throw ctx.error(400, 'nothing_to_update');
             template = `UPDATE ${from} SET ${cols.map(c => `${quoteId(c)} = ?`).join(', ')} WHERE ${whereSql} LIMIT 1`;
             params = [...cols.map(c => vals[c]), ...whereParams];
           } else if (op === 'delete-many') {
@@ -647,7 +652,7 @@ module.exports = function createDbClient(ctx) {
           const result = await execute(await poolFor(conn, db), sql, 1);
           res.json({ ...result, sql });
         } catch (e) {
-          res.status(e.status || 400).json({ error: e.message, code: e.code || null });
+          sendFailure(res, e);
         }
       },
 
@@ -655,14 +660,13 @@ module.exports = function createDbClient(ctx) {
       // generato qui e, come ogni modifica, eseguito solo dopo la conferma del testo esatto
       // (la risposta 428 fa anche da anteprima per il designer)
       async createTable(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const conn = connectionOr404(req.params.id);
         const { db } = req.params;
-        if (!DB_NAME_RE.test(db)) return res.status(400).json({ error: 'Nome database non valido' });
-        if (conn.readOnly) return res.status(403).json({ error: 'Connessione in sola lettura' });
+        if (!DB_NAME_RE.test(db)) throw ctx.error(400, 'database_invalid');
+        if (conn.readOnly) throw ctx.error(403, 'read_only');
         let sql;
         try { sql = ddl.createTableSql(db, req.body.definition); }
-        catch (e) { if (e instanceof ddl.DdlError) return res.status(400).json({ error: e.message }); throw e; }
+        catch (e) { if (e instanceof ddl.DdlError) throw ctx.error(400, `ddl_${e.key}`, e.params); throw e; }
         const token = confirmToken(conn, db, sql);
         const given = typeof req.body.confirm === 'string' ? Buffer.from(req.body.confirm) : Buffer.alloc(0);
         if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
@@ -672,35 +676,34 @@ module.exports = function createDbClient(ctx) {
           const result = await execute(await poolFor(conn, db), sql, 1);
           res.json({ ...result, sql });
         } catch (e) {
-          res.status(e.status || 400).json({ error: e.message, code: e.code || null, sql });
+          sendFailure(res, e, 400, { sql });
         }
       },
 
       // Esegue una istruzione. Le letture partono subito; tutto ciò che può modificare
       // dati o schema richiede il token di conferma di quella esatta istruzione (428).
       async query(req, res) {
-        const conn = findConnection(req.params.id);
-        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const conn = connectionOr404(req.params.id);
         const { sql, confirm } = req.body;
         const database = req.body.database || conn.database || null;
-        if (database && !DB_NAME_RE.test(database)) return res.status(400).json({ error: 'Nome database non valido' });
+        if (database && !DB_NAME_RE.test(database)) throw ctx.error(400, 'database_invalid');
         const limit = Math.min(Math.max(parseInt(req.body.limit) || DEFAULT_ROW_LIMIT, 1), MAX_ROW_LIMIT);
 
         const c = classify(sql);
-        if (c.kind === 'invalid' || c.kind === 'empty') return res.status(400).json({ error: c.reason });
+        if (c.kind === 'invalid' || c.kind === 'empty') throw ctx.error(400, `sql_${c.reason}`);
         if (c.kind === 'write') {
-          if (conn.readOnly) return res.status(403).json({ error: `Connessione in sola lettura: ${c.verb || 'istruzione'} non consentito` });
+          if (conn.readOnly) throw ctx.error(403, 'read_only_statement', { verb: c.verb || '?' });
           const token = confirmToken(conn, database, sql);
           const given = typeof confirm === 'string' ? Buffer.from(confirm) : Buffer.alloc(0);
           if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
-            return res.status(428).json({ needsConfirmation: true, token, verb: c.verb, reason: c.reason || null, database, sql });
+            return res.status(428).json({ needsConfirmation: true, token, verb: c.verb, reason: c.reason || null, word: c.word || null, database, sql });
           }
         }
         try {
           const result = await execute(await poolFor(conn, database), sql, limit);
           res.json({ ...result, statement: c.kind, database, limit });
         } catch (e) {
-          res.status(e.status || 400).json({ error: e.message, code: e.code || null });
+          sendFailure(res, e);
         }
       },
 
@@ -716,10 +719,10 @@ module.exports = function createDbClient(ctx) {
       },
 
       async vaultInit(req, res) {
-        if (vault()) return vaultError(res, 409, 'La master password è già stata creata');
+        if (vault()) throw ctx.error(409, 'vault_exists');
         let created;
         try { created = await vaultLib.createVault(req.body.password); }
-        catch (e) { return vaultError(res, 400, e.message); }
+        catch (e) { return sendFailure(res, e); }
         ctx.config.set('vault', created.record);
         session.key = created.encKey;
         session.lastUse = Date.now();
@@ -728,16 +731,16 @@ module.exports = function createDbClient(ctx) {
 
       async vaultUnlock(req, res) {
         const record = vault();
-        if (!record) return vaultError(res, 409, 'Master password non ancora creata');
+        if (!record) throw ctx.error(409, 'vault_missing');
         const wait = Math.ceil((throttle.retryAt - Date.now()) / 1000);
         if (wait > 0) {
           res.setHeader('Retry-After', String(wait));
-          return vaultError(res, 429, `Troppi tentativi: riprova tra ${wait}s`);
+          throw ctx.error(429, 'too_many_attempts', { seconds: wait });
         }
         const key = await vaultLib.openVault(record, req.body.password);
         if (!key) {
           registerFailure();
-          return vaultError(res, 401, 'Master password errata');
+          throw ctx.error(401, 'wrong_password');
         }
         throttle.failures = 0;
         throttle.retryAt = 0;
@@ -754,12 +757,12 @@ module.exports = function createDbClient(ctx) {
       // Nuova master password: tutte le password vengono ri-cifrate e salvate insieme al vault
       async vaultChange(req, res) {
         const record = vault();
-        if (!record) return vaultError(res, 409, 'Master password non ancora creata');
+        if (!record) throw ctx.error(409, 'vault_missing');
         const oldKey = await vaultLib.openVault(record, req.body.oldPassword);
-        if (!oldKey) { registerFailure(); return vaultError(res, 401, 'Master password attuale errata'); }
+        if (!oldKey) { registerFailure(); throw ctx.error(401, 'wrong_current_password'); }
         let created;
         try { created = await vaultLib.createVault(req.body.newPassword); }
-        catch (e) { return vaultError(res, 400, e.message); }
+        catch (e) { return sendFailure(res, e); }
         const reencrypted = connections().map(c => c.password
           ? { ...c, password: vaultLib.encrypt(created.encKey, vaultLib.decrypt(oldKey, c.password)) }
           : c);
@@ -780,18 +783,18 @@ module.exports = function createDbClient(ctx) {
       // master password di quel file e ri-cifrate con la chiave attuale (vault sbloccato)
       async importConnections(req, res) {
         const key = currentKey();
-        if (!key) return vaultError(res, 423, 'Vault bloccato: inserisci la master password');
+        if (!key) throw ctx.error(423, 'vault_locked');
         const { config: file, password, mode } = req.body;
-        if (mode !== 'merge' && mode !== 'replace') return res.status(400).json({ error: 'Modalità non valida' });
+        if (mode !== 'merge' && mode !== 'replace') throw ctx.error(400, 'mode_invalid');
         const incoming = file?.dbConnections;
-        if (!Array.isArray(incoming)) return res.status(400).json({ error: 'Il file non contiene connessioni database' });
+        if (!Array.isArray(incoming)) throw ctx.error(400, 'file_no_connections');
         const withPassword = incoming.filter(c => c?.password);
         let fileKey = null;
         if (withPassword.length) {
-          try { vaultLib.validateRecord(file.vault); } catch { return res.status(400).json({ error: 'Il file non contiene il blocco vault delle password' }); }
-          if (!file.vault) return res.status(400).json({ error: 'Il file non contiene il blocco vault delle password' });
+          try { vaultLib.validateRecord(file.vault); } catch { throw ctx.error(400, 'file_no_vault'); }
+          if (!file.vault) throw ctx.error(400, 'file_no_vault');
           fileKey = await vaultLib.openVault(file.vault, password);
-          if (!fileKey) { registerFailure(); return vaultError(res, 401, 'Master password del file errata'); }
+          if (!fileKey) { registerFailure(); throw ctx.error(401, 'wrong_file_password'); }
         }
         let converted;
         try {
@@ -800,7 +803,7 @@ module.exports = function createDbClient(ctx) {
             conn.password = c?.password ? vaultLib.encrypt(key, vaultLib.decrypt(fileKey, c.password)) : null;
             return conn;
           });
-        } catch { return res.status(400).json({ error: 'Password del file non leggibili con questa master password' }); }
+        } catch { throw ctx.error(400, 'file_passwords_unreadable'); }
         const current = connections();
         const ids = new Set(current.map(c => c.id));
         const next = mode === 'replace' ? converted : [...current, ...converted.filter(c => !ids.has(c.id))];
@@ -811,7 +814,7 @@ module.exports = function createDbClient(ctx) {
 
       // Password dimenticata: si cancellano vault e password salvate (le connessioni restano)
       vaultReset(req, res) {
-        if (req.body.confirm !== 'RESET') return vaultError(res, 400, 'Conferma mancante');
+        if (req.body.confirm !== 'RESET') throw ctx.error(400, 'confirm_missing');
         const cleared = connections().map(c => ({ ...c, password: null }));
         ctx.config.update({ dbConnections: cleared, vault: null });
         lock();
@@ -820,7 +823,7 @@ module.exports = function createDbClient(ctx) {
 
       vaultSettings(req, res) {
         const record = vault();
-        if (!record) return vaultError(res, 409, 'Master password non ancora creata');
+        if (!record) throw ctx.error(409, 'vault_missing');
         const minutes = Number(req.body.lockAfterMinutes);
         ctx.config.set('vault', { ...record, lockAfterMinutes: minutes });
         res.json({ ok: true, lockAfterMinutes: minutes });

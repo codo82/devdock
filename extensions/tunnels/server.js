@@ -12,7 +12,7 @@ const SERVER_FIELDS = ['key', 'label', 'port', 'remote', 'alias', 'type'];
 const GROUP_FIELDS  = ['key', 'label', 'color', 'servers'];
 
 module.exports = function createTunnels(ctx) {
-  const { ConfigError, pick } = ctx.lib.config;
+  const { pick } = ctx.lib.config;
   const { KEY_RE, COLOR_RE, REMOTE_RE, ALIAS_RE, isPort, isText } = ctx.lib.validate;
   const { hasCommand } = ctx.lib.system;
 
@@ -36,36 +36,36 @@ module.exports = function createTunnels(ctx) {
   }
 
   function validateServer(srv) {
-    const where = `server "${srv?.key}"`;
-    if (!srv || typeof srv !== 'object') throw new ConfigError('Server non valido');
-    if (!KEY_RE.test(srv.key || '')) throw new ConfigError(`${where}: chiave non valida (lettere, numeri, _ e -)`);
-    if (!isText(srv.label)) throw new ConfigError(`${where}: nome obbligatorio`);
-    if (!isPort(srv.port)) throw new ConfigError(`${where}: porta locale non valida (1-65535)`);
+    if (!srv || typeof srv !== 'object') throw ctx.error.config('server_invalid');
+    const bad = name => ctx.error.config(name, { key: String(srv.key ?? '') });
+    if (!KEY_RE.test(srv.key || '')) throw bad('server_key');
+    if (!isText(srv.label)) throw bad('server_label');
+    if (!isPort(srv.port)) throw bad('server_port');
     const m = REMOTE_RE.exec(srv.remote || '');
-    if (!m || !isPort(Number(m[2]))) throw new ConfigError(`${where}: remote non valido (formato host:porta)`);
-    if (!ALIAS_RE.test(srv.alias || '')) throw new ConfigError(`${where}: alias SSH non valido`);
-    if (srv.type != null && !isText(srv.type, 40)) throw new ConfigError(`${where}: tipo non valido`);
+    if (!m || !isPort(Number(m[2]))) throw bad('server_remote');
+    if (!ALIAS_RE.test(srv.alias || '')) throw bad('server_alias');
+    if (srv.type != null && !isText(srv.type, 40)) throw bad('server_type');
   }
 
   function validateGroup(g, serverKeys) {
-    const where = `gruppo "${g?.key}"`;
-    if (!g || typeof g !== 'object') throw new ConfigError('Gruppo non valido');
-    if (!KEY_RE.test(g.key || '')) throw new ConfigError(`${where}: chiave non valida (lettere, numeri, _ e -)`);
-    if (!isText(g.label)) throw new ConfigError(`${where}: nome obbligatorio`);
-    if (!COLOR_RE.test(g.color || '')) throw new ConfigError(`${where}: colore non valido (#rrggbb)`);
-    if (!Array.isArray(g.servers)) throw new ConfigError(`${where}: lista server non valida`);
+    if (!g || typeof g !== 'object') throw ctx.error.config('group_invalid');
+    const bad = (name, params = {}) => ctx.error.config(name, { key: String(g.key ?? ''), ...params });
+    if (!KEY_RE.test(g.key || '')) throw bad('group_key');
+    if (!isText(g.label)) throw bad('group_label');
+    if (!COLOR_RE.test(g.color || '')) throw bad('group_color');
+    if (!Array.isArray(g.servers)) throw bad('group_servers');
     const missing = g.servers.filter(k => !serverKeys.has(k));
-    if (missing.length) throw new ConfigError(`${where}: server inesistenti ${missing.join(', ')}`);
+    if (missing.length) throw bad('group_missing_servers', { servers: missing.join(', ') });
   }
 
   function assertList(value, key) {
-    if (!Array.isArray(value)) throw new ConfigError(`Config non valida: "${key}" deve essere una lista`);
+    if (!Array.isArray(value)) throw ctx.error.config('not_a_list', { section: key });
   }
 
   function assertUnique(list, field, what) {
     const seen = new Set();
     for (const x of list) {
-      if (seen.has(x[field])) throw new ConfigError(`${what} duplicato: ${x[field]}`);
+      if (seen.has(x[field])) throw ctx.error.config(`duplicate_${what}`, { key: String(x[field]) });
       seen.add(x[field]);
     }
   }
@@ -77,7 +77,7 @@ module.exports = function createTunnels(ctx) {
       validate(list) {
         assertList(list, 'servers');
         list.forEach(validateServer);
-        assertUnique(list, 'key', 'Server');
+        assertUnique(list, 'key', 'server');
       },
     },
     groups: {
@@ -87,7 +87,7 @@ module.exports = function createTunnels(ctx) {
         assertList(list, 'groups');
         const serverKeys = new Set((cfg.servers || []).map(s => s.key));
         list.forEach(g => validateGroup(g, serverKeys));
-        assertUnique(list, 'key', 'Gruppo');
+        assertUnique(list, 'key', 'group');
       },
       // Gruppi già esistenti: si uniscono le liste di server
       merge(current, incoming) {
@@ -121,22 +121,25 @@ module.exports = function createTunnels(ctx) {
     td.process = proc;
     td.pid = proc.pid;
 
-    const log = text => {
-      td.logs.push({ ts: Date.now(), text });
+    // Righe di ssh così come arrivano; i messaggi di DevDock hanno anche code/params
+    // (il frontend li traduce, text resta nella lingua sorgente)
+    const log = (text, sys) => {
+      td.logs.push({ ts: Date.now(), text, ...(sys ? { code: `${ctx.code}.${sys.name}`, params: sys.params } : {}) });
       if (td.logs.length > 200) td.logs.splice(0, td.logs.length - 200);
     };
+    const sysLog = (name, params) => log(ctx.error.message(name, params), { name, params });
 
-    log(`Connessione a ${td.alias} → 127.0.0.1:${td.port} ↔ ${td.remote} [${useAuto ? 'autossh' : 'ssh'}, pid ${proc.pid}]`);
+    sysLog('log_connecting', { alias: td.alias, port: td.port, remote: td.remote, command: useAuto ? 'autossh' : 'ssh', pid: proc.pid });
     proc.stdout.on('data', d => log(d.toString()));
     proc.stderr.on('data', d => log(d.toString()));
-    proc.on('error', err => log(`Errore spawn: ${err.message}`));
+    proc.on('error', err => sysLog('log_spawn_error', { error: err.message }));
 
     proc.on('close', code => {
       const t = active.get(id);
       if (!t) return; // già rimosso manualmente
       if (t.stopping) { active.delete(id); return; }
       const delay = Math.min(t.reconnectDelay, RECONNECT_MAX_DELAY);
-      log(`Tunnel chiuso (exit ${code}). Riconnessione tra ${Math.round(delay / 1000)}s...`);
+      sysLog('log_closed', { code, seconds: Math.round(delay / 1000) });
       t.reconnectDelay = Math.round(delay * RECONNECT_BACKOFF);
       t.reconnectTimer = setTimeout(() => {
         const cur = active.get(id);
@@ -158,16 +161,14 @@ module.exports = function createTunnels(ctx) {
     active.clear();
   }
 
-  const fail = (message, status = 400) => Object.assign(new Error(message), { status });
-
   // Avvia il tunnel di un server (porta locale del server o customPort)
   function openTunnel(serverKey, customPort) {
     const srv = servers().find(s => s.key === serverKey);
-    if (!srv) throw fail('Server non trovato');
+    if (!srv) throw ctx.error(400, 'server_not_found', { key: String(serverKey) });
     const localPort = customPort == null || customPort === '' ? srv.port : Number(customPort);
-    if (!isPort(localPort)) throw fail('Porta locale non valida (1-65535)');
+    if (!isPort(localPort)) throw ctx.error(400, 'port_invalid');
     for (const [, t] of active) {
-      if (t.port === localPort) throw fail(`Porta ${localPort} già in uso da "${t.label}"`, 409);
+      if (t.port === localPort) throw ctx.error(409, 'port_in_use', { port: localPort, label: t.label });
     }
 
     const id = crypto.randomUUID();
@@ -216,13 +217,11 @@ module.exports = function createTunnels(ctx) {
       if (!active.has(id) || t.reconnectTimer) break; // ssh già uscito: inutile aspettare
       await new Promise(r => setTimeout(r, 300));
     }
-    const lastLog = t.logs.filter(l => !l.text.startsWith('Connessione a')).map(l => l.text.trim()).filter(Boolean).pop();
-    throw fail(`Tunnel "${t.label}" non pronto${lastLog ? `: ${lastLog}` : ''}`, 502);
+    const lastLog = t.logs.filter(l => !l.code).map(l => l.text.trim()).filter(Boolean).pop();
+    throw lastLog ? ctx.error(502, 'not_ready_log', { label: t.label, log: lastLog }) : ctx.error(502, 'not_ready', { label: t.label });
   }
 
   const getServer = key => servers().find(s => s.key === key) || null;
-
-  const notFound = (res, what) => res.status(404).json({ error: `${what} non trovato` });
 
   return {
     config,
@@ -240,17 +239,13 @@ module.exports = function createTunnels(ctx) {
       },
 
       startTunnel(req, res) {
-        try {
-          const t = openTunnel(req.body.serverKey, req.body.port);
-          res.json({ id: t.id, pid: t.pid, port: t.port, label: t.label });
-        } catch (e) {
-          res.status(e.status || 400).json({ error: e.message });
-        }
+        const t = openTunnel(req.body.serverKey, req.body.port);
+        res.json({ id: t.id, pid: t.pid, port: t.port, label: t.label });
       },
 
       stopTunnel(req, res) {
         const t = active.get(req.params.id);
-        if (!t) return notFound(res, 'Tunnel');
+        if (!t) throw ctx.error(404, 'tunnel_not_found');
         stop(t);
         active.delete(req.params.id);
         res.json({ ok: true });
@@ -263,15 +258,15 @@ module.exports = function createTunnels(ctx) {
 
       tunnelLogs(req, res) {
         const t = active.get(req.params.id);
-        if (!t) return notFound(res, 'Tunnel');
+        if (!t) throw ctx.error(404, 'tunnel_not_found');
         res.json(t.logs.slice(-100));
       },
 
       createGroup(req, res) {
         const { key, label, color } = req.body;
-        if (!key || !label) return res.status(400).json({ error: 'key e label obbligatori' });
+        if (!key || !label) throw ctx.error(400, 'key_label_required');
         const list = groups();
-        if (list.some(g => g.key === key)) return res.status(409).json({ error: 'Chiave già esistente' });
+        if (list.some(g => g.key === key)) throw ctx.error(409, 'key_exists', { key: String(key) });
         save([...list, { key, label, color: color || '#6b7280', servers: [] }]);
         res.json({ ok: true });
       },
@@ -279,7 +274,7 @@ module.exports = function createTunnels(ctx) {
       updateGroup(req, res) {
         const list = groups();
         const idx = list.findIndex(g => g.key === req.params.key);
-        if (idx === -1) return notFound(res, 'Gruppo');
+        if (idx === -1) throw ctx.error(404, 'group_not_found', { key: req.params.key });
         list[idx] = { ...list[idx], ...pick(req.body, ['label', 'color', 'servers']) };
         save(list);
         res.json({ ok: true });
@@ -292,9 +287,9 @@ module.exports = function createTunnels(ctx) {
 
       createServer(req, res) {
         const { key, label, port, remote, alias, type, groupKey } = req.body;
-        if (!key || !label || !port || !remote || !alias) return res.status(400).json({ error: 'Campi obbligatori mancanti' });
+        if (!key || !label || !port || !remote || !alias) throw ctx.error(400, 'fields_required');
         const srvList = servers();
-        if (srvList.some(s => s.key === key)) return res.status(409).json({ error: 'Chiave già esistente' });
+        if (srvList.some(s => s.key === key)) throw ctx.error(409, 'key_exists', { key: String(key) });
         const grpList = groups();
         const g = groupKey && grpList.find(x => x.key === groupKey);
         if (g) g.servers.push(key);
@@ -305,7 +300,7 @@ module.exports = function createTunnels(ctx) {
       updateServer(req, res) {
         const list = servers();
         const idx = list.findIndex(s => s.key === req.params.key);
-        if (idx === -1) return notFound(res, 'Server');
+        if (idx === -1) throw ctx.error(404, 'server_not_found', { key: req.params.key });
         list[idx] = { ...list[idx], ...normalizeServer(pick(req.body, ['label', 'port', 'remote', 'alias', 'type'])) };
         save(null, list);
         res.json({ ok: true });

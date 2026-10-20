@@ -165,8 +165,8 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 - [x] **M6.11** Migrate the existing extensions one at a time (Swagger, PM2, Tunnels, npm, Git); from then on every new extension (DB client) is born with at least the source-language catalog
 
 **Backend**
-- [ ] **M6.12** API errors become structured: `{ error: { code: "tunnels.not_found", params: { … }, message: "<source-language fallback>" } }`. The frontend translates `code` with `t()`, and falls back to `message` for unknown codes. The server stays language-agnostic (no `Accept-Language` handling). Applies to the core middlewares (`security.js`: host, origin, content-type), config validation and extension handlers
-- [ ] **M6.13** Output of external commands (`git`, `npm`, `pm2`, `ssh`) is **not** translated: it is shown as is in the SSE panel
+- [x] **M6.12** API errors become structured: `{ error: "<source-language message>", code: "tunnels.not_found", params: { … } }` (flat, so existing clients keep reading `error` and extra fields such as `files` stay at the top level). The message is built by the server from the source-language catalog (`errors.<name>`), so handlers contain no text. The frontend translates `code` with `t()`, and falls back to `error` for unknown codes. The server stays language-agnostic (no `Accept-Language` handling). Applies to the core middlewares (`security.js`: host, origin, content-type), config validation and extension handlers
+- [x] **M6.13** Output of external commands (`git`, `npm`, `pm2`, `ssh`) is **not** translated: it is shown as is in the SSE panel
 
 **Quality**
 - [ ] **M6.14** Tests on the catalogs, for the core and for each extension: the source language is complete; no other catalog has keys that don't exist in the source (stale keys); `{param}` placeholders match the source; every plural key has `other`; `_meta` is valid. Missing translations are **not** a failure: they are reported as completeness %

@@ -28,7 +28,8 @@ const verifierOf = verifyKey => b64(crypto.createHash('sha256').update(verifyKey
 
 function checkPassword(password) {
   if (typeof password !== 'string' || [...password].length < MIN_PASSWORD) {
-    throw new Error(`La master password deve avere almeno ${MIN_PASSWORD} caratteri`);
+    // key/params: il server lo trasforma in un errore con codice traducibile
+    throw Object.assign(new Error(`password_short`), { key: 'password_short', params: { min: MIN_PASSWORD } });
   }
 }
 
@@ -70,7 +71,7 @@ function validateRecord(record) {
     && [record.kdf.N, record.kdf.r, record.kdf.p].every(Number.isInteger)
     && typeof record.kdf.salt === 'string' && B64_RE.test(record.kdf.salt)
     && typeof record.verifier === 'string' && B64_RE.test(record.verifier);
-  if (!ok) throw new Error('blocco vault non valido');
+  if (!ok) throw Object.assign(new Error('vault_record_invalid'), { key: 'vault_record_invalid', params: {} });
 }
 
 const isBox = v => v && typeof v === 'object' && ['iv', 'tag', 'data'].every(k => typeof v[k] === 'string' && B64_RE.test(v[k]));

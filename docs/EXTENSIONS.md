@@ -140,11 +140,29 @@ Only `handlers` is needed when the manifest declares routes; everything else is 
 | `ctx.config.update({ key: value, … })` | Writes several of the extension's keys in a single atomic save (e.g. data that must change together) |
 | `ctx.require(code)` | `services` of a dependency declared in the manifest (`null` if an optional dependency is missing) |
 | `ctx.sse(res)` | Opens an SSE response; returns `send(type, data)`, with `send.end()` to close it |
+| `ctx.error(status, name, params, extra)` | Error with a translatable code (see *Errors*): `throw ctx.error(404, 'repo_not_found')`. `ctx.error.config(name, params)` for config validation (400), `ctx.error.send(res, status, name, params)` where throwing is not possible (callbacks), `ctx.error.message(name, params)` for the source-language text |
 | `ctx.lib.validate` | `KEY_RE`, `COLOR_RE`, `REMOTE_RE`, `ALIAS_RE`, `NPM_NAME_RE`, `PM2_TARGET_RE`, `isPort`, `isText`, `isValidBranchName`, `isValidCommitHash` |
-| `ctx.lib.config` | `ConfigError` (throw it to reject input with a 400) and `pick(obj, fields)` |
+| `ctx.lib.config` | `ConfigError` (400 without a code; prefer `ctx.error.config`) and `pick(obj, fields)` |
+| `ctx.lib.errors` | `ApiError` (the class of `ctx.error`) and `errorBody(err)`, for handlers that build the response themselves |
 | `ctx.lib.system` | `hasCommand(cmd)`, `getTools()` (installed external tools) |
 | `ctx.lib.ports` | `getPortsForPgid(pid)`: TCP ports listened on by a process group |
 | `ctx.log.info/warn/error(...)` | Console log prefixed with `[ext:<code>]` |
+
+### Errors
+
+Error responses have one shape for the core and every extension:
+
+```json
+{ "error": "Branch inesistente: feature/x", "code": "git.not_found", "params": { "branch": "feature/x" } }
+```
+
+- `code` is `<extension code>.<name>` (`core.<name>` for the core); extra fields can follow (e.g. `files` for `git.dirty`).
+- `error` is the message in the source language, built by the server from the extension's `i18n/it.json`, key `errors.<name>` (with `{param}` placeholders and plurals on `params.count`). The server never picks a language and contains no message text: handlers only throw `ctx.error(status, name, params)`.
+- The frontend translates `code` with the key `<code>.errors.<name>` of the active language and falls back to `error`; `ctx.api` errors carry `status`, `code`, `data` and the translated `message`. For bodies read by hand use `ctx.ui.errorText(data)`.
+- Output of external commands (`git`, `npm`, `pm2`, `ssh`, MySQL errors) is not translated: it travels as a parameter (e.g. `git.command_failed` with `{ output }`) and is shown as is.
+- SSE events that carry a DevDock message use the same `{ error, code, params }` object (e.g. the Git `notice` event).
+
+Manifest and loader errors (`GET /api/core/extensions` → `error`, `warnings`) are developer diagnostics and stay in the source language.
 
 ## Configuration
 
@@ -256,7 +274,7 @@ Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i1
 }
 ```
 
-- `{name}` is replaced with `params.name`; numbers are formatted for the active language.
+- `{name}` is replaced with `params.name`. `{count}` is formatted for the active language (other numbers, such as ports or ids, are inserted as they are: format them with `fmt.number` when they are quantities).
 - A value can be an object of plural forms by CLDR category (`zero`, `one`, `two`, `few`, `many`, `other`; only `other` is required), chosen with `Intl.PluralRules` on `params.count`.
 - Lookup goes along the chain *active language → its base language (`pt-BR` → `pt`) → Italian → the key itself* (with a console warning), so a partially translated language works. An extension may support a different set of languages from the core, and may ship a language the core lacks (the core falls back to Italian for its own strings).
 - Catalogs that fail validation are ignored and reported in the extension's warnings.

@@ -4,22 +4,21 @@
   "sidebar.back": "← Tunnel",
   "sidebar.backTitle": "Torna ai tunnel",
   "sidebar.newGroup": "Nuovo gruppo",
-
   "notify.connected": "Tunnel connesso su :{port}",
   "notify.lost": "Connessione persa — riconnessione...",
   "notify.reconnected": "Riconnessione riuscita su :{port}",
   "notify.disconnected": "Tunnel disconnesso da :{port}",
-
   "pill.reconnecting": "(riconnessione)",
   "pill.stopAll": "⏹ Stop all",
-
   "groups.none": "Nessun gruppo",
   "main.selectGroup": "Seleziona un gruppo dalla sidebar",
   "main.autossh": "autossh non installato: i tunnel usano ssh e la riconnessione è gestita da DevDock.",
-  "main.connected": { "one": "{count} connesso", "other": "{count} connessi" },
+  "main.connected": {
+    "one": "{count} connesso",
+    "other": "{count} connessi"
+  },
   "main.disconnectAll": "⏹ Disconnetti tutti",
   "main.noServers": "Nessun server in questo gruppo",
-
   "card.alias": "alias:",
   "card.remote": "remote:",
   "card.pid": "pid:",
@@ -27,7 +26,6 @@
   "card.disconnect": "Disconnetti",
   "card.logs": "Log",
   "card.connect": "Connetti",
-
   "settings.noGroups": "Nessun gruppo.",
   "settings.add": "+ Aggiungi",
   "settings.newServer": "+ Nuovo server",
@@ -35,7 +33,6 @@
   "settings.noServers": "Nessun server in questo gruppo.",
   "settings.removeFromGroup": "Rimuovi dal gruppo",
   "settings.deleteForever": "Elimina definitivamente",
-
   "form.key": "Chiave (snake_case, non modificabile)",
   "form.groupKeyPlaceholder": "es. nuovo_gruppo",
   "form.name": "Nome",
@@ -52,16 +49,13 @@
   "form.noGroup": "-- Nessuno --",
   "form.create": "Crea",
   "form.availableServers": "Server disponibili",
-
   "modal.newGroup": "Nuovo gruppo",
   "modal.editGroup": "Modifica gruppo",
   "modal.newServer": "Nuovo server",
   "modal.editServer": "Modifica server",
   "modal.assignServer": "Aggiungi server esistente",
-
   "logs.empty": "Nessun output",
   "logs.title": "🔗 SSH Log — {name}",
-
   "toast.started": "Tunnel avviato su :{port}",
   "toast.stopped": "Tunnel terminato",
   "toast.stoppedAll": "Tutti i tunnel terminati",
@@ -74,7 +68,35 @@
   "toast.serverDeleted": "Server eliminato",
   "toast.selectServer": "Seleziona un server",
   "toast.serverAssigned": "Server aggiunto al gruppo",
-
   "confirm.deleteGroup": "Eliminare il gruppo \"{name}\"?",
-  "confirm.deleteServer": "Eliminare definitivamente il server \"{name}\"?"
+  "confirm.deleteServer": "Eliminare definitivamente il server \"{name}\"?",
+  "errors.server_invalid": "Server non valido",
+  "errors.server_key": "server \"{key}\": chiave non valida (lettere, numeri, _ e -)",
+  "errors.server_label": "server \"{key}\": nome obbligatorio",
+  "errors.server_port": "server \"{key}\": porta locale non valida (1-65535)",
+  "errors.server_remote": "server \"{key}\": remote non valido (formato host:porta)",
+  "errors.server_alias": "server \"{key}\": alias SSH non valido",
+  "errors.server_type": "server \"{key}\": tipo non valido",
+  "errors.group_invalid": "Gruppo non valido",
+  "errors.group_key": "gruppo \"{key}\": chiave non valida (lettere, numeri, _ e -)",
+  "errors.group_label": "gruppo \"{key}\": nome obbligatorio",
+  "errors.group_color": "gruppo \"{key}\": colore non valido (#rrggbb)",
+  "errors.group_servers": "gruppo \"{key}\": lista server non valida",
+  "errors.group_missing_servers": "gruppo \"{key}\": server inesistenti {servers}",
+  "errors.not_a_list": "Config non valida: \"{section}\" deve essere una lista",
+  "errors.duplicate_server": "Server duplicato: {key}",
+  "errors.duplicate_group": "Gruppo duplicato: {key}",
+  "errors.server_not_found": "Server non trovato: {key}",
+  "errors.port_invalid": "Porta locale non valida (1-65535)",
+  "errors.port_in_use": "Porta {port} già in uso da \"{label}\"",
+  "errors.not_ready": "Tunnel \"{label}\" non pronto",
+  "errors.not_ready_log": "Tunnel \"{label}\" non pronto: {log}",
+  "errors.tunnel_not_found": "Tunnel non trovato",
+  "errors.group_not_found": "Gruppo non trovato: {key}",
+  "errors.key_label_required": "Chiave e nome obbligatori",
+  "errors.key_exists": "Chiave già esistente: {key}",
+  "errors.fields_required": "Campi obbligatori mancanti",
+  "errors.log_connecting": "Connessione a {alias} → 127.0.0.1:{port} ↔ {remote} [{command}, pid {pid}]",
+  "errors.log_spawn_error": "Errore di avvio: {error}",
+  "errors.log_closed": "Tunnel chiuso (exit {code}). Riconnessione tra {seconds} s..."
 }

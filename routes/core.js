@@ -5,6 +5,7 @@ const { ROOT } = require('../lib/env');
 const { SOURCE_LANG, languages } = require('../lib/i18n');
 const { getTools, refreshTools } = require('../lib/system');
 const { ConfigError, listSections, exportConfig, importConfig } = require('../lib/config');
+const { errorBody } = require('../lib/errors');
 
 const NAME_RE = /^[a-z0-9-]{1,40}$/;
 
@@ -48,7 +49,8 @@ module.exports = function coreRoutes(extensions) {
     try {
       res.json({ ok: true, ...importConfig(req.body?.config, req.body?.mode) });
     } catch (e) {
-      res.status(e instanceof ConfigError ? 400 : 500).json({ error: e.message });
+      if (!(e instanceof ConfigError)) throw e;
+      res.status(400).json(errorBody(e));
     }
   });
 

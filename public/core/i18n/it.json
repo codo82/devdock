@@ -1,6 +1,9 @@
 {
-  "_meta": { "name": "Italian", "nativeName": "Italiano", "dir": "ltr" },
-
+  "_meta": {
+    "name": "Italian",
+    "nativeName": "Italiano",
+    "dir": "ltr"
+  },
   "core.action.add": "Aggiungi",
   "core.action.cancel": "Annulla",
   "core.action.close": "Chiudi",
@@ -9,23 +12,18 @@
   "core.action.edit": "Modifica",
   "core.action.refresh": "Aggiorna",
   "core.action.save": "Salva",
-
   "core.extensions.unavailable": "Estensioni non disponibili: {error}",
   "core.extensions.loadError": "Errore nel caricamento di {name}: {error}",
   "core.extensions.none": "Nessuna estensione disponibile",
-
   "core.language.choose": "Lingua",
-
   "core.output.title": "Output",
   "core.output.clear": "Pulisci",
-
   "core.notifications.enable": "Attiva notifiche desktop",
   "core.notifications.activeTitle": "Notifiche attive — clicca per disattivare",
   "core.notifications.on": "Notifiche attivate",
   "core.notifications.off": "Notifiche disattivate",
   "core.notifications.unsupported": "Notifiche non supportate dal browser",
   "core.notifications.denied": "Permesso notifiche negato",
-
   "core.export.button": "Export",
   "core.export.buttonTitle": "Esporta la configurazione",
   "core.export.title": "Esporta configurazione",
@@ -33,7 +31,6 @@
   "core.export.submit": "Esporta",
   "core.export.nothing": "Nessuna estensione ha dati da esportare",
   "core.export.selectOne": "Seleziona almeno una voce",
-
   "core.import.button": "Import",
   "core.import.buttonTitle": "Importa una configurazione",
   "core.import.title": "Importa configurazione",
@@ -48,6 +45,14 @@
   "core.import.error": "Errore import: {error}",
   "core.import.doneMerge": "Import completato (unione)",
   "core.import.doneReplace": "Import completato (sostituzione)",
-
-  "core.tools.recheck": "Ricontrolla"
+  "core.tools.recheck": "Ricontrolla",
+  "core.errors.host_not_allowed": "Host non consentito",
+  "core.errors.origin_not_allowed": "Origine non consentita",
+  "core.errors.json_required": "Content-Type deve essere application/json",
+  "core.errors.json_invalid": "JSON non valido",
+  "core.errors.internal": "Errore interno: {error}",
+  "core.errors.config_invalid": "Config non valida",
+  "core.errors.section_invalid": "{section}: {error}",
+  "core.errors.import_mode": "Modalità di import non valida",
+  "core.errors.import_no_sections": "Il file non contiene sezioni riconosciute"
 }

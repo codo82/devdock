@@ -26,5 +26,12 @@
   "error": "PM2 errore: {error}",
   "logsAll": "pm2 logs (tutti)",
   "connectionLost": "Connessione persa",
-  "rechecked": "Strumenti ricontrollati"
+  "rechecked": "Strumenti ricontrollati",
+  "streamEnded": "Stream terminato",
+  "errors.action_unsupported": "Azione PM2 non supportata: {action}",
+  "errors.npm_unavailable": "Estensione npm non disponibile",
+  "errors.project_not_found": "Progetto non trovato: {id}",
+  "errors.script_not_defined": "Script non definito in package.json: {script}",
+  "errors.invalid_target": "Processo PM2 non valido",
+  "errors.command_failed": "pm2: {output}"
 }

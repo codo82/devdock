@@ -51,36 +51,38 @@ function mask(sql) {
   return out;
 }
 
-// { kind: 'read' | 'write' | 'empty' | 'invalid', verb, reason? }
+// { kind: 'read' | 'write' | 'empty' | 'invalid', verb, reason?, word? }
+// reason è un codice (tradotto dalla UI): missing, empty, single_statement, use_unsupported,
+// explain_analyze_write, into, row_lock, write_word (con word = la parola trovata)
 function classify(sql) {
-  if (typeof sql !== 'string') return { kind: 'invalid', reason: 'Istruzione mancante' };
+  if (typeof sql !== 'string') return { kind: 'invalid', reason: 'missing' };
   const masked = mask(sql).trim().replace(/;\s*$/, '');
-  if (!masked) return { kind: 'empty', reason: 'Nessuna istruzione' };
-  if (masked.includes(';')) return { kind: 'invalid', reason: 'Una sola istruzione per volta' };
+  if (!masked) return { kind: 'empty', reason: 'empty' };
+  if (masked.includes(';')) return { kind: 'invalid', reason: 'single_statement' };
 
   const words = masked.toUpperCase().match(/[A-Z_][A-Z0-9_$]*/g) || [];
   const verb = words[0] || '';
   const has = w => words.includes(w);
-  const write = (reason) => ({ kind: 'write', verb, ...(reason ? { reason } : {}) });
+  const write = (reason, word) => ({ kind: 'write', verb, ...(reason ? { reason } : {}), ...(word ? { word } : {}) });
 
-  if (verb === 'USE') return { kind: 'invalid', verb, reason: 'USE non è supportato: scegli il database dal selettore' };
+  if (verb === 'USE') return { kind: 'invalid', verb, reason: 'use_unsupported' };
   if (!READ_START.has(verb)) return write();
   if (verb === 'SHOW' || verb === 'HELP') return { kind: 'read', verb }; // SHOW CREATE TABLE ecc. sono letture
 
   // EXPLAIN senza ANALYZE non esegue l'istruzione; con ANALYZE la esegue
   if (verb === 'EXPLAIN' || verb === 'DESCRIBE' || verb === 'DESC') {
     if (!has('ANALYZE')) return { kind: 'read', verb };
-    return [...WRITE_WORDS].some(w => w !== 'ANALYZE' && has(w)) ? write('EXPLAIN ANALYZE di una scrittura') : { kind: 'read', verb };
+    return [...WRITE_WORDS].some(w => w !== 'ANALYZE' && has(w)) ? write('explain_analyze_write') : { kind: 'read', verb };
   }
   // SELECT ... INTO (variabili o file) e i lock in lettura non sono letture pure
-  if (has('INTO')) return write('INTO');
-  if (/\bFOR\s+(UPDATE|SHARE)\b|\bLOCK\s+IN\s+SHARE\s+MODE\b/i.test(masked)) return write('lock sulle righe');
+  if (has('INTO')) return write('into');
+  if (/\bFOR\s+(UPDATE|SHARE)\b|\bLOCK\s+IN\s+SHARE\s+MODE\b/i.test(masked)) return write('row_lock');
   // Una CTE può precedere UPDATE/DELETE; in generale nessuna parola di scrittura in una lettura
   // (REPLACE(...) e INSERT(...) seguiti da parentesi sono funzioni di stringa, non istruzioni)
   const writeWord = [...masked.toUpperCase().matchAll(/\b([A-Z_][A-Z0-9_$]*)\b(\s*\()?/g)]
     .filter(m => !m[2]).map(m => m[1])
     .find(w => WRITE_WORDS.has(w) && !['SET', 'DO', 'ANALYZE', 'LOCK', 'RESET', 'LOAD', 'CALL', 'HANDLER', 'KILL'].includes(w));
-  if (writeWord) return write(writeWord);
+  if (writeWord) return write('write_word', writeWord);
   return { kind: 'read', verb };
 }
 

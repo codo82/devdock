@@ -4,12 +4,10 @@
   "sidebar.none": "Nessun progetto.",
   "sidebar.add": "+ Aggiungi",
   "sidebar.remove": "Rimuovi",
-
   "empty": "Seleziona un progetto dalla sidebar",
   "tab.scripts": "▶ Scripts",
   "tab.packages": "📦 Pacchetti",
   "running": "▶ {count} in esecuzione",
-
   "script.running": "In esecuzione (pid {pid})",
   "script.exited": "Terminato (exit {code})",
   "script.portInUse": "Porta in uso",
@@ -21,7 +19,6 @@
   "script.run": "▶ Esegui",
   "script.pm2": "Avvia con PM2",
   "script.none": "Nessuno script in package.json",
-
   "packages.loading": "Lettura pacchetti...",
   "packages.package": "Pacchetto",
   "packages.configVersion": "Versione config",
@@ -31,12 +28,13 @@
   "packages.none": "Nessuna dipendenza nel package.json",
   "packages.notInstalled": "non installato",
   "packages.checking": "Controllo in corso...",
-  "packages.available": { "one": "{count} aggiornamento disponibile", "other": "{count} aggiornamenti disponibili" },
+  "packages.available": {
+    "one": "{count} aggiornamento disponibile",
+    "other": "{count} aggiornamenti disponibili"
+  },
   "packages.upToDate": "✓ Tutti aggiornati",
   "packages.error": "Errore: {error}",
-
   "stream.lost": "[connessione persa]",
-
   "toast.started": "Avviato: {script}",
   "toast.stopped": "Processo fermato",
   "toast.restarted": "Processo riavviato",
@@ -46,13 +44,31 @@
   "toast.allRequired": "Tutti i campi sono obbligatori",
   "toast.projectAdded": "Progetto aggiunto",
   "toast.projectRemoved": "Progetto rimosso",
-
   "form.title": "Nuovo progetto",
   "form.id": "ID (snake_case, non modificabile)",
   "form.idPlaceholder": "es. my_app",
   "form.name": "Nome",
   "form.namePlaceholder": "es. My App",
   "form.path": "Percorso assoluto cartella",
-
-  "confirm.removeProject": "Rimuovere questo progetto dalla lista?"
+  "confirm.removeProject": "Rimuovere questo progetto dalla lista?",
+  "stream.removed": "[processo rimosso]",
+  "stream.ended": "[processo terminato, exit {code}]",
+  "errors.project_invalid": "Progetto non valido",
+  "errors.project_id": "progetto \"{id}\": id non valido (lettere, numeri, _ e -)",
+  "errors.project_label": "progetto \"{id}\": nome obbligatorio",
+  "errors.project_path": "progetto \"{id}\": il percorso deve essere assoluto",
+  "errors.not_a_list": "Config non valida: \"{section}\" deve essere una lista",
+  "errors.duplicate_project": "Progetto duplicato: {id}",
+  "errors.project_not_found": "Progetto non trovato: {id}",
+  "errors.process_not_found": "Processo non trovato",
+  "errors.fields_required": "ID, nome e percorso sono obbligatori",
+  "errors.id_exists": "ID già esistente: {id}",
+  "errors.folder_not_found": "Cartella non trovata: {path}",
+  "errors.package_invalid": "package.json non valido",
+  "errors.outdated_invalid": "Risposta di npm outdated non valida",
+  "errors.script_required": "Script obbligatorio",
+  "errors.script_not_defined": "Script non definito in package.json: {script}",
+  "errors.package_not_declared": "Pacchetto non dichiarato in package.json: {name}",
+  "errors.project_gone": "Progetto non più disponibile",
+  "errors.process_running": "Processo ancora in esecuzione"
 }

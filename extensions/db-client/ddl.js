@@ -21,53 +21,56 @@ const FK_ACTIONS = new Set(['RESTRICT', 'CASCADE', 'SET NULL', 'NO ACTION']);
 const ENGINES = new Set(['InnoDB', 'MyISAM', 'MEMORY', 'ARCHIVE']);
 const NO_DEFAULT = new Set(['TEXT', 'MEDIUMTEXT', 'LONGTEXT', 'TINYTEXT', 'BLOB', 'MEDIUMBLOB', 'LONGBLOB', 'JSON']);
 
-class DdlError extends Error {}
-const fail = msg => { throw new DdlError(msg); };
+// Errore di definizione: key = nome del messaggio (catalogo "errors.ddl_<key>"), params per il testo
+class DdlError extends Error {
+  constructor(key, params = {}) { super(key); this.key = key; this.params = params; }
+}
+const fail = (key, params) => { throw new DdlError(key, params); };
 const int = (v, min, max) => Number.isInteger(Number(v)) && Number(v) >= min && Number(v) <= max;
 
 function columnSql(c) {
-  const where = `colonna "${c?.name}"`;
-  if (!c || !NAME_RE.test(c.name || '')) fail('Nome di colonna non valido');
+  if (!c || !NAME_RE.test(c.name || '')) fail('column_name');
+  const col = { column: c.name };
   const type = String(c.type || '').toUpperCase();
   const kind = TYPES[type];
-  if (!kind) fail(`${where}: tipo non ammesso (${c.type})`);
+  if (!kind) fail('type', { ...col, type: String(c.type) });
 
   let t = type;
   if (kind === 'length') {
-    if (!int(c.length, 1, type.startsWith('VAR') ? 65535 : 255)) fail(`${where}: lunghezza obbligatoria`);
+    if (!int(c.length, 1, type.startsWith('VAR') ? 65535 : 255)) fail('length', col);
     t += `(${Number(c.length)})`;
   } else if (kind === 'decimal') {
     const p = c.length ?? 10, s = c.scale ?? 0;
-    if (!int(p, 1, 65) || !int(s, 0, 30) || Number(s) > Number(p)) fail(`${where}: precisione/scala non valide`);
+    if (!int(p, 1, 65) || !int(s, 0, 30) || Number(s) > Number(p)) fail('precision', col);
     t += `(${Number(p)},${Number(s)})`;
   } else if (kind === 'temporal' && c.length != null && c.length !== '') {
-    if (!int(c.length, 0, 6)) fail(`${where}: frazioni di secondo da 0 a 6`);
+    if (!int(c.length, 0, 6)) fail('fraction', col);
     t += `(${Number(c.length)})`;
   } else if (kind === 'values') {
-    if (!Array.isArray(c.values) || !c.values.length) fail(`${where}: elenco di valori obbligatorio`);
+    if (!Array.isArray(c.values) || !c.values.length) fail('values', col);
     t += `(${c.values.map(v => mysql.escape(String(v))).join(', ')})`;
   }
   if (c.unsigned) {
-    if (!['int', 'decimal', 'float'].includes(kind)) fail(`${where}: UNSIGNED solo per i numeri`);
+    if (!['int', 'decimal', 'float'].includes(kind)) fail('unsigned', col);
     t += ' UNSIGNED';
   }
 
   let sql = `${quoteId(c.name)} ${t}${c.nullable ? ' NULL' : ' NOT NULL'}`;
   if (c.autoIncrement) {
-    if (kind !== 'int') fail(`${where}: AUTO_INCREMENT solo per i tipi interi`);
+    if (kind !== 'int') fail('auto_increment_type', col);
     sql += ' AUTO_INCREMENT';
   }
   // default: nessuno | NULL | valore | CURRENT_TIMESTAMP (date/ora)
   const d = c.default;
   if (d && d.kind && d.kind !== 'none') {
-    if (NO_DEFAULT.has(type)) fail(`${where}: ${type} non ammette un valore predefinito`);
-    if (d.kind === 'null') { if (!c.nullable) fail(`${where}: default NULL su una colonna NOT NULL`); sql += ' DEFAULT NULL'; }
-    else if (d.kind === 'current_timestamp') { if (kind !== 'temporal') fail(`${where}: CURRENT_TIMESTAMP solo per DATETIME/TIMESTAMP`); sql += ' DEFAULT CURRENT_TIMESTAMP'; }
+    if (NO_DEFAULT.has(type)) fail('no_default', { ...col, type });
+    if (d.kind === 'null') { if (!c.nullable) fail('default_null', col); sql += ' DEFAULT NULL'; }
+    else if (d.kind === 'current_timestamp') { if (kind !== 'temporal') fail('current_timestamp', col); sql += ' DEFAULT CURRENT_TIMESTAMP'; }
     else if (d.kind === 'value') sql += ` DEFAULT ${mysql.escape(String(d.value ?? ''))}`;
-    else fail(`${where}: default non valido`);
+    else fail('default', col);
   }
   if (c.onUpdateCurrentTimestamp) {
-    if (kind !== 'temporal') fail(`${where}: ON UPDATE CURRENT_TIMESTAMP solo per DATETIME/TIMESTAMP`);
+    if (kind !== 'temporal') fail('on_update', col);
     sql += ' ON UPDATE CURRENT_TIMESTAMP';
   }
   if (c.comment) sql += ` COMMENT ${mysql.escape(String(c.comment))}`;
@@ -75,48 +78,49 @@ function columnSql(c) {
 }
 
 function createTableSql(db, def) {
-  if (!def || !NAME_RE.test(def.name || '')) fail('Nome della tabella obbligatorio');
+  if (!def || !NAME_RE.test(def.name || '')) fail('table_name');
   const cols = Array.isArray(def.columns) ? def.columns : [];
-  if (!cols.length) fail('Serve almeno una colonna');
+  if (!cols.length) fail('no_columns');
   const names = cols.map(c => c?.name);
-  if (new Set(names).size !== names.length) fail('Nomi di colonna duplicati');
+  if (new Set(names).size !== names.length) fail('duplicate_columns');
   const has = n => names.includes(n);
-  const colList = (list, what) => {
-    if (!Array.isArray(list) || !list.length || !list.every(has)) fail(`${what}: colonne non valide`);
+  // where: { what: 'primary_key' | 'index' | 'foreign_key', name }
+  const colList = (list, where) => {
+    if (!Array.isArray(list) || !list.length || !list.every(has)) fail(`columns_${where.what}`, { name: where.name || '' });
     return list.map(quoteId).join(', ');
   };
 
   const lines = cols.map(columnSql);
   const pk = Array.isArray(def.primaryKey) ? def.primaryKey : [];
-  if (pk.length) lines.push(`PRIMARY KEY (${colList(pk, 'chiave primaria')})`);
+  if (pk.length) lines.push(`PRIMARY KEY (${colList(pk, { what: 'primary_key' })})`);
   const ai = cols.filter(c => c.autoIncrement);
-  if (ai.length > 1) fail('Una sola colonna AUTO_INCREMENT');
+  if (ai.length > 1) fail('auto_increment_many');
   if (ai.length && !pk.includes(ai[0].name) && !(def.indexes || []).some(i => i.columns?.[0] === ai[0].name)) {
-    fail('La colonna AUTO_INCREMENT deve essere nella chiave primaria o in un indice');
+    fail('auto_increment_key');
   }
   for (const ix of def.indexes || []) {
-    if (ix.name != null && ix.name !== '' && !NAME_RE.test(ix.name)) fail('Nome di indice non valido');
-    lines.push(`${ix.unique ? 'UNIQUE ' : ''}KEY ${ix.name ? quoteId(ix.name) + ' ' : ''}(${colList(ix.columns, `indice ${ix.name || ''}`)})`);
+    if (ix.name != null && ix.name !== '' && !NAME_RE.test(ix.name)) fail('index_name');
+    lines.push(`${ix.unique ? 'UNIQUE ' : ''}KEY ${ix.name ? quoteId(ix.name) + ' ' : ''}(${colList(ix.columns, { what: 'index', name: ix.name })})`);
   }
   for (const fk of def.foreignKeys || []) {
-    if (fk.name != null && fk.name !== '' && !NAME_RE.test(fk.name)) fail('Nome di chiave esterna non valido');
-    if (!NAME_RE.test(fk.refTable || '') || !Array.isArray(fk.refColumns) || !fk.refColumns.every(n => NAME_RE.test(n || ''))) fail('Riferimento della chiave esterna non valido');
-    if ((fk.refColumns || []).length !== (fk.columns || []).length) fail('Chiave esterna: colonne e colonne riferite devono essere lo stesso numero');
+    if (fk.name != null && fk.name !== '' && !NAME_RE.test(fk.name)) fail('fk_name');
+    if (!NAME_RE.test(fk.refTable || '') || !Array.isArray(fk.refColumns) || !fk.refColumns.every(n => NAME_RE.test(n || ''))) fail('fk_reference');
+    if ((fk.refColumns || []).length !== (fk.columns || []).length) fail('fk_count');
     const refDb = fk.refDatabase ? `${quoteId(fk.refDatabase)}.` : '';
-    let sql = `${fk.name ? `CONSTRAINT ${quoteId(fk.name)} ` : ''}FOREIGN KEY (${colList(fk.columns, 'chiave esterna')}) REFERENCES ${refDb}${quoteId(fk.refTable)} (${fk.refColumns.map(quoteId).join(', ')})`;
+    let sql = `${fk.name ? `CONSTRAINT ${quoteId(fk.name)} ` : ''}FOREIGN KEY (${colList(fk.columns, { what: 'foreign_key', name: fk.name })}) REFERENCES ${refDb}${quoteId(fk.refTable)} (${fk.refColumns.map(quoteId).join(', ')})`;
     for (const [k, label] of [['onDelete', 'ON DELETE'], ['onUpdate', 'ON UPDATE']]) {
       if (!fk[k]) continue;
       const action = String(fk[k]).toUpperCase();
-      if (!FK_ACTIONS.has(action)) fail(`Chiave esterna: azione non ammessa (${fk[k]})`);
+      if (!FK_ACTIONS.has(action)) fail('fk_action', { action: String(fk[k]) });
       sql += ` ${label} ${action}`;
     }
     lines.push(sql);
   }
 
   let options = '';
-  if (def.engine) { if (!ENGINES.has(def.engine)) fail('Engine non ammesso'); options += ` ENGINE=${def.engine}`; }
-  if (def.charset) { if (!CHARSET_RE.test(def.charset)) fail('Charset non valido'); options += ` DEFAULT CHARSET=${def.charset}`; }
-  if (def.collation) { if (!CHARSET_RE.test(def.collation)) fail('Collation non valida'); options += ` COLLATE=${def.collation}`; }
+  if (def.engine) { if (!ENGINES.has(def.engine)) fail('engine'); options += ` ENGINE=${def.engine}`; }
+  if (def.charset) { if (!CHARSET_RE.test(def.charset)) fail('charset'); options += ` DEFAULT CHARSET=${def.charset}`; }
+  if (def.collation) { if (!CHARSET_RE.test(def.collation)) fail('collation'); options += ` COLLATE=${def.collation}`; }
   if (def.comment) options += ` COMMENT=${mysql.escape(String(def.comment))}`;
 
   return `CREATE TABLE ${quoteId(db)}.${quoteId(def.name)} (\n  ${lines.join(',\n  ')}\n)${options}`;

@@ -4,6 +4,7 @@ const path = require('path');
 const { ROOT, PORT, CONFIG_PATH, EXTENSIONS_DIR } = require('./lib/env');
 const { applySecurity } = require('./lib/security');
 const { ConfigError } = require('./lib/config');
+const { ApiError, coreError, errorBody } = require('./lib/errors');
 const { loadExtensions, frontendRouter } = require('./lib/extensions');
 
 const app = express();
@@ -19,21 +20,23 @@ const extensions = loadExtensions(EXTENSIONS_DIR, {
     config:   require('./lib/config'),
     system:   require('./lib/system'),
     ports:    require('./lib/ports'),
+    errors:   require('./lib/errors'),
   },
 });
 app.use('/api/ext', extensions.router);
 app.use('/ext', frontendRouter(extensions));
 app.use('/api/core', require('./routes/core')(extensions));
 
-// Errori non gestiti nelle route: le validazioni della config diventano 400 JSON
+// Errori non gestiti nelle route: { error, code, params } (vedi lib/errors.js)
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
-  if (err instanceof ConfigError) return res.status(400).json({ error: err.message });
-  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON non valido' });
+  if (err instanceof ApiError) return res.status(err.status).json(errorBody(err));
+  if (err instanceof ConfigError) return res.status(400).json(errorBody(err));
+  if (err.type === 'entity.parse.failed') return res.status(400).json(errorBody(coreError(400, 'json_invalid')));
   // Errori con uno stato HTTP esplicito (es. 423 vault bloccato, 409 conflitto)
-  if (Number.isInteger(err.status) && err.status >= 400 && err.status < 600) return res.status(err.status).json({ error: err.message });
+  if (Number.isInteger(err.status) && err.status >= 400 && err.status < 600) return res.status(err.status).json(errorBody(err));
   console.error(err);
-  res.status(500).json({ error: err.message || 'Errore interno' });
+  res.status(500).json(errorBody(coreError(500, 'internal', { error: err.message || '' })));
 });
 
 function shutdown(signal) {

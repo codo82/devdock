@@ -2,7 +2,6 @@
   "sidebar.title": "Repositories",
   "sidebar.none": "No git repositories found.",
   "sidebar.noneHint": "Add a project in the NPM section: if it is inside a git repository it will show up here.",
-
   "empty": "Select a repository in the sidebar",
   "bar.reload": "↻ Reload",
   "files.title": "Changes",
@@ -19,37 +18,37 @@
   "log.message": "Message",
   "log.author": "Author",
   "log.date": "Date",
-
   "header.branchTitle": "Switch, create, merge or delete branches",
   "header.merging": "⑃ merge in progress",
   "header.ahead": "↑{count} ahead",
   "header.behind": "↓{count} behind",
   "header.stash": "📦 {count} stash",
-
   "merge.banner": "⑃ Merge in progress",
-  "merge.conflicts": { "one": "{count} conflicted file", "other": "{count} conflicted files" },
+  "merge.conflicts": {
+    "one": "{count} conflicted file",
+    "other": "{count} conflicted files"
+  },
   "merge.resolved": "conflicts resolved",
   "merge.hint": "Resolve the conflicts in your editor (remove the <<<<<<< / >>>>>>> markers), then conclude.",
   "merge.abort": "Abort merge",
   "merge.continue": "Conclude merge",
   "merge.confirmAbort": "Abort the merge in progress? The merge changes are discarded.",
   "merge.stillConflicts": "Conflicts still to resolve: {files}",
-
   "drawer.copy": "Click to copy",
   "drawer.sha": "SHA:",
   "drawer.parent": "Parent:",
-
   "run.error": "Error: {error}",
   "commit.required": "Enter a commit message",
   "commit.pushSkipped": "[push cancelled: commit failed]",
-
   "dirty.title": "Uncommitted changes",
-  "dirty.text": { "one": "There is {count} modified file not committed. To {what} you can set it aside with git stash (get it back later with 📤 Pop).", "other": "There are {count} modified files not committed. To {what} you can set them aside with git stash (get them back later with 📤 Pop)." },
+  "dirty.text": {
+    "one": "There is {count} modified file not committed. To {what} you can set it aside with git stash (get it back later with 📤 Pop).",
+    "other": "There are {count} modified files not committed. To {what} you can set them aside with git stash (get them back later with 📤 Pop)."
+  },
   "dirty.more": "… and {count} more",
   "dirty.stash": "Stash and continue",
   "dirty.switch": "switch to {branch}",
   "dirty.create": "create {branch} from {start}",
-
   "newBranch.title": "New branch",
   "newBranch.name": "Name",
   "newBranch.placeholder": "e.g. feature/new-feature",
@@ -57,7 +56,6 @@
   "newBranch.current": "current commit ({branch}) — uncommitted changes are kept",
   "newBranch.create": "Create and switch",
   "newBranch.nameRequired": "Enter the branch name",
-
   "mergeDialog.nothing": "No other branch to merge",
   "mergeDialog.title": "Merge into {branch}",
   "mergeDialog.branch": "Branch to merge",
@@ -68,13 +66,17 @@
   "mergeDialog.squash": "Squash: changes in the working tree, commit by hand (--squash)",
   "mergeDialog.submit": "⑃ Merge",
   "mergeDialog.upToDate": "✓ Already up to date: nothing to merge.",
-  "mergeDialog.incoming": { "one": "{count} incoming commit", "other": "{count} incoming commits" },
+  "mergeDialog.incoming": {
+    "one": "{count} incoming commit",
+    "other": "{count} incoming commits"
+  },
   "mergeDialog.ffPossible": "fast-forward possible",
-  "mergeDialog.files": { "one": "{count} file", "other": "{count} files" },
-
+  "mergeDialog.files": {
+    "one": "{count} file",
+    "other": "{count} files"
+  },
   "delete.confirm": "Delete the local branch \"{name}\"?",
   "delete.unmerged": "{error}.\n\nDelete it anyway? Those commits will no longer be reachable from any branch.",
-
   "pop.search": "Search branches…",
   "pop.local": "Local",
   "pop.remote": "Remote",
@@ -86,5 +88,34 @@
   "pop.delete": "Delete",
   "pop.switchLocal": "Switch to the local copy",
   "pop.createLocal": "Create the local copy and switch",
-  "pop.hasLocal": "local copy exists"
+  "pop.hasLocal": "local copy exists",
+  "errors.action_unsupported": "Unsupported action: {action}",
+  "errors.branch_required": "Branch is required",
+  "errors.branch_invalid": "Invalid branch name: {branch}",
+  "errors.remote_unknown": "Unknown remote: {remote}",
+  "errors.message_invalid": "Invalid message",
+  "errors.exists": "The branch \"{branch}\" already exists",
+  "errors.start_point_invalid": "Invalid start point: {startPoint}",
+  "errors.not_found": "Branch not found: {branch}",
+  "errors.dirty": {
+    "one": "There is {count} modified file not committed",
+    "other": "There are {count} modified files not committed"
+  },
+  "errors.step_failed": "[{command} failed, continuing]",
+  "errors.repo_not_found": "Repository not found",
+  "errors.merge_mode_invalid": "Invalid merge mode",
+  "errors.merging": "A merge is already in progress: conclude or abort it",
+  "errors.no_merge": "No merge in progress",
+  "errors.conflicts": {
+    "one": "Conflicts still to resolve in {count} file",
+    "other": "Conflicts still to resolve in {count} files"
+  },
+  "errors.local_not_found": "Local branch not found: {branch}",
+  "errors.current": "The current branch cannot be deleted",
+  "errors.unmerged": "The branch \"{branch}\" contains commits not merged into {current}",
+  "errors.busy": "Another git operation is running on this repository",
+  "errors.files_invalid": "Invalid file list",
+  "errors.files_unknown": "Files not among the changes: {files}",
+  "errors.command_failed": "git: {output}",
+  "errors.hash_invalid": "Invalid hash"
 }

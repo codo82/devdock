@@ -9,7 +9,7 @@ const PROJECT_FIELDS = ['id', 'label', 'path'];
 const MAX_LOG_LINES = 500;
 
 module.exports = function createNpm(ctx) {
-  const { ConfigError, pick } = ctx.lib.config;
+  const { pick } = ctx.lib.config;
   const { KEY_RE, NPM_NAME_RE, isText } = ctx.lib.validate;
   const { getPortsForPgid } = ctx.lib.ports;
 
@@ -27,11 +27,11 @@ module.exports = function createNpm(ctx) {
   }
 
   function validateProject(p) {
-    const where = `progetto "${p?.id}"`;
-    if (!p || typeof p !== 'object') throw new ConfigError('Progetto non valido');
-    if (!KEY_RE.test(p.id || '')) throw new ConfigError(`${where}: id non valido (lettere, numeri, _ e -)`);
-    if (!isText(p.label)) throw new ConfigError(`${where}: nome obbligatorio`);
-    if (!isText(p.path, 1024) || !path.isAbsolute(p.path)) throw new ConfigError(`${where}: il percorso deve essere assoluto`);
+    if (!p || typeof p !== 'object') throw ctx.error.config('project_invalid');
+    const bad = name => ctx.error.config(name, { id: String(p.id ?? '') });
+    if (!KEY_RE.test(p.id || '')) throw bad('project_id');
+    if (!isText(p.label)) throw bad('project_label');
+    if (!isText(p.path, 1024) || !path.isAbsolute(p.path)) throw bad('project_path');
   }
 
   const config = {
@@ -39,11 +39,11 @@ module.exports = function createNpm(ctx) {
       empty: [], idField: 'id',
       normalize: v => (Array.isArray(v) ? v.map(p => pick(p || {}, PROJECT_FIELDS)) : v),
       validate(list) {
-        if (!Array.isArray(list)) throw new ConfigError('Config non valida: "projects" deve essere una lista');
+        if (!Array.isArray(list)) throw ctx.error.config('not_a_list', { section: 'projects' });
         list.forEach(validateProject);
         const seen = new Set();
         for (const p of list) {
-          if (seen.has(p.id)) throw new ConfigError(`Progetto duplicato: ${p.id}`);
+          if (seen.has(p.id)) throw ctx.error.config('duplicate_project', { id: p.id });
           seen.add(p.id);
         }
       },
@@ -74,7 +74,7 @@ module.exports = function createNpm(ctx) {
       pd.running = false; pd.exitCode = code;
       log(pd, `\n[exit ${code}]`);
     });
-    proc.on('error', err => { if (current()) { pd.running = false; log(pd, `\nErrore: ${err.message}`); } });
+    proc.on('error', err => { if (current()) { pd.running = false; log(pd, `\n[error: ${err.message}]`); } });
   }
 
   function startNpm(p, script, args) {
@@ -97,8 +97,16 @@ module.exports = function createNpm(ctx) {
     }
   }
 
-  const notFound = (res, what) => res.status(404).json({ error: `${what} non trovato` });
-  const projectOr404 = (req, res) => getProject(req.params.id) || (notFound(res, 'Progetto'), null);
+  const projectOr404 = req => {
+    const p = getProject(req.params.id);
+    if (!p) throw ctx.error(404, 'project_not_found', { id: req.params.id });
+    return p;
+  };
+  const processOr404 = req => {
+    const pd = processes.get(req.params.id);
+    if (!pd) throw ctx.error(404, 'process_not_found');
+    return pd;
+  };
 
   return {
     config,
@@ -111,10 +119,10 @@ module.exports = function createNpm(ctx) {
 
       createProject(req, res) {
         const { id, label, path: projectPath } = req.body;
-        if (!id || !label || !projectPath) return res.status(400).json({ error: 'id, label e path obbligatori' });
+        if (!id || !label || !projectPath) throw ctx.error(400, 'fields_required');
         const list = getProjects();
-        if (list.some(p => p.id === id)) return res.status(409).json({ error: 'ID già esistente' });
-        if (!fs.existsSync(projectPath)) return res.status(400).json({ error: `Cartella non trovata: ${projectPath}` });
+        if (list.some(p => p.id === id)) throw ctx.error(409, 'id_exists', { id: String(id) });
+        if (!fs.existsSync(projectPath)) throw ctx.error(400, 'folder_not_found', { path: String(projectPath) });
         saveProjects([...list, { id, label, path: projectPath }]);
         res.json({ ok: true });
       },
@@ -122,9 +130,9 @@ module.exports = function createNpm(ctx) {
       updateProject(req, res) {
         const list = getProjects();
         const idx = list.findIndex(p => p.id === req.params.id);
-        if (idx === -1) return notFound(res, 'Progetto');
+        if (idx === -1) throw ctx.error(404, 'project_not_found', { id: req.params.id });
         const { path: projectPath } = req.body;
-        if (projectPath && !fs.existsSync(projectPath)) return res.status(400).json({ error: `Cartella non trovata: ${projectPath}` });
+        if (projectPath && !fs.existsSync(projectPath)) throw ctx.error(400, 'folder_not_found', { path: String(projectPath) });
         list[idx] = { ...list[idx], ...pick(req.body, ['label', 'path']) };
         saveProjects(list);
         res.json({ ok: true });
@@ -136,13 +144,12 @@ module.exports = function createNpm(ctx) {
       },
 
       packageInfo(req, res) {
-        const p = projectOr404(req, res);
-        if (!p) return;
+        const p = projectOr404(req);
         if (!fs.existsSync(path.join(p.path, 'package.json'))) {
           return res.json({ name: null, scripts: {}, dependencies: {}, devDependencies: {} });
         }
         const pkg = readPackage(p);
-        if (!pkg) return res.status(500).json({ error: 'package.json non valido' });
+        if (!pkg) throw ctx.error(500, 'package_invalid');
         res.json({
           name: pkg.name || null,
           version: pkg.version || null,
@@ -154,8 +161,7 @@ module.exports = function createNpm(ctx) {
 
       // Versioni installate (da node_modules/<pkg>/package.json); nomi non validi ignorati
       installedVersions(req, res) {
-        const p = projectOr404(req, res);
-        if (!p) return;
+        const p = projectOr404(req);
         const names = Array.isArray(req.body.packages) ? req.body.packages : [];
         const result = {};
         for (const name of names) {
@@ -171,8 +177,7 @@ module.exports = function createNpm(ctx) {
 
       // npm outdated --json esce con codice 1 se ci sono aggiornamenti: l'output resta valido
       outdated(req, res) {
-        const p = projectOr404(req, res);
-        if (!p) return;
+        const p = projectOr404(req);
         let out;
         try {
           out = execFileSync('npm', ['outdated', '--json'], { cwd: p.path, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'ignore'] });
@@ -180,21 +185,20 @@ module.exports = function createNpm(ctx) {
           out = e.stdout || '{}';
         }
         try { res.json(JSON.parse(out || '{}')); }
-        catch { res.status(500).json({ error: 'Risposta di npm outdated non valida' }); }
+        catch { ctx.error.send(res, 500, 'outdated_invalid'); }
       },
 
       // Solo "install" o script definiti in package.json
       runScript(req, res) {
-        const p = projectOr404(req, res);
-        if (!p) return;
+        const p = projectOr404(req);
         const { script } = req.body;
-        if (typeof script !== 'string' || !script) return res.status(400).json({ error: 'script obbligatorio' });
+        if (typeof script !== 'string' || !script) throw ctx.error(400, 'script_required');
         let args;
         if (script === 'install') {
           args = ['install'];
         } else {
           const scripts = readPackage(p)?.scripts || {};
-          if (!Object.hasOwn(scripts, script)) return res.status(400).json({ error: `Script non definito in package.json: ${script}` });
+          if (!Object.hasOwn(scripts, script)) throw ctx.error(400, 'script_not_defined', { script });
           args = ['run', script];
         }
         const pd = startNpm(p, script, args);
@@ -203,13 +207,12 @@ module.exports = function createNpm(ctx) {
 
       // npm update <pkg>: solo pacchetti dichiarati in package.json
       updatePackage(req, res) {
-        const p = projectOr404(req, res);
-        if (!p) return;
+        const p = projectOr404(req);
         const name = req.body.package;
         const pkg = readPackage(p) || {};
         const declared = { ...pkg.dependencies, ...pkg.devDependencies };
         if (typeof name !== 'string' || !NPM_NAME_RE.test(name) || !Object.hasOwn(declared, name)) {
-          return res.status(400).json({ error: `Pacchetto non dichiarato in package.json: ${name}` });
+          throw ctx.error(400, 'package_not_declared', { name: String(name) });
         }
         const pd = startNpm(p, `update ${name}`, ['update', name]);
         res.json({ id: pd.id, pid: pd.pid });
@@ -224,8 +227,7 @@ module.exports = function createNpm(ctx) {
       },
 
       stopProcess(req, res) {
-        const pd = processes.get(req.params.id);
-        if (!pd) return notFound(res, 'Processo');
+        const pd = processOr404(req);
         killGroup(pd);
         pd.running = false;
         processes.delete(pd.id);
@@ -233,45 +235,42 @@ module.exports = function createNpm(ctx) {
       },
 
       restartProcess(req, res) {
-        const pd = processes.get(req.params.id);
-        if (!pd) return notFound(res, 'Processo');
+        const pd = processOr404(req);
         const p = getProject(pd.projectId);
-        if (!p) return res.status(400).json({ error: 'Progetto non più disponibile' });
+        if (!p) throw ctx.error(400, 'project_gone');
         killGroup(pd);
-        spawnNpm(pd, p.path, '\n--- Riavvio ---\n');
+        spawnNpm(pd, p.path, '\n--- ↻ ---\n');
         res.json({ ok: true, pid: pd.pid });
       },
 
       // Toglie dalla lista un processo già terminato
       dismissProcess(req, res) {
-        const pd = processes.get(req.params.id);
-        if (!pd) return notFound(res, 'Processo');
-        if (pd.running) return res.status(409).json({ error: 'Processo ancora in esecuzione' });
+        const pd = processOr404(req);
+        if (pd.running) throw ctx.error(409, 'process_running');
         processes.delete(pd.id);
         res.json({ ok: true });
       },
 
       processLogs(req, res) {
-        const pd = processes.get(req.params.id);
-        if (!pd) return notFound(res, 'Processo');
+        const pd = processOr404(req);
         res.json({ running: pd.running, exitCode: pd.exitCode, logs: pd.logs.slice(-200) });
       },
 
       // Log in streaming: prima lo storico, poi le righe nuove ogni 100ms
       processStream(req, res) {
-        const pd = processes.get(req.params.id);
-        if (!pd) return notFound(res, 'Processo');
+        const pd = processOr404(req);
         const send = ctx.sse(res);
         if (pd.logs.length) send('history', pd.logs.map(l => l.text).join(''));
-        if (!pd.running) { send('exit', `[processo terminato, exit ${pd.exitCode}]`); send.end(); return; }
+        // exit: { exitCode } oppure { removed: true }; il testo lo compone il frontend
+        if (!pd.running) { send('exit', { exitCode: pd.exitCode, ended: true }); send.end(); return; }
 
         let lastTs = pd.logs.length ? pd.logs[pd.logs.length - 1].ts : Date.now();
         const timer = setInterval(() => {
           const cur = processes.get(pd.id);
-          if (!cur) { clearInterval(timer); send('exit', '[processo rimosso]'); send.end(); return; }
+          if (!cur) { clearInterval(timer); send('exit', { removed: true }); send.end(); return; }
           const fresh = cur.logs.filter(l => l.ts > lastTs);
           if (fresh.length) { send('stdout', fresh.map(l => l.text).join('')); lastTs = fresh[fresh.length - 1].ts; }
-          if (!cur.running) { clearInterval(timer); send('exit', `[exit ${cur.exitCode}]`); send.end(); }
+          if (!cur.running) { clearInterval(timer); send('exit', { exitCode: cur.exitCode }); send.end(); }
         }, 100);
         req.on('close', () => clearInterval(timer));
       },

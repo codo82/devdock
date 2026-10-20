@@ -265,7 +265,8 @@ export default {
         if (!logs.length) output.append(t('logs.empty'), 'sys');
         for (const l of logs) {
           output.append(`[${fmt.date(l.ts, { timeStyle: 'medium' })}] `, 'sys');
-          output.append(l.text.endsWith('\n') ? l.text : l.text + '\n');
+          const text = l.code ? ctx.ui.errorText({ code: l.code, params: l.params, error: l.text }) : l.text;
+          output.append(text.endsWith('\n') ? text : text + '\n');
         }
       } catch { stopLogs(); }
     }

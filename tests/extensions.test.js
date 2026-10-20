@@ -134,7 +134,9 @@ test('servizi tra estensioni con ctx.require', async () => {
 test('errori dei handler async → 500 JSON', async () => {
   const r = await srv.request('GET', '/api/ext/alpha/boom');
   assert.equal(r.status, 500);
-  assert.equal(r.json.error, 'esploso');
+  assert.equal(r.json.code, 'core.internal');
+  assert.equal(r.json.params.error, 'esploso');
+  assert.match(r.json.error, /esploso/);
 });
 
 test('stream SSE con ctx.sse', async () => {

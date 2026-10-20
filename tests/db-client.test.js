@@ -239,7 +239,7 @@ test('query: letture subito, scritture solo con la conferma della stessa istruzi
     assert.equal((await q('rw', { sql: 'USE mysql' })).status, 400);
     r = await q('rw', { sql: 'SELECT * FROM tabella_inesistente' });
     assert.equal(r.status, 400);
-    assert.equal(r.json.code, 'ER_NO_SUCH_TABLE');
+    assert.equal(r.json.params.mysqlCode, 'ER_NO_SUCH_TABLE');
 
     // database
     r = await api('GET', '/connections/rw/databases');
@@ -499,7 +499,7 @@ test('creazione tabella da definizione strutturata, solo dopo conferma', async t
     r = await create({ definition });
     r = await create({ definition, confirm: r.json.token });
     assert.equal(r.status, 400);
-    assert.equal(r.json.code, 'ER_TABLE_EXISTS_ERROR');
+    assert.equal(r.json.params.mysqlCode, 'ER_TABLE_EXISTS_ERROR');
   } finally {
     await s.stop();
     await mysqlDb.stop();

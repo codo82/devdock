@@ -370,7 +370,7 @@ export default {
       try {
         const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ definition }) });
         const data = await res.json().catch(() => ({}));
-        if (res.status !== 428) { toast(data.error || `HTTP ${res.status}`, 'error'); return; }
+        if (res.status !== 428) { toast(ctx.ui.errorText(data, `HTTP ${res.status}`), 'error'); return; }
         renderDesigner(data.sql);
         if (!execute) return;
         askConfirmation(data, async token => {
@@ -459,7 +459,7 @@ export default {
         const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, key, values, keys }) });
         const data = await res.json().catch(() => ({}));
         if (res.status === 428 && data.needsConfirmation) askConfirmation(data, send, true);
-        else toast(data.error || `HTTP ${res.status}`, 'error'); // le scritture chiedono sempre conferma
+        else toast(ctx.ui.errorText(data, `HTTP ${res.status}`), 'error'); // le scritture chiedono sempre conferma
       } catch (e) { toast(e.message, 'error'); }
     }
 
@@ -760,7 +760,7 @@ export default {
         const data = await res.json().catch(() => ({}));
         const record = (ok, summary) => addHistory({ sql, connId: c.id, db: body.database, at: Date.now(), ok, summary });
         if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token }));
-        else if (!res.ok) { renderError(data.error || `HTTP ${res.status}`, sql); record(false); }
+        else if (!res.ok) { renderError(ctx.ui.errorText(data, `HTTP ${res.status}`), sql); record(false); }
         else {
           renderResult(data);
           record(true, data.kind === 'rows' ? { rows: data.rowCount } : { affected: data.affectedRows });
@@ -784,7 +784,7 @@ export default {
         verb: strong(data.verb || t('confirm.unknownVerb')), database: strong(data.database || ''), connection: strong(active()?.label || ''),
       })).replace(/\u0000/g, '<strong>').replace(/\u0001/g, '</strong>');
       openModal(t('confirm.title'), `
-        <p class="db-confirm-text">${text}${data.reason ? ` <span class="db-muted">(${esc(data.reason)})</span>` : ''}</p>
+        <p class="db-confirm-text">${text}${data.reason ? ` <span class="db-muted">(${esc(t(`reason.${data.reason}`, { word: data.word || '' }))})</span>` : ''}</p>
         <pre class="db-confirm-sql">${highlightSql(data.sql, esc)}</pre>`,
         `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].cancelConfirm()">${esc(t('core.action.cancel'))}</button>
          <button class="btn btn-danger" onclick="Ext['db-client'].confirmRun()">${esc(t('confirm.run'))}</button>`);

@@ -80,7 +80,8 @@ window.UI = (() => {
       const text = await r.text();
       let data = null;
       try { data = text ? JSON.parse(text) : null; } catch {}
-      if (!r.ok) throw Object.assign(new Error(data?.error || text || `HTTP ${r.status}`), { status: r.status, data });
+      // messaggio tradotto dal codice dell'errore; status, code e corpo restano sull'Error
+      if (!r.ok) throw Object.assign(new Error(I18n.errorText(data, text || `HTTP ${r.status}`)), { status: r.status, code: data?.code, data });
       return data;
     };
     const send = (method, p, body) => fetch(base + p, {
@@ -149,5 +150,5 @@ window.UI = (() => {
   // click fuori dal modal lo chiude
   document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
-  return { t: I18n.t, fmt: I18n.fmt, esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
+  return { t: I18n.t, fmt: I18n.fmt, errorText: I18n.errorText, esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
 })();

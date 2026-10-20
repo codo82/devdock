@@ -26,5 +26,12 @@
   "error": "PM2 error: {error}",
   "logsAll": "pm2 logs (all)",
   "connectionLost": "Connection lost",
-  "rechecked": "Tools checked again"
+  "rechecked": "Tools checked again",
+  "streamEnded": "Stream ended",
+  "errors.action_unsupported": "Unsupported PM2 action: {action}",
+  "errors.npm_unavailable": "The npm extension is not available",
+  "errors.project_not_found": "Project not found: {id}",
+  "errors.script_not_defined": "Script not defined in package.json: {script}",
+  "errors.invalid_target": "Invalid PM2 process",
+  "errors.command_failed": "pm2: {output}"
 }

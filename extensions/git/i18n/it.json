@@ -2,7 +2,6 @@
   "sidebar.title": "Repository",
   "sidebar.none": "Nessun repo git trovato.",
   "sidebar.noneHint": "Aggiungi un progetto nella sezione NPM: se è dentro un repository git apparirà qui.",
-
   "empty": "Seleziona un repository dalla sidebar",
   "bar.reload": "↻ Ricarica",
   "files.title": "Modifiche",
@@ -19,37 +18,37 @@
   "log.message": "Messaggio",
   "log.author": "Autore",
   "log.date": "Data",
-
   "header.branchTitle": "Cambia, crea, unisci o elimina branch",
   "header.merging": "⑃ merge in corso",
   "header.ahead": "↑{count} ahead",
   "header.behind": "↓{count} behind",
   "header.stash": "📦 {count} stash",
-
   "merge.banner": "⑃ Merge in corso",
-  "merge.conflicts": { "one": "{count} file in conflitto", "other": "{count} file in conflitto" },
+  "merge.conflicts": {
+    "one": "{count} file in conflitto",
+    "other": "{count} file in conflitto"
+  },
   "merge.resolved": "conflitti risolti",
   "merge.hint": "Risolvi i conflitti nell'editor (togli i marcatori <<<<<<< / >>>>>>>), poi concludi.",
   "merge.abort": "Annulla merge",
   "merge.continue": "Concludi merge",
   "merge.confirmAbort": "Annullare il merge in corso? Le modifiche del merge vengono scartate.",
   "merge.stillConflicts": "Conflitti ancora da risolvere: {files}",
-
   "drawer.copy": "Click per copiare",
   "drawer.sha": "SHA:",
   "drawer.parent": "Parent:",
-
   "run.error": "Errore: {error}",
   "commit.required": "Inserisci un messaggio di commit",
   "commit.pushSkipped": "[push annullato: commit fallito]",
-
   "dirty.title": "Modifiche non committate",
-  "dirty.text": { "one": "C'è {count} file modificato non committato. Per {what} puoi metterlo da parte con git stash (lo recuperi poi con 📤 Pop).", "other": "Ci sono {count} file modificati non committati. Per {what} puoi metterli da parte con git stash (li recuperi poi con 📤 Pop)." },
+  "dirty.text": {
+    "one": "C'è {count} file modificato non committato. Per {what} puoi metterlo da parte con git stash (lo recuperi poi con 📤 Pop).",
+    "other": "Ci sono {count} file modificati non committati. Per {what} puoi metterli da parte con git stash (li recuperi poi con 📤 Pop)."
+  },
   "dirty.more": "… e altri {count}",
   "dirty.stash": "Stash e continua",
   "dirty.switch": "passare a {branch}",
   "dirty.create": "creare {branch} da {start}",
-
   "newBranch.title": "Nuovo branch",
   "newBranch.name": "Nome",
   "newBranch.placeholder": "es. feature/nuova-funzione",
@@ -57,7 +56,6 @@
   "newBranch.current": "commit attuale ({branch}) — le modifiche non committate restano",
   "newBranch.create": "Crea e passa",
   "newBranch.nameRequired": "Scrivi il nome del branch",
-
   "mergeDialog.nothing": "Nessun altro branch da unire",
   "mergeDialog.title": "Merge nel branch {branch}",
   "mergeDialog.branch": "Branch da unire",
@@ -68,13 +66,17 @@
   "mergeDialog.squash": "Squash: modifiche nel working tree, commit a mano (--squash)",
   "mergeDialog.submit": "⑃ Unisci",
   "mergeDialog.upToDate": "✓ Già allineato: niente da unire.",
-  "mergeDialog.incoming": { "one": "{count} commit in arrivo", "other": "{count} commit in arrivo" },
+  "mergeDialog.incoming": {
+    "one": "{count} commit in arrivo",
+    "other": "{count} commit in arrivo"
+  },
   "mergeDialog.ffPossible": "fast-forward possibile",
-  "mergeDialog.files": { "one": "{count} file", "other": "{count} file" },
-
+  "mergeDialog.files": {
+    "one": "{count} file",
+    "other": "{count} file"
+  },
   "delete.confirm": "Eliminare il branch locale \"{name}\"?",
   "delete.unmerged": "{error}.\n\nEliminarlo comunque? Quei commit non saranno più raggiungibili da nessun branch.",
-
   "pop.search": "Cerca branch…",
   "pop.local": "Locali",
   "pop.remote": "Remoti",
@@ -86,5 +88,34 @@
   "pop.delete": "Elimina",
   "pop.switchLocal": "Passa alla copia locale",
   "pop.createLocal": "Crea la copia locale e passa",
-  "pop.hasLocal": "locale presente"
+  "pop.hasLocal": "locale presente",
+  "errors.action_unsupported": "Azione non supportata: {action}",
+  "errors.branch_required": "Branch obbligatorio",
+  "errors.branch_invalid": "Nome branch non valido: {branch}",
+  "errors.remote_unknown": "Remote sconosciuto: {remote}",
+  "errors.message_invalid": "Messaggio non valido",
+  "errors.exists": "Il branch \"{branch}\" esiste già",
+  "errors.start_point_invalid": "Punto di partenza non valido: {startPoint}",
+  "errors.not_found": "Branch inesistente: {branch}",
+  "errors.dirty": {
+    "one": "C'è {count} file modificato non committato",
+    "other": "Ci sono {count} file modificati non committati"
+  },
+  "errors.step_failed": "[{command} non riuscito, si prosegue]",
+  "errors.repo_not_found": "Repository non trovato",
+  "errors.merge_mode_invalid": "Modalità di merge non valida",
+  "errors.merging": "C'è già un merge in corso: concludilo o annullalo",
+  "errors.no_merge": "Nessun merge in corso",
+  "errors.conflicts": {
+    "one": "Conflitti ancora da risolvere in {count} file",
+    "other": "Conflitti ancora da risolvere in {count} file"
+  },
+  "errors.local_not_found": "Branch locale inesistente: {branch}",
+  "errors.current": "Non si può eliminare il branch corrente",
+  "errors.unmerged": "Il branch \"{branch}\" contiene commit non uniti in {current}",
+  "errors.busy": "Un'altra operazione git è in corso su questo repository",
+  "errors.files_invalid": "Lista file non valida",
+  "errors.files_unknown": "File non presenti tra le modifiche: {files}",
+  "errors.command_failed": "git: {output}",
+  "errors.hash_invalid": "Hash non valido"
 }

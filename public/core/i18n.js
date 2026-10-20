@@ -125,7 +125,8 @@ window.I18n = (() => {
   function has(key) { return !!lookup(key); }
 
   // t('core.toast.saved'), t('git.commits', { count: 3 }): {nome} sostituiti con params,
-  // plurali scelti con Intl.PluralRules su params.count. Chiave mancante → la chiave stessa.
+  // plurali scelti con Intl.PluralRules su params.count (formattato con fmt.number).
+  // Chiave mancante → la chiave stessa.
   function t(key, params = {}) {
     const hit = lookup(key);
     if (!hit) {
@@ -141,8 +142,21 @@ window.I18n = (() => {
     return text.replace(/\{(\w+)\}/g, (m, name) => {
       if (!(name in params)) return m;
       const v = params[name];
-      return typeof v === 'number' ? fmt.number(v) : String(v ?? '');
+      // solo {count} è una quantità da formattare (porte, pid e id restano come sono)
+      return name === 'count' && typeof v === 'number' ? fmt.number(v) : String(v ?? '');
     });
+  }
+
+  // Testo di un errore delle API ({ error, code, params } o una stringa): il codice
+  // "<ns>.<nome>" si traduce con la chiave "<ns>.errors.<nome>", altrimenti resta error
+  function errorText(data, fallback = '') {
+    if (data == null) return fallback;
+    if (typeof data === 'string') return data;
+    if (data.code) {
+      const key = String(data.code).replace(/^([^.]+)\./, '$1.errors.');
+      if (has(key)) return t(key, data.params || {});
+    }
+    return data.error || data.message || fallback;
   }
 
   // Chiave relativa al namespace di un'estensione; "core." resta globale
@@ -224,7 +238,7 @@ window.I18n = (() => {
   };
 
   return {
-    init, setLanguage, onChange, t, has, scoped, qualify, pick, apply, fmt,
+    init, setLanguage, onChange, t, has, errorText, scoped, qualify, pick, apply, fmt,
     get lang() { return lang; },
     get source() { return source; },
     get languages() { return languages.slice(); },

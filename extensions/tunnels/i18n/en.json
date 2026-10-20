@@ -4,22 +4,21 @@
   "sidebar.back": "← Tunnels",
   "sidebar.backTitle": "Back to the tunnels",
   "sidebar.newGroup": "New group",
-
   "notify.connected": "Tunnel connected on :{port}",
   "notify.lost": "Connection lost — reconnecting...",
   "notify.reconnected": "Reconnected on :{port}",
   "notify.disconnected": "Tunnel disconnected from :{port}",
-
   "pill.reconnecting": "(reconnecting)",
   "pill.stopAll": "⏹ Stop all",
-
   "groups.none": "No groups",
   "main.selectGroup": "Select a group in the sidebar",
   "main.autossh": "autossh is not installed: tunnels use ssh and DevDock handles reconnection.",
-  "main.connected": { "one": "{count} connected", "other": "{count} connected" },
+  "main.connected": {
+    "one": "{count} connected",
+    "other": "{count} connected"
+  },
   "main.disconnectAll": "⏹ Disconnect all",
   "main.noServers": "No servers in this group",
-
   "card.alias": "alias:",
   "card.remote": "remote:",
   "card.pid": "pid:",
@@ -27,7 +26,6 @@
   "card.disconnect": "Disconnect",
   "card.logs": "Logs",
   "card.connect": "Connect",
-
   "settings.noGroups": "No groups.",
   "settings.add": "+ Add",
   "settings.newServer": "+ New server",
@@ -35,7 +33,6 @@
   "settings.noServers": "No servers in this group.",
   "settings.removeFromGroup": "Remove from group",
   "settings.deleteForever": "Delete permanently",
-
   "form.key": "Key (snake_case, cannot be changed)",
   "form.groupKeyPlaceholder": "e.g. new_group",
   "form.name": "Name",
@@ -52,16 +49,13 @@
   "form.noGroup": "-- None --",
   "form.create": "Create",
   "form.availableServers": "Available servers",
-
   "modal.newGroup": "New group",
   "modal.editGroup": "Edit group",
   "modal.newServer": "New server",
   "modal.editServer": "Edit server",
   "modal.assignServer": "Add existing server",
-
   "logs.empty": "No output",
   "logs.title": "🔗 SSH log — {name}",
-
   "toast.started": "Tunnel started on :{port}",
   "toast.stopped": "Tunnel stopped",
   "toast.stoppedAll": "All tunnels stopped",
@@ -74,7 +68,35 @@
   "toast.serverDeleted": "Server deleted",
   "toast.selectServer": "Select a server",
   "toast.serverAssigned": "Server added to the group",
-
   "confirm.deleteGroup": "Delete the group \"{name}\"?",
-  "confirm.deleteServer": "Permanently delete the server \"{name}\"?"
+  "confirm.deleteServer": "Permanently delete the server \"{name}\"?",
+  "errors.server_invalid": "Invalid server",
+  "errors.server_key": "server \"{key}\": invalid key (letters, digits, _ and -)",
+  "errors.server_label": "server \"{key}\": name is required",
+  "errors.server_port": "server \"{key}\": invalid local port (1-65535)",
+  "errors.server_remote": "server \"{key}\": invalid remote (host:port format)",
+  "errors.server_alias": "server \"{key}\": invalid SSH alias",
+  "errors.server_type": "server \"{key}\": invalid type",
+  "errors.group_invalid": "Invalid group",
+  "errors.group_key": "group \"{key}\": invalid key (letters, digits, _ and -)",
+  "errors.group_label": "group \"{key}\": name is required",
+  "errors.group_color": "group \"{key}\": invalid colour (#rrggbb)",
+  "errors.group_servers": "group \"{key}\": invalid server list",
+  "errors.group_missing_servers": "group \"{key}\": unknown servers {servers}",
+  "errors.not_a_list": "Invalid config: \"{section}\" must be a list",
+  "errors.duplicate_server": "Duplicate server: {key}",
+  "errors.duplicate_group": "Duplicate group: {key}",
+  "errors.server_not_found": "Server not found: {key}",
+  "errors.port_invalid": "Invalid local port (1-65535)",
+  "errors.port_in_use": "Port {port} already used by \"{label}\"",
+  "errors.not_ready": "Tunnel \"{label}\" not ready",
+  "errors.not_ready_log": "Tunnel \"{label}\" not ready: {log}",
+  "errors.tunnel_not_found": "Tunnel not found",
+  "errors.group_not_found": "Group not found: {key}",
+  "errors.key_label_required": "Key and name are required",
+  "errors.key_exists": "Key already exists: {key}",
+  "errors.fields_required": "Required fields are missing",
+  "errors.log_connecting": "Connecting to {alias} → 127.0.0.1:{port} ↔ {remote} [{command}, pid {pid}]",
+  "errors.log_spawn_error": "Start error: {error}",
+  "errors.log_closed": "Tunnel closed (exit {code}). Reconnecting in {seconds} s..."
 }

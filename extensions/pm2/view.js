@@ -71,7 +71,8 @@ export default {
       output.open(name ? `pm2 logs ${name}` : t('logsAll'));
       const q = name ? `?name=${encodeURIComponent(name)}&lines=100` : '?lines=100';
       closeLogs = ctx.api.events('/logs' + q, ({ type, data }) => {
-        output.append(data, type === 'stderr' || type === 'error' ? 'err' : type === 'exit' ? 'sys' : 'out');
+        if (type === 'exit') output.append(`\n${t('streamEnded')}`, 'sys');
+        else output.append(data, type === 'stderr' || type === 'error' ? 'err' : 'out');
         if (type === 'exit') { closeLogs?.(); closeLogs = null; }
       }, () => output.append('\n' + t('connectionLost'), 'err'));
     }

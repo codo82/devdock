@@ -171,7 +171,7 @@ window.Shell = (() => {
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         // stato e corpo restano sull'errore: la UI può reagire ai codici (es. 409 { code })
-        throw Object.assign(new Error(d.error || `HTTP ${res.status}`), { status: res.status, data: d });
+        throw Object.assign(new Error(window.I18n.errorText(d, `HTTP ${res.status}`)), { status: res.status, code: d.code, data: d });
       }
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -238,7 +238,7 @@ window.Shell = (() => {
         pick,
         apply: (root) => window.I18n.apply(root, meta.code),
       },
-      ui: { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, output, formatUptime, toolNotice, notify, contextMenu, t, fmt },
+      ui: { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, output, formatUptime, toolNotice, notify, contextMenu, t, fmt, errorText: window.I18n.errorText },
       bus: {
         on(name, fn) { const h = e => fn(e.detail); bus.addEventListener(name, h); return () => bus.removeEventListener(name, h); },
         emit(name, detail) { bus.dispatchEvent(new CustomEvent(name, { detail })); },

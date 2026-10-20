@@ -352,7 +352,7 @@ export default {
     }
 
     // ---- azioni git con output in streaming ----
-    // onRefused(data): il server ha rifiutato prima di eseguire (409/404 con { code })
+    // onRefused(err): il server ha rifiutato prima di eseguire (err.code, err.message tradotto, err.data)
     async function run(body, title, onRefused) {
       if (title) output.open(title);
       let exit = 1;
@@ -360,11 +360,12 @@ export default {
         exit = await ctx.api.stream(repoUrl('/action'), body, ({ type, data }) => {
           if (type === 'stdout') output.append(data, 'out');
           else if (type === 'stderr') output.append(data, 'err');
-          else if (type === 'error') output.append(`\n${t('run.error', { error: data })}\n`, 'err');
+          else if (type === 'error') output.append(`\n${t('run.error', { error: ctx.ui.errorText(data) })}\n`, 'err');
+          else if (type === 'notice') output.append(`${ctx.ui.errorText(data)}\n`, 'sys');
           else if (type === 'exit') output.append(`\n[exit ${data}]`, 'sys');
         });
       } catch (e) {
-        if (onRefused && e.data?.code) { output.close(); onRefused(e.data); return 'refused'; }
+        if (onRefused && e.code) { output.close(); onRefused(e); return 'refused'; }
         output.append(`\n${t('run.error', { error: e.message })}\n`, 'err');
       }
       setTimeout(reload, 400); // status e log aggiornati dopo ogni operazione
@@ -398,9 +399,9 @@ export default {
     // Cambio di branch; con modifiche non committate propone lo stash
     async function switchTo(branch, stash = false) {
       closeBranchPop();
-      await run({ action: 'checkout', branch, stash }, `git checkout ${branch}`, data => {
-        if (data.code === 'dirty') dirtyDialog(data.files, t('dirty.switch', { branch }), () => switchTo(branch, true));
-        else toast(data.error, 'error');
+      await run({ action: 'checkout', branch, stash }, `git checkout ${branch}`, err => {
+        if (err.code === 'git.dirty') dirtyDialog(err.data.files, t('dirty.switch', { branch }), () => switchTo(branch, true));
+        else toast(err.message, 'error');
       });
     }
 
@@ -430,9 +431,9 @@ export default {
     }
 
     async function createBranch(name, startPoint, stash = false) {
-      await run({ action: 'checkout_new', branch: name, startPoint: startPoint || undefined, stash }, `git checkout -b ${name}`, data => {
-        if (data.code === 'dirty') dirtyDialog(data.files, t('dirty.create', { branch: name, start: startPoint }), () => createBranch(name, startPoint, true));
-        else toast(data.error, 'error');
+      await run({ action: 'checkout_new', branch: name, startPoint: startPoint || undefined, stash }, `git checkout -b ${name}`, err => {
+        if (err.code === 'git.dirty') dirtyDialog(err.data.files, t('dirty.create', { branch: name, start: startPoint }), () => createBranch(name, startPoint, true));
+        else toast(err.message, 'error');
       });
     }
 
@@ -475,10 +476,10 @@ export default {
     async function deleteBranch(name, force = false) {
       closeBranchPop();
       if (!force && !confirm(t('delete.confirm', { name }))) return;
-      await run({ action: 'branch_delete', branch: name, force }, `git branch -d ${name}`, data => {
-        if (data.code === 'unmerged') {
-          if (confirm(t('delete.unmerged', { error: data.error }))) deleteBranch(name, true);
-        } else toast(data.error, 'error');
+      await run({ action: 'branch_delete', branch: name, force }, `git branch -d ${name}`, err => {
+        if (err.code === 'git.unmerged') {
+          if (confirm(t('delete.unmerged', { error: err.message }))) deleteBranch(name, true);
+        } else toast(err.message, 'error');
       });
     }
 
@@ -561,7 +562,7 @@ export default {
         const mode = document.querySelector('input[name="f_merge_mode"]:checked')?.value || 'ff';
         if (!branch) return;
         closeModal();
-        run({ action: 'merge', branch, mode }, `git merge${mode === 'ff' ? '' : ` --${mode}`} ${branch}`, data => toast(data.error, 'error'));
+        run({ action: 'merge', branch, mode }, `git merge${mode === 'ff' ? '' : ` --${mode}`} ${branch}`, err => toast(err.message, 'error'));
       },
       createBranch() {
         const name = (document.getElementById('f_new_branch')?.value || '').trim();
@@ -586,9 +587,9 @@ export default {
       else if (a === 'merge') mergeDialog();
       else if (a === 'branches') openBranchPop(e.target.closest('[data-action]'));
       else if (a === 'merge-abort') { if (confirm(t('merge.confirmAbort'))) run({ action: 'merge_abort' }, 'git merge --abort'); }
-      else if (a === 'merge-continue') run({ action: 'merge_continue' }, 'git commit (merge)', data => {
-        if (data.code === 'conflicts') toast(t('merge.stillConflicts', { files: fmt.list(data.files) }), 'error');
-        else toast(data.error, 'error');
+      else if (a === 'merge-continue') run({ action: 'merge_continue' }, 'git commit (merge)', err => {
+        if (err.code === 'git.conflicts') toast(t('merge.stillConflicts', { files: fmt.list(err.data.files) }), 'error');
+        else toast(err.message, 'error');
       });
       else if (a === 'commit') commit(false);
       else if (a === 'commit-push') commit(true);

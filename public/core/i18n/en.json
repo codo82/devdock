@@ -1,6 +1,9 @@
 {
-  "_meta": { "name": "English", "nativeName": "English", "dir": "ltr" },
-
+  "_meta": {
+    "name": "English",
+    "nativeName": "English",
+    "dir": "ltr"
+  },
   "core.action.add": "Add",
   "core.action.cancel": "Cancel",
   "core.action.close": "Close",
@@ -9,23 +12,18 @@
   "core.action.edit": "Edit",
   "core.action.refresh": "Refresh",
   "core.action.save": "Save",
-
   "core.extensions.unavailable": "Extensions unavailable: {error}",
   "core.extensions.loadError": "Error loading {name}: {error}",
   "core.extensions.none": "No extensions available",
-
   "core.language.choose": "Language",
-
   "core.output.title": "Output",
   "core.output.clear": "Clear",
-
   "core.notifications.enable": "Enable desktop notifications",
   "core.notifications.activeTitle": "Notifications on — click to turn off",
   "core.notifications.on": "Notifications on",
   "core.notifications.off": "Notifications off",
   "core.notifications.unsupported": "Notifications are not supported by this browser",
   "core.notifications.denied": "Notification permission denied",
-
   "core.export.button": "Export",
   "core.export.buttonTitle": "Export the configuration",
   "core.export.title": "Export configuration",
@@ -33,7 +31,6 @@
   "core.export.submit": "Export",
   "core.export.nothing": "No extension has data to export",
   "core.export.selectOne": "Select at least one item",
-
   "core.import.button": "Import",
   "core.import.buttonTitle": "Import a configuration",
   "core.import.title": "Import configuration",
@@ -48,6 +45,14 @@
   "core.import.error": "Import error: {error}",
   "core.import.doneMerge": "Import completed (merge)",
   "core.import.doneReplace": "Import completed (replace)",
-
-  "core.tools.recheck": "Check again"
+  "core.tools.recheck": "Check again",
+  "core.errors.host_not_allowed": "Host not allowed",
+  "core.errors.origin_not_allowed": "Origin not allowed",
+  "core.errors.json_required": "Content-Type must be application/json",
+  "core.errors.json_invalid": "Invalid JSON",
+  "core.errors.internal": "Internal error: {error}",
+  "core.errors.config_invalid": "Invalid config",
+  "core.errors.section_invalid": "{section}: {error}",
+  "core.errors.import_mode": "Invalid import mode",
+  "core.errors.import_no_sections": "The file contains no recognised sections"
 }

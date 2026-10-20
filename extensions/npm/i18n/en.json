@@ -4,12 +4,10 @@
   "sidebar.none": "No projects.",
   "sidebar.add": "+ Add",
   "sidebar.remove": "Remove",
-
   "empty": "Select a project in the sidebar",
   "tab.scripts": "▶ Scripts",
   "tab.packages": "📦 Packages",
   "running": "▶ {count} running",
-
   "script.running": "Running (pid {pid})",
   "script.exited": "Exited (exit {code})",
   "script.portInUse": "Port in use",
@@ -21,7 +19,6 @@
   "script.run": "▶ Run",
   "script.pm2": "Start with PM2",
   "script.none": "No scripts in package.json",
-
   "packages.loading": "Reading packages...",
   "packages.package": "Package",
   "packages.configVersion": "Config version",
@@ -31,12 +28,13 @@
   "packages.none": "No dependencies in package.json",
   "packages.notInstalled": "not installed",
   "packages.checking": "Checking...",
-  "packages.available": { "one": "{count} update available", "other": "{count} updates available" },
+  "packages.available": {
+    "one": "{count} update available",
+    "other": "{count} updates available"
+  },
   "packages.upToDate": "✓ All up to date",
   "packages.error": "Error: {error}",
-
   "stream.lost": "[connection lost]",
-
   "toast.started": "Started: {script}",
   "toast.stopped": "Process stopped",
   "toast.restarted": "Process restarted",
@@ -46,13 +44,31 @@
   "toast.allRequired": "All fields are required",
   "toast.projectAdded": "Project added",
   "toast.projectRemoved": "Project removed",
-
   "form.title": "New project",
   "form.id": "ID (snake_case, cannot be changed)",
   "form.idPlaceholder": "e.g. my_app",
   "form.name": "Name",
   "form.namePlaceholder": "e.g. My App",
   "form.path": "Absolute folder path",
-
-  "confirm.removeProject": "Remove this project from the list?"
+  "confirm.removeProject": "Remove this project from the list?",
+  "stream.removed": "[process removed]",
+  "stream.ended": "[process ended, exit {code}]",
+  "errors.project_invalid": "Invalid project",
+  "errors.project_id": "project \"{id}\": invalid id (letters, digits, _ and -)",
+  "errors.project_label": "project \"{id}\": name is required",
+  "errors.project_path": "project \"{id}\": the path must be absolute",
+  "errors.not_a_list": "Invalid config: \"{section}\" must be a list",
+  "errors.duplicate_project": "Duplicate project: {id}",
+  "errors.project_not_found": "Project not found: {id}",
+  "errors.process_not_found": "Process not found",
+  "errors.fields_required": "ID, name and path are required",
+  "errors.id_exists": "ID already exists: {id}",
+  "errors.folder_not_found": "Folder not found: {path}",
+  "errors.package_invalid": "Invalid package.json",
+  "errors.outdated_invalid": "Invalid response from npm outdated",
+  "errors.script_required": "Script is required",
+  "errors.script_not_defined": "Script not defined in package.json: {script}",
+  "errors.package_not_declared": "Package not declared in package.json: {name}",
+  "errors.project_gone": "Project no longer available",
+  "errors.process_running": "Process still running"
 }

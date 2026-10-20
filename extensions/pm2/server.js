@@ -34,44 +34,45 @@ module.exports = function createPm2(ctx) {
       // "npm run <script>" del progetto sotto pm2
       action(req, res) {
         const { action, target, projectId, script } = req.body;
-        if (!ACTIONS.has(action)) return res.status(400).json({ error: 'Azione PM2 non supportata' });
+        if (!ACTIONS.has(action)) throw ctx.error(400, 'action_unsupported', { action: String(action) });
         let args;
         if (action === 'start' && projectId) {
-          if (!npm) return res.status(400).json({ error: 'Estensione npm non disponibile' });
+          if (!npm) throw ctx.error(400, 'npm_unavailable');
           const p = npm.getProject(projectId);
-          if (!p) return res.status(404).json({ error: 'Progetto non trovato' });
+          if (!p) throw ctx.error(404, 'project_not_found', { id: String(projectId) });
           const scripts = npm.readPackage(p)?.scripts || {};
           if (typeof script !== 'string' || !Object.hasOwn(scripts, script)) {
-            return res.status(400).json({ error: `Script non definito in package.json: ${script}` });
+            throw ctx.error(400, 'script_not_defined', { script: String(script) });
           }
           args = ['start', 'npm', '--name', `${p.id}-${script}`, '--cwd', p.path, '--', 'run', script];
         } else {
-          if (typeof target !== 'string' || !PM2_TARGET_RE.test(target)) return res.status(400).json({ error: 'Processo PM2 non valido' });
+          if (typeof target !== 'string' || !PM2_TARGET_RE.test(target)) throw ctx.error(400, 'invalid_target');
           args = [action, target];
         }
         const proc = spawn('pm2', args, { env: { ...process.env } });
         let out = '', err = '';
         proc.stdout.on('data', d => out += d.toString());
         proc.stderr.on('data', d => err += d.toString());
-        proc.on('error', e => { if (!res.headersSent) res.status(500).json({ error: e.message }); });
+        proc.on('error', e => { if (!res.headersSent) ctx.error.send(res, 500, 'command_failed', { output: e.message }); });
         proc.on('close', code => {
           if (res.headersSent) return;
           if (code === 0) res.json({ ok: true, out });
-          else res.status(500).json({ error: err || out || `exit ${code}` });
+          // l'output di pm2 resta com'è (non si traduce)
+          else ctx.error.send(res, 500, 'command_failed', { output: (err || out || `exit ${code}`).trim() });
         });
       },
 
       // Log in streaming (SSE); ?name= per un solo processo, ?lines= righe iniziali
       logs(req, res) {
         const { name } = req.query;
-        if (name != null && !PM2_TARGET_RE.test(name)) return res.status(400).json({ error: 'Processo PM2 non valido' });
+        if (name != null && !PM2_TARGET_RE.test(name)) throw ctx.error(400, 'invalid_target');
         const lines = String(Math.min(Math.max(parseInt(req.query.lines) || 50, 1), 5000));
         const send = ctx.sse(res);
         const args = name ? ['logs', name, '--lines', lines] : ['logs', '--lines', lines];
         const proc = spawn('pm2', args, { env: { ...process.env } });
         proc.stdout.on('data', d => send('stdout', d.toString()));
         proc.stderr.on('data', d => send('stderr', d.toString()));
-        proc.on('close', () => { send('exit', 'Stream terminato'); send.end(); });
+        proc.on('close', () => { send('exit', null); send.end(); }); // il frontend scrive "stream terminato"
         proc.on('error', e => { send('error', e.message); send.end(); });
         req.on('close', () => { try { proc.kill(); } catch {} });
       },

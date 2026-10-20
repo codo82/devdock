@@ -184,7 +184,11 @@ export default {
       closeStream?.();
       output.open(title);
       closeStream = ctx.api.events(`/processes/${encodeURIComponent(procId)}/stream`, ({ type, data }) => {
-        if (type === 'exit') { output.append(data, 'sys'); closeStream?.(); closeStream = null; }
+        if (type === 'exit') {
+          const text = data?.removed ? t('stream.removed') : data?.ended ? t('stream.ended', { code: String(data.exitCode) }) : `[exit ${data?.exitCode}]`;
+          output.append(`\n${text}`, 'sys');
+          closeStream?.(); closeStream = null;
+        }
         else output.append(data, type === 'stderr' ? 'err' : 'out');
       }, () => output.append('\n' + t('stream.lost'), 'err'));
     }

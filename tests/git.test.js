@@ -170,15 +170,15 @@ test('cambio e creazione di branch con i controlli preliminari', async () => {
   fs.writeFileSync(path.join(repo, 'p1'), 'modificato');
   r = await action({ action: 'checkout', branch: 'main' });
   assert.equal(r.status, 409);
-  assert.deepEqual([r.json.code, r.json.files], ['dirty', ['p1']]);
+  assert.deepEqual([r.json.code, r.json.files], ['git.dirty', ['p1']]);
   r = await action({ action: 'checkout', branch: 'main', stash: true });
   assert.equal(exitOf(r), 0, r.text);
   assert.equal(git(repo, 'branch', '--show-current').trim(), 'main');
-  assert.match(git(repo, 'stash', 'list'), /devdock: prima di passare a main/);
+  assert.match(git(repo, 'stash', 'list'), /devdock → main/);
   git(repo, 'stash', 'drop', '-q');
 
   // nuovo branch: esistente → 409; punto di partenza non valido → 400; ok
-  assert.equal((await action({ action: 'checkout_new', branch: 'main' })).json.code, 'exists');
+  assert.equal((await action({ action: 'checkout_new', branch: 'main' })).json.code, 'git.exists');
   assert.equal((await action({ action: 'checkout_new', branch: 'x1', startPoint: '--orphan' })).status, 400);
   assert.equal((await action({ action: 'checkout_new', branch: 'x1', startPoint: 'inesistente' })).status, 400);
   r = await action({ action: 'checkout_new', branch: 'feature/nuova', startPoint: 'origin/main' });
@@ -218,7 +218,7 @@ test('merge: anteprima, opzioni, conflitti, annulla e concludi', async () => {
   let st = (await srv.request('GET', '/api/ext/git/repos/r/status')).json;
   assert.equal(st.merging, true);
   assert.deepEqual(st.conflicts, ['conflitto.txt']);
-  assert.equal((await action({ action: 'merge', branch: 'm-a' })).json.code, 'merging');
+  assert.equal((await action({ action: 'merge', branch: 'm-a' })).json.code, 'git.merging');
   r = await action({ action: 'merge_continue' });
   assert.equal(r.status, 409);
   assert.deepEqual(r.json.files, ['conflitto.txt']);
@@ -241,13 +241,13 @@ test('eliminazione dei branch locali', async () => {
   git(repo, 'branch', '-f', 'da-eliminare', 'main');
   git(repo, 'checkout', '-q', '-b', 'non-unito'); commitFile(repo, 'solo-qui.txt'); git(repo, 'checkout', '-q', 'main');
 
-  assert.equal((await action({ action: 'branch_delete', branch: 'main' })).json.code, 'current');
+  assert.equal((await action({ action: 'branch_delete', branch: 'main' })).json.code, 'git.current');
   assert.equal((await action({ action: 'branch_delete', branch: 'inesistente' })).status, 404);
   let r = await action({ action: 'branch_delete', branch: 'da-eliminare' });
   assert.equal(exitOf(r), 0, r.text);
   assert.match(r.text, /branch -d da-eliminare/);
   r = await action({ action: 'branch_delete', branch: 'non-unito' });
-  assert.equal(r.json.code, 'unmerged');
+  assert.equal(r.json.code, 'git.unmerged');
   r = await action({ action: 'branch_delete', branch: 'non-unito', force: true });
   assert.equal(exitOf(r), 0, r.text);
   assert.match(r.text, /branch -D non-unito/);
