@@ -30,6 +30,8 @@ app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   if (err instanceof ConfigError) return res.status(400).json({ error: err.message });
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON non valido' });
+  // Errori con uno stato HTTP esplicito (es. 423 vault bloccato, 409 conflitto)
+  if (Number.isInteger(err.status) && err.status >= 400 && err.status < 600) return res.status(err.status).json({ error: err.message });
   console.error(err);
   res.status(500).json({ error: err.message || 'Errore interno' });
 });

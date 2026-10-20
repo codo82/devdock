@@ -5,8 +5,15 @@ const vaultLib = require('./vault');
 
 const DEFAULT_LOCK_MINUTES = 30;
 
+const CONNECTION_FIELDS = ['id', 'label', 'type', 'host', 'port', 'database', 'user', 'password', 'projectId', 'tunnel', 'readOnly'];
+const HOST_RE = /^(\[[0-9a-f:.]+\]|[A-Za-z0-9._-]{1,253})$/i;  // nome host, IPv4 o [IPv6]
+const DB_NAME_RE = /^[^`\\/\x00]{1,64}$/;                       // nome database MySQL (niente backtick, slash, NUL)
+const CONNECT_TIMEOUT_MS = 8000;
+
 module.exports = function createDbClient(ctx) {
-  const { ConfigError } = ctx.lib.config;
+  const { ConfigError, pick } = ctx.lib.config;
+  const { KEY_RE, isPort, isText } = ctx.lib.validate;
+  const tunnels = ctx.require('tunnels'); // opzionale: senza, niente connessioni via tunnel
 
   const vault = () => ctx.config.get('vault');
   const connections = () => ctx.config.get('dbConnections');
@@ -46,6 +53,81 @@ module.exports = function createDbClient(ctx) {
     return vaultLib.decrypt(key, conn.password);
   }
 
+  // ---- connessioni ----
+
+  function validateConnection(c) {
+    const where = `connessione "${c?.id}"`;
+    if (!c || typeof c !== 'object') throw new ConfigError('Connessione non valida');
+    if (!KEY_RE.test(c.id || '')) throw new ConfigError(`${where}: id non valido (lettere, numeri, _ e -)`);
+    if (!isText(c.label)) throw new ConfigError(`${where}: nome obbligatorio`);
+    if ((c.type ?? 'mysql') !== 'mysql') throw new ConfigError(`${where}: tipo non supportato`);
+    if (c.tunnel != null) {
+      if (!KEY_RE.test(c.tunnel)) throw new ConfigError(`${where}: tunnel non valido`);
+    } else {
+      if (!HOST_RE.test(c.host || '')) throw new ConfigError(`${where}: host non valido`);
+      if (!isPort(c.port)) throw new ConfigError(`${where}: porta non valida (1-65535)`);
+    }
+    if (c.database != null && c.database !== '' && !DB_NAME_RE.test(c.database)) throw new ConfigError(`${where}: nome database non valido`);
+    if (!isText(c.user, 80)) throw new ConfigError(`${where}: utente obbligatorio`);
+    if (c.password != null && !vaultLib.isBox(c.password)) throw new ConfigError(`${where}: password non cifrata`);
+    if (c.projectId != null && !KEY_RE.test(c.projectId)) throw new ConfigError(`${where}: progetto non valido`);
+    if (c.readOnly != null && typeof c.readOnly !== 'boolean') throw new ConfigError(`${where}: readOnly deve essere true o false`);
+  }
+
+  // Ciò che vede il frontend: mai la password, solo se c'è
+  const publicConnection = c => ({ ...pick(c, CONNECTION_FIELDS.filter(f => f !== 'password')), hasPassword: !!c.password });
+
+  const fail = (message, status = 400) => Object.assign(new Error(message), { status });
+
+  // Dati dal form → connessione da salvare. password: stringa = nuova (cifrata subito),
+  // '' o assente = invariata, null = rimossa
+  function buildConnection(body, existing = {}) {
+    const c = { ...existing, ...pick(body || {}, ['label', 'host', 'port', 'database', 'user', 'projectId', 'tunnel', 'readOnly']) };
+    if (!existing.id) c.id = body.id;
+    c.type = 'mysql';
+    if (c.port !== undefined && c.port !== null && c.port !== '') c.port = Number(c.port);
+    for (const k of ['database', 'projectId', 'tunnel']) if (c[k] === '') c[k] = null;
+    c.readOnly = !!c.readOnly;
+    if (c.tunnel) {
+      if (!tunnels) throw fail('Estensione Tunnels SSH non attiva: connessione via tunnel non disponibile');
+      if (!tunnels.getServer(c.tunnel)) throw fail(`Server tunnel inesistente: ${c.tunnel}`);
+      delete c.host; delete c.port; // host e porta vengono dal tunnel
+    }
+    if (typeof body.password === 'string' && body.password !== '') {
+      const key = currentKey();
+      if (!key) throw fail('Vault bloccato: inserisci la master password', 423);
+      c.password = vaultLib.encrypt(key, body.password);
+    } else if (body.password === null) {
+      c.password = null;
+    } else if (c.password === undefined) {
+      c.password = null;
+    }
+    return c;
+  }
+
+  // Parametri di connessione per mysql2 (avvia il tunnel se la connessione lo usa)
+  async function connectionTarget(conn) {
+    let host = conn.host, port = conn.port, via = null;
+    if (conn.tunnel) {
+      if (!tunnels) throw fail('Estensione Tunnels SSH non attiva: connessione via tunnel non disponibile');
+      const t = await tunnels.ensureTunnel(conn.tunnel);
+      host = '127.0.0.1'; port = t.port; via = t.label;
+    }
+    return {
+      options: {
+        host, port, user: conn.user, password: decryptPassword(conn),
+        database: conn.database || undefined,
+        connectTimeout: CONNECT_TIMEOUT_MS,
+        multipleStatements: false, // una sola istruzione per richiesta
+        dateStrings: true,
+        supportBigNumbers: true, bigNumberStrings: true,
+      },
+      via,
+    };
+  }
+
+  const findConnection = id => connections().find(c => c.id === id) || null;
+
   // ---- regole delle sezioni di config ----
 
   const config = {
@@ -61,11 +143,15 @@ module.exports = function createDbClient(ctx) {
     },
     dbConnections: {
       empty: [], idField: 'id',
+      normalize: v => (Array.isArray(v) ? v.map(c => pick(c || {}, CONNECTION_FIELDS)) : v),
       validate(list, cfg) {
         if (!Array.isArray(list)) throw new ConfigError('Config non valida: "dbConnections" deve essere una lista');
+        const seen = new Set();
         for (const c of list) {
-          if (c.password != null && !vaultLib.isBox(c.password)) throw new ConfigError(`connessione "${c?.id}": password non cifrata`);
-          if (c.password != null && !cfg.vault) throw new ConfigError(`connessione "${c?.id}": password cifrata senza vault`);
+          validateConnection(c);
+          if (seen.has(c.id)) throw new ConfigError(`Connessione duplicata: ${c.id}`);
+          seen.add(c.id);
+          if (c.password != null && !cfg.vault) throw new ConfigError(`connessione "${c.id}": password cifrata senza vault`);
         }
       },
     },
@@ -79,6 +165,51 @@ module.exports = function createDbClient(ctx) {
     handlers: {
       info(req, res) {
         res.json({ driver: 'mysql2', version: require('mysql2/package.json').version, ready: typeof mysql.createPool === 'function' });
+      },
+
+      // ---- connessioni ----
+
+      listConnections(req, res) {
+        res.json({ connections: connections().map(publicConnection), tunnelsAvailable: !!tunnels });
+      },
+
+      createConnection(req, res) {
+        if (findConnection(req.body.id)) return res.status(409).json({ error: 'ID già esistente' });
+        const c = buildConnection(req.body);
+        ctx.config.set('dbConnections', [...connections(), c]);
+        res.json({ ok: true, connection: publicConnection(c) });
+      },
+
+      updateConnection(req, res) {
+        const list = connections();
+        const idx = list.findIndex(c => c.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ error: 'Connessione non trovata' });
+        list[idx] = buildConnection(req.body, list[idx]);
+        ctx.config.set('dbConnections', list);
+        res.json({ ok: true, connection: publicConnection(list[idx]) });
+      },
+
+      deleteConnection(req, res) {
+        ctx.config.set('dbConnections', connections().filter(c => c.id !== req.params.id));
+        res.json({ ok: true });
+      },
+
+      // Prova di connessione: versione del server e utente effettivo
+      async testConnection(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        let db;
+        try {
+          const { options, via } = await connectionTarget(conn);
+          const started = Date.now();
+          db = await mysql.createConnection(options);
+          const [[row]] = await db.query('SELECT VERSION() AS version, CURRENT_USER() AS user, DATABASE() AS db');
+          res.json({ ok: true, ...row, via, ms: Date.now() - started });
+        } catch (e) {
+          res.status(e.status || 502).json({ error: e.message });
+        } finally {
+          db?.end().catch(() => {});
+        }
       },
 
       // ---- vault ----

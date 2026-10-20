@@ -2,6 +2,7 @@
 // gruppi e server salvati nelle sezioni "groups" e "servers" di config.json
 const { spawn } = require('child_process');
 const crypto = require('crypto');
+const net = require('net');
 
 const RECONNECT_INITIAL_DELAY = 5000;   // 5s primo tentativo
 const RECONNECT_MAX_DELAY     = 60000;  // max 60s tra un tentativo e l'altro
@@ -157,6 +158,70 @@ module.exports = function createTunnels(ctx) {
     active.clear();
   }
 
+  const fail = (message, status = 400) => Object.assign(new Error(message), { status });
+
+  // Avvia il tunnel di un server (porta locale del server o customPort)
+  function openTunnel(serverKey, customPort) {
+    const srv = servers().find(s => s.key === serverKey);
+    if (!srv) throw fail('Server non trovato');
+    const localPort = customPort == null || customPort === '' ? srv.port : Number(customPort);
+    if (!isPort(localPort)) throw fail('Porta locale non valida (1-65535)');
+    for (const [, t] of active) {
+      if (t.port === localPort) throw fail(`Porta ${localPort} già in uso da "${t.label}"`, 409);
+    }
+
+    const id = crypto.randomUUID();
+    const sshArgs = [
+      '-o', 'ServerAliveInterval=15',
+      '-o', 'ServerAliveCountMax=3',
+      '-o', 'ExitOnForwardFailure=yes',
+      '-o', 'TCPKeepAlive=yes',
+      '-L', `127.0.0.1:${localPort}:${srv.remote}`,
+      '-N', srv.alias,
+    ];
+    const td = {
+      serverKey, label: srv.label, port: localPort,
+      remote: srv.remote, alias: srv.alias, type: srv.type,
+      pid: null, process: null,
+      startedAt: new Date().toISOString(),
+      logs: [], stopping: false,
+      reconnectDelay: RECONNECT_INITIAL_DELAY, reconnectTimer: null,
+    };
+    active.set(id, td);
+    spawnTunnel(id, sshArgs, hasCommand('autossh')); // ricontrollato a ogni avvio
+    return { id, ...td };
+  }
+
+  // La porta locale accetta connessioni? (tunnel pronto)
+  function portOpen(port) {
+    return new Promise(resolve => {
+      const sock = net.connect({ host: '127.0.0.1', port }, () => { sock.destroy(); resolve(true); });
+      sock.on('error', () => resolve(false));
+      sock.setTimeout(1000, () => { sock.destroy(); resolve(false); });
+    });
+  }
+
+  // Per le altre estensioni: porta locale di un tunnel attivo, avviandolo se serve
+  // e aspettando che risponda (al massimo timeoutMs)
+  async function ensureTunnel(serverKey, timeoutMs = 10000) {
+    let entry = [...active].find(([, t]) => t.serverKey === serverKey && !t.stopping);
+    if (!entry) {
+      const t = openTunnel(serverKey);
+      entry = [t.id, active.get(t.id)];
+    }
+    const [id, t] = entry;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (await portOpen(t.port)) return { id, port: t.port, label: t.label };
+      if (!active.has(id) || t.reconnectTimer) break; // ssh già uscito: inutile aspettare
+      await new Promise(r => setTimeout(r, 300));
+    }
+    const lastLog = t.logs.filter(l => !l.text.startsWith('Connessione a')).map(l => l.text.trim()).filter(Boolean).pop();
+    throw fail(`Tunnel "${t.label}" non pronto${lastLog ? `: ${lastLog}` : ''}`, 502);
+  }
+
+  const getServer = key => servers().find(s => s.key === key) || null;
+
   const notFound = (res, what) => res.status(404).json({ error: `${what} non trovato` });
 
   return {
@@ -175,36 +240,12 @@ module.exports = function createTunnels(ctx) {
       },
 
       startTunnel(req, res) {
-        const { serverKey, port: customPort } = req.body;
-        const srv = servers().find(s => s.key === serverKey);
-        if (!srv) return res.status(400).json({ error: 'Server non trovato' });
-
-        const localPort = customPort == null || customPort === '' ? srv.port : Number(customPort);
-        if (!isPort(localPort)) return res.status(400).json({ error: 'Porta locale non valida (1-65535)' });
-        for (const [, t] of active) {
-          if (t.port === localPort) return res.status(409).json({ error: `Porta ${localPort} già in uso da "${t.label}"` });
+        try {
+          const t = openTunnel(req.body.serverKey, req.body.port);
+          res.json({ id: t.id, pid: t.pid, port: t.port, label: t.label });
+        } catch (e) {
+          res.status(e.status || 400).json({ error: e.message });
         }
-
-        const id = crypto.randomUUID();
-        const sshArgs = [
-          '-o', 'ServerAliveInterval=15',
-          '-o', 'ServerAliveCountMax=3',
-          '-o', 'ExitOnForwardFailure=yes',
-          '-o', 'TCPKeepAlive=yes',
-          '-L', `127.0.0.1:${localPort}:${srv.remote}`,
-          '-N', srv.alias,
-        ];
-        const td = {
-          serverKey, label: srv.label, port: localPort,
-          remote: srv.remote, alias: srv.alias, type: srv.type,
-          pid: null, process: null,
-          startedAt: new Date().toISOString(),
-          logs: [], stopping: false,
-          reconnectDelay: RECONNECT_INITIAL_DELAY, reconnectTimer: null,
-        };
-        active.set(id, td);
-        spawnTunnel(id, sshArgs, hasCommand('autossh')); // ricontrollato a ogni avvio
-        res.json({ id, pid: td.pid, port: localPort, label: srv.label });
       },
 
       stopTunnel(req, res) {
@@ -278,6 +319,8 @@ module.exports = function createTunnels(ctx) {
         res.json({ ok: true });
       },
     },
+
+    services: { getServer, ensureTunnel },
 
     shutdown: stopAllTunnels,
   };

@@ -97,7 +97,7 @@ Routes are declared in the manifest, not registered by code, so the whole API su
 - `handler`: name of a function in the backend's `handlers`; the loader refuses an extension whose manifest names a handler that does not exist, and warns about handlers that no route uses
 - `stream: true`: the handler answers with Server-Sent Events (documentation only; the handler opens the stream with `ctx.sse(res)`)
 
-Every route goes through the core security middleware (Host and Origin checks, JSON content type) and the core error handler: errors thrown by handlers, also asynchronous ones, become a JSON 500 (a 400 for a `ConfigError`).
+Every route goes through the core security middleware (Host and Origin checks, JSON content type) and the core error handler: errors thrown by handlers, also asynchronous ones, become a JSON response: 400 for a `ConfigError`, the error's `status` when it has one (e.g. `Object.assign(new Error('…'), { status: 409 })`), 500 otherwise.
 
 ## Backend module
 
