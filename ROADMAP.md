@@ -78,7 +78,7 @@ Every feature becomes an extension with its own manifest, backend routes, HTML, 
 - [x] **M3.6** Frontend shell: header, section bar, sidebar, panels, modal, toast, SSE output panel, lazy loading of `view.html`/`view.js`/`style.css`, warning icon for missing optional dependencies, header-position extensions
 - [x] **M3.7** Migrate the sections one at a time, keeping the tests green: Swagger ✓ → PM2 ✓ → Tunnels ✓ (with their settings) → npm ✓ → Git ✓
 - [x] **M3.8** Unify the push logic (`push`, fetch-error fallback, `pull_push`) in the Git extension into a single pipeline of sequential SSE commands
-- [ ] **M3.9** npm workspaces: `"workspaces": ["extensions/*"]`, a single `node_modules`
+- [x] **M3.9** npm workspaces: `"workspaces": ["extensions/*"]`, a single `node_modules`
 - [ ] **M3.10** *(Backlog #5)* `CLAUDE.md`: purpose, structure, extension pattern, conventions (Italian UI messages, vanilla JS, no build step), how to run and test, reference to this roadmap
 - [x] **M3.11** Publish on GitHub
 

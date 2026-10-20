@@ -3,6 +3,9 @@
   "version": "1.3.0",
   "description": "Dashboard locale per sviluppatori: tunnel SSH, script npm, PM2, Git e anteprima Swagger",
   "private": true,
+  "workspaces": [
+    "extensions/*"
+  ],
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

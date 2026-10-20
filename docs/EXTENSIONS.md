@@ -205,4 +205,14 @@ The header (notifications toggle, export/import of `config.json` by section, ↻
 
 ## Dependencies and npm workspaces
 
-The root `package.json` declares `"workspaces": ["extensions/*"]`. An extension with its own `package.json` lists its dependencies there; a single `npm install` at the root installs everything into the shared `node_modules`.
+The root `package.json` declares `"workspaces": ["extensions/*"]`. An extension that needs npm packages adds its own `package.json`:
+
+```json
+{
+  "name": "devdock-ext-db-client",
+  "private": true,
+  "dependencies": { "mysql2": "^3.11.0" }
+}
+```
+
+A single `npm install` at the root installs everything into the shared `node_modules` (deduplicating common packages), and the backend uses the packages with a plain `require()`. Extensions without dependencies need no `package.json`.
