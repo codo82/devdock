@@ -92,3 +92,6 @@
 .db-new-row td{background:color-mix(in srgb,var(--ext-color) 4%,transparent)}
 .db-new-row .db-cell-input{border-color:var(--border)}
 .db-row-form{max-height:60vh;overflow:auto}
+.db-row-actions{width:74px}
+.db-row-actions input[type=checkbox]{vertical-align:middle;margin-right:4px;cursor:pointer}
+.db-selected td{background:color-mix(in srgb,var(--danger) 8%,transparent)}

@@ -562,8 +562,8 @@ module.exports = function createDbClient(ctx) {
         if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
         const { db, table } = req.params;
         if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) return res.status(400).json({ error: 'Nome non valido' });
-        const { op, key, values, confirm } = req.body;
-        if (!['insert', 'update', 'delete'].includes(op)) return res.status(400).json({ error: 'Operazione non valida' });
+        const { op, key, keys, values, confirm } = req.body;
+        if (!['insert', 'update', 'delete', 'delete-many'].includes(op)) return res.status(400).json({ error: 'Operazione non valida' });
         if (conn.readOnly) return res.status(403).json({ error: 'Connessione in sola lettura' });
         try {
           const q = (await poolFor(conn, db)).promise();
@@ -583,7 +583,16 @@ module.exports = function createDbClient(ctx) {
 
           // WHERE sulla chiave primaria completa (niente modifiche senza)
           let whereSql = '', whereParams = [];
-          if (op !== 'insert') {
+          if (op === 'delete-many') {
+            if (!pk.length) return res.status(400).json({ error: 'La tabella non ha una chiave primaria: modifica non disponibile' });
+            if (!Array.isArray(keys) || !keys.length || keys.length > 1000) return res.status(400).json({ error: 'Seleziona da 1 a 1000 righe' });
+            const valid = k => k && typeof k === 'object' && pk.every(c => c in k && scalar(k[c]) && k[c] !== null);
+            if (!keys.every(valid)) return res.status(400).json({ error: `Chiave primaria mancante: ${pk.join(', ')}` });
+            const tuple = pk.length > 1 ? `(${pk.map(quoteId).join(', ')})` : quoteId(pk[0]);
+            const one = pk.length > 1 ? `(${pk.map(() => '?').join(', ')})` : '?';
+            whereSql = `${tuple} IN (${keys.map(() => one).join(', ')})`;
+            whereParams = keys.flatMap(k => pk.map(c => k[c]));
+          } else if (op !== 'insert') {
             if (!pk.length) return res.status(400).json({ error: 'La tabella non ha una chiave primaria: modifica non disponibile' });
             if (!key || typeof key !== 'object' || pk.some(k => !(k in key) || !scalar(key[k]) || key[k] === null)) {
               return res.status(400).json({ error: `Chiave primaria mancante: ${pk.join(', ')}` });
@@ -603,6 +612,9 @@ module.exports = function createDbClient(ctx) {
             if (!cols.length) return res.status(400).json({ error: 'Nessun valore da modificare' });
             template = `UPDATE ${from} SET ${cols.map(c => `${quoteId(c)} = ?`).join(', ')} WHERE ${whereSql} LIMIT 1`;
             params = [...cols.map(c => vals[c]), ...whereParams];
+          } else if (op === 'delete-many') {
+            template = `DELETE FROM ${from} WHERE ${whereSql} LIMIT ${keys.length}`;
+            params = whereParams;
           } else {
             template = `DELETE FROM ${from} WHERE ${whereSql} LIMIT 1`;
             params = whereParams;
@@ -612,7 +624,7 @@ module.exports = function createDbClient(ctx) {
           const token = confirmToken(conn, db, sql);
           const given = typeof confirm === 'string' ? Buffer.from(confirm) : Buffer.alloc(0);
           if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
-            return res.status(428).json({ needsConfirmation: true, token, verb: op.toUpperCase(), database: db, sql });
+            return res.status(428).json({ needsConfirmation: true, token, verb: op === 'delete-many' ? 'DELETE' : op.toUpperCase(), database: db, sql });
           }
           const result = await execute(await poolFor(conn, db), sql, 1);
           res.json({ ...result, sql });

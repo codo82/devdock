@@ -367,6 +367,19 @@ test('righe: insert, update e delete generati dal server e solo dopo conferma', 
     await row({ op: 'delete', key: { id: 4 }, confirm: r.json.token });
     assert.equal(await count(), '3');
 
+    // eliminazione multipla: una sola istruzione, sempre con conferma
+    await api('POST', '/connections/c/query', { sql: "INSERT INTO app.clienti (nome) VALUES ('a'),('b'),('c')" }).then(r =>
+      api('POST', '/connections/c/query', { sql: "INSERT INTO app.clienti (nome) VALUES ('a'),('b'),('c')", confirm: r.json.token }));
+    const many = { op: 'delete-many', keys: [{ id: 5 }, { id: 6 }, { id: 7 }] };
+    r = await row(many);
+    assert.equal(r.status, 428);
+    assert.equal(r.json.sql, 'DELETE FROM `app`.`clienti` WHERE `id` IN (5, 6, 7) LIMIT 3');
+    r = await row({ ...many, confirm: r.json.token });
+    assert.equal(r.json.affectedRows, 3);
+    assert.equal(await count(), '3');
+    assert.equal((await row({ op: 'delete-many', keys: [] })).status, 400);
+    assert.equal((await row({ op: 'delete-many', keys: [{ nome: 'x' }] })).status, 400);
+
     // controlli
     assert.equal((await row({ op: 'update', values: { nome: 'x' } })).status, 400);                       // senza chiave
     assert.equal((await row({ op: 'update', key: { id: 1 }, values: { 'nome`=1;--': 'x' } })).status, 400); // colonna sconosciuta

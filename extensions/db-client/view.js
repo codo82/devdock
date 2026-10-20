@@ -190,6 +190,7 @@ export default {
     async function loadGrid() {
       if (!grid) return;
       const g = grid;
+      g.selected = new Set(); // la selezione vale per la pagina mostrata
       const c = connections.find(x => x.id === g.connId);
       try {
         g.data = await ctx.api.post(tableUrl(c, g.db, g.table) + '/rows',
@@ -219,6 +220,7 @@ export default {
           <button class="btn btn-ghost btn-sm" data-grid="add-filter">+ Filtro</button>
           ${canInsert ? '<button class="btn btn-ghost btn-sm" data-grid="insert-dialog">+ Riga</button>' : ''}
           <button class="btn btn-ghost btn-sm" data-grid="export">⤓ Esporta</button>
+          ${editable ? `<button class="btn btn-danger btn-sm" data-grid="delete-selected" ${grid.selected.size ? '' : 'hidden'}>🗑 Elimina selezionate (${grid.selected.size})</button>` : ''}
           ${!data.primaryKey.length ? '<span class="db-badge db-badge-warn" title="Senza chiave primaria le righe non si possono identificare">senza chiave primaria: modifica non disponibile</span>' : ''}
           ${grid.filters.map((f, i) => `<span class="db-chip">${esc(f.column)} ${esc(FILTER_LABELS[f.op])}${f.op === 'null' || f.op === 'notnull' ? '' : ` <b>${esc(f.value)}</b>`}<button data-grid="remove-filter" data-i="${i}" title="Rimuovi">✕</button></span>`).join('')}
           <div class="db-pager">
@@ -231,9 +233,9 @@ export default {
           </div>
         </div>
         <div class="db-table-wrap"><table class="data-table db-table">
-          <thead><tr>${editable ? '<th class="db-row-actions"></th>' : ''}${data.columns.map(col => `<th data-grid="sort" data-col="${esc(col.name)}" title="${esc(col.type)}${col.key === 'PRI' ? ' · chiave primaria' : ''}">${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)}${sort?.column === col.name ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
-          <tbody>${data.rows.map((row, r) => `<tr data-r="${r}">${editable ? `<td class="db-row-actions">
-              <button data-grid="edit-dialog" data-r="${r}" title="Modifica">✏️</button><button data-grid="delete-row" data-r="${r}" title="Elimina">🗑</button></td>` : ''}${row.map((v, c) =>
+          <thead><tr>${editable ? `<th class="db-row-actions"><input type="checkbox" data-grid="select-all" title="Seleziona tutte le righe della pagina" ${data.rows.length && grid.selected.size === data.rows.length ? 'checked' : ''}></th>` : ''}${data.columns.map(col => `<th data-grid="sort" data-col="${esc(col.name)}" title="${esc(col.type)}${col.key === 'PRI' ? ' · chiave primaria' : ''}">${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)}${sort?.column === col.name ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
+          <tbody>${data.rows.map((row, r) => `<tr data-r="${r}" class="${grid.selected.has(r) ? 'db-selected' : ''}">${editable ? `<td class="db-row-actions">
+              <input type="checkbox" data-grid="select" data-r="${r}" ${grid.selected.has(r) ? 'checked' : ''}><button data-grid="edit-dialog" data-r="${r}" title="Modifica">✏️</button><button data-grid="delete-row" data-r="${r}" title="Elimina">🗑</button></td>` : ''}${row.map((v, c) =>
               `<td data-c="${c}" class="${v === null ? 'db-null' : ''}${editable ? ' db-editable' : ''}" title="${esc(v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`).join('')}</tr>`).join('')
             || `<tr><td class="db-muted" colspan="${data.columns.length + (editable ? 1 : 0)}">Nessuna riga</td></tr>`}
             ${canInsert ? `<tr class="db-new-row">${editable ? '<td class="db-row-actions"><button data-grid="insert-inline" title="Inserisci la riga">＋</button></td>' : ''}${data.columns.map(col =>
@@ -277,19 +279,19 @@ export default {
     }
 
     // ---- scrittura delle righe: sempre tramite conferma dell'SQL generato ----
-    async function saveRow(op, key, values) {
+    async function saveRow(op, key, values, keys) {
       const c = connections.find(x => x.id === grid.connId);
       const url = tableUrl(c, grid.db, grid.table) + '/row';
       const send = async confirm => {
         try {
-          const r = await ctx.api.post(url, { op, key, values, ...(confirm ? { confirm } : {}) });
-          const label = { insert: 'Riga inserita', update: 'Riga modificata', delete: 'Riga eliminata' }[op];
+          const r = await ctx.api.post(url, { op, key, values, keys, ...(confirm ? { confirm } : {}) });
+          const label = { insert: 'Riga inserita', update: 'Riga modificata', delete: 'Riga eliminata', 'delete-many': `${r.affectedRows} righe eliminate` }[op];
           toast(r.affectedRows ? `${label}${r.insertId ? ` (id ${r.insertId})` : ''}` : 'Nessuna riga modificata (già uguale o non trovata)', r.affectedRows ? 'success' : 'info');
           loadGrid();
         } catch (e) { toast(e.message, 'error'); }
       };
       try {
-        const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, key, values }) });
+        const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, key, values, keys }) });
         const data = await res.json().catch(() => ({}));
         if (res.status === 428 && data.needsConfirmation) askConfirmation(data, send, true);
         else toast(data.error || `HTTP ${res.status}`, 'error'); // le scritture chiedono sempre conferma
@@ -385,6 +387,14 @@ export default {
       else if (a === 'export') exportTableMenu(t, connections.find(x => x.id === grid.connId), grid.db, grid.table, true);
       else if (a === 'edit-dialog') rowDialog(Number(t.dataset.r));
       else if (a === 'delete-row') saveRow('delete', keyOf(grid.data.rows[Number(t.dataset.r)]));
+      else if (a === 'select' || a === 'select-all') {
+        if (a === 'select') { const r = Number(t.dataset.r); grid.selected.has(r) ? grid.selected.delete(r) : grid.selected.add(r); }
+        else grid.selected = t.checked ? new Set(grid.data.rows.map((_, i) => i)) : new Set();
+        renderGrid();
+      } else if (a === 'delete-selected' && grid.selected.size) {
+        const keys = [...grid.selected].sort((x, y) => x - y).map(r => keyOf(grid.data.rows[r]));
+        saveRow('delete-many', null, null, keys);
+      }
       else if (a === 'insert-inline') {
         const values = {};
         for (const input of $(ctx.root, 'results').querySelectorAll('[data-new]')) if (input.value !== '') values[input.dataset.new] = input.value;
