@@ -81,6 +81,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
 | `backend.module` | no | Backend file, relative to the extension folder |
 | `backend.routes` | no | Routes mounted under `/api/ext/<code>`; each one names a handler of the backend |
 | `frontend.html` / `sidebar` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served (never `server.js` or `setting.json`) |
+| `mcp.tools` | no | Tools the extension exposes to AI agents through the MCP server (see *MCP tools*); requires a backend |
 | `frontend.preload` | no | `true`: the module is mounted at startup (hidden) instead of on first open — for extensions that keep header pills, badges or notifications up to date in the background |
 
 ### Loading and states
@@ -125,6 +126,7 @@ module.exports = function createGit(ctx) {
     },
     services: { repos },                           // for extensions that depend on this one
     config: {},                                    // rules for the keys in setting.json → config
+    mcp: {},                                       // MCP tool handlers, named in setting.json → mcp.tools
     shutdown() { /* stop timers and child processes */ },
   };
 
@@ -132,7 +134,7 @@ module.exports = function createGit(ctx) {
 };
 ```
 
-Only `handlers` is needed when the manifest declares routes; everything else is optional.
+Only `handlers` is needed when the manifest declares routes (and `mcp` when it declares MCP tools); everything else is optional.
 
 `ctx` contains:
 
@@ -184,6 +186,15 @@ return {
 | `inputSchema` | JSON Schema of the arguments (`type: "object"`) |
 | `handler` | Function in `instance.mcp`; it receives the arguments, returns an object (or throws `ctx.error`) |
 | `readOnly` | `true` (default) for tools that only read; `false` for tools that change state (published with `readOnlyHint: false`) |
+
+Steps to enable MCP for an extension:
+
+1. Add the `mcp.tools` block to `setting.json` (the extension needs a `backend`).
+2. Implement each `handler` in `instance.mcp` of `server.js`, reusing the same services and validation as the HTTP routes; errors are thrown with `ctx.error`, so their messages go in `i18n/<lang>.json` under `errors.<name>`.
+3. Restart DevDock: the tools appear in the 🤖 *MCP server* panel and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
+4. Try them from a client: copy the setup from the panel (for Claude Code `claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"`), or in a test with the SDK client as in `tests/mcp.test.js`.
+
+The extensions shipped with DevDock expose: `tunnels_list`; `pm2_list`, `pm2_logs`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI).
 
 Keep tools read-only unless the user asked otherwise, never return secrets (passwords, tokens, vault data), and limit long outputs with a parameter (`limit`, `lines`) and a `truncated` flag. A missing handler disables the extension like a missing route handler.
 
@@ -370,5 +381,6 @@ A single `npm install` at the root installs everything into the shared `node_mod
 3. Configuration (if needed): list the keys in `config`, describe them in `instance.config` and add the `export` checkboxes that should appear in the Export/Import dialogs.
 4. Frontend (if needed): `view.html`, optionally `sidebar.html` and `style.css`, and `view.js` with `mount(ctx)`.
 5. Texts: write the UI strings in `i18n/it.json` (the source language) and use them with `data-i18n…` attributes and `ctx.t()`; add `i18n/en.json` and any other language.
-6. Restart the server: the log line `Estensioni: …` lists the loaded extensions, and `GET /api/core/extensions` explains why one is disabled.
-7. Add tests in `tests/` (see `tests/helpers.js`: `startServer()` runs DevDock on a free port with a temporary config).
+6. MCP (optional): declare `mcp.tools` and implement them in `instance.mcp` (see *MCP tools*).
+7. Restart the server: the log line `Estensioni: …` lists the loaded extensions, and `GET /api/core/extensions` explains why one is disabled.
+8. Add tests in `tests/` (see `tests/helpers.js`: `startServer()` runs DevDock on a free port with a temporary config).
