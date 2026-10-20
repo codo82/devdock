@@ -79,7 +79,7 @@ window.UI = (() => {
       const text = await r.text();
       let data = null;
       try { data = text ? JSON.parse(text) : null; } catch {}
-      if (!r.ok) throw new Error(data?.error || text || `HTTP ${r.status}`);
+      if (!r.ok) throw Object.assign(new Error(data?.error || text || `HTTP ${r.status}`), { status: r.status, data });
       return data;
     };
     const send = (method, p, body) => fetch(base + p, {

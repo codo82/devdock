@@ -158,7 +158,8 @@ window.Shell = (() => {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || `HTTP ${res.status}`);
+        // stato e corpo restano sull'errore: la UI può reagire ai codici (es. 409 { code })
+        throw Object.assign(new Error(d.error || `HTTP ${res.status}`), { status: res.status, data: d });
       }
       const reader = res.body.getReader();
       const dec = new TextDecoder();

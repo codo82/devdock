@@ -218,8 +218,8 @@ export default {
 | `ctx.code`, `ctx.meta` | Extension code and its data from `/api/core/extensions` |
 | `ctx.root` | Panel element (already contains `view.html`) |
 | `ctx.sidebar` | Sidebar element, shown while the extension is active (already contains `sidebar.html`) |
-| `ctx.api.get/post/put/del(path)` | JSON calls to `/api/ext/<code><path>`; errors become `Error` with the server message |
-| `ctx.api.stream(path, body, onEvent)` | POST answered with SSE (e.g. git actions); resolves with the `exit` code |
+| `ctx.api.get/post/put/del(path)` | JSON calls to `/api/ext/<code><path>`; errors become `Error` with the server message, plus `status` and `data` (the JSON body, e.g. `{ code }`) |
+| `ctx.api.stream(path, body, onEvent)` | POST answered with SSE (e.g. git actions); resolves with the `exit` code; a non-2xx answer throws with `status` and `data` |
 | `ctx.api.events(path, onEvent, onError)` | GET answered with SSE (`EventSource`); returns a function that closes it |
 | `ctx.core` | Same client for `/api/core` (e.g. `ctx.core.get('/system')`) |
 | `ctx.apiFor(code)` | Same client for another extension's API |
