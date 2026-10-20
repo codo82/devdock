@@ -16,8 +16,14 @@
   "export": [
     {
       "id": "projects",
-      "label": { "it": "Progetti NPM", "en": "NPM projects" },
-      "description": { "it": "Cartelle dei progetti (usate anche da Git)", "en": "Project folders (also used by Git)" },
+      "label": {
+        "it": "Progetti NPM",
+        "en": "NPM projects"
+      },
+      "description": {
+        "it": "Cartelle dei progetti (usate anche da Git)",
+        "en": "Project folders (also used by Git)"
+      },
       "sections": [
         "projects"
       ]
@@ -26,21 +32,82 @@
   "backend": {
     "module": "server.js",
     "routes": [
-      { "method": "GET",     "path": "/projects",                        "handler": "listProjects" },
-      { "method": "POST",    "path": "/projects",                        "handler": "createProject" },
-      { "method": "PUT",     "path": "/projects/:id",                    "handler": "updateProject" },
-      { "method": "DELETE",  "path": "/projects/:id",                    "handler": "deleteProject" },
-      { "method": "GET",     "path": "/projects/:id/package",            "handler": "packageInfo" },
-      { "method": "POST",    "path": "/projects/:id/installed-versions", "handler": "installedVersions" },
-      { "method": "GET",     "path": "/projects/:id/outdated",           "handler": "outdated" },
-      { "method": "POST",    "path": "/projects/:id/run",                "handler": "runScript" },
-      { "method": "POST",    "path": "/projects/:id/update",             "handler": "updatePackage" },
-      { "method": "GET",     "path": "/processes",                       "handler": "listProcesses" },
-      { "method": "DELETE",  "path": "/processes/:id",                   "handler": "stopProcess" },
-      { "method": "POST",    "path": "/processes/:id/restart",           "handler": "restartProcess" },
-      { "method": "DELETE",  "path": "/processes/:id/dismiss",           "handler": "dismissProcess" },
-      { "method": "GET",     "path": "/processes/:id/logs",              "handler": "processLogs" },
-      { "method": "GET",     "path": "/processes/:id/stream",            "handler": "processStream", "stream": true }
+      {
+        "method": "GET",
+        "path": "/projects",
+        "handler": "listProjects"
+      },
+      {
+        "method": "POST",
+        "path": "/projects",
+        "handler": "createProject"
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id",
+        "handler": "updateProject"
+      },
+      {
+        "method": "DELETE",
+        "path": "/projects/:id",
+        "handler": "deleteProject"
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/package",
+        "handler": "packageInfo"
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/installed-versions",
+        "handler": "installedVersions"
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/outdated",
+        "handler": "outdated"
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/run",
+        "handler": "runScript"
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/update",
+        "handler": "updatePackage"
+      },
+      {
+        "method": "GET",
+        "path": "/processes",
+        "handler": "listProcesses"
+      },
+      {
+        "method": "DELETE",
+        "path": "/processes/:id",
+        "handler": "stopProcess"
+      },
+      {
+        "method": "POST",
+        "path": "/processes/:id/restart",
+        "handler": "restartProcess"
+      },
+      {
+        "method": "DELETE",
+        "path": "/processes/:id/dismiss",
+        "handler": "dismissProcess"
+      },
+      {
+        "method": "GET",
+        "path": "/processes/:id/logs",
+        "handler": "processLogs"
+      },
+      {
+        "method": "GET",
+        "path": "/processes/:id/stream",
+        "handler": "processStream",
+        "stream": true
+      }
     ]
   },
   "frontend": {
@@ -49,5 +116,93 @@
     "js": "view.js",
     "css": "style.css",
     "preload": true
+  },
+  "mcp": {
+    "tools": [
+      {
+        "name": "projects",
+        "handler": "projects",
+        "readOnly": true,
+        "description": "List the npm projects configured in DevDock with their folder and package.json scripts.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "processes",
+        "handler": "processes",
+        "readOnly": true,
+        "description": "List the npm processes started by DevDock (running or exited) with pid, listening ports, start time and exit code.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "run",
+        "handler": "run",
+        "readOnly": false,
+        "description": "Start a package.json script of a project (npm run <script>, or npm install with script \"install\") as a tracked background process, like the Run button of DevDock. Returns the process id: read its output with npm_output.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project id, from npm_projects"
+            },
+            "script": {
+              "type": "string",
+              "description": "Script name from package.json, or \"install\""
+            }
+          },
+          "required": [
+            "project",
+            "script"
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "handler": "stop",
+        "readOnly": false,
+        "description": "Stop an npm process started by DevDock (the whole process group).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "process": {
+              "type": "string",
+              "description": "Process id, from npm_processes or npm_run"
+            }
+          },
+          "required": [
+            "process"
+          ]
+        }
+      },
+      {
+        "name": "output",
+        "handler": "output",
+        "readOnly": true,
+        "description": "Last lines of the output of an npm process started by DevDock, with its status.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "process": {
+              "type": "string"
+            },
+            "lines": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000,
+              "default": 100
+            }
+          },
+          "required": [
+            "process"
+          ]
+        }
+      }
+    ]
   }
 }

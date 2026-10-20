@@ -431,5 +431,8 @@
   "migrate.done": "Change applied (no migration)",
   "confirm.runOnly": "Run only",
   "confirm.saveMigration": "Save as migration…",
-  "confirm.migrationHint": "This is a schema change and the connection is linked to a migrations folder: you can save it as a migration (with a preview of the file before applying it) or just run it."
+  "confirm.migrationHint": "This is a schema change and the connection is linked to a migrations folder: you can save it as a migration (with a preview of the file before applying it) or just run it.",
+  "errors.mcp_vault_locked": "Vault locked: unlock it from the DevDock UI (Database section) to use databases from the agent",
+  "errors.mcp_read_only": "Agents can only run reads (SELECT, SHOW, DESCRIBE, EXPLAIN): {verb} not allowed",
+  "errors.mcp_database_required": "Specify the database (the connection has no default one)"
 }

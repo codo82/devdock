@@ -26,6 +26,8 @@ const extensions = loadExtensions(EXTENSIONS_DIR, {
 app.use('/api/ext', extensions.router);
 app.use('/ext', frontendRouter(extensions));
 app.use('/api/core', require('./routes/core')(extensions));
+// Server MCP per gli agenti (token bearer, nessuna richiesta da browser)
+app.all('/mcp', require('./lib/mcp').mcpHandler(extensions, { version: require('./package.json').version }));
 
 // Errori non gestiti nelle route: { error, code, params } (vedi lib/errors.js)
 app.use((err, req, res, next) => {

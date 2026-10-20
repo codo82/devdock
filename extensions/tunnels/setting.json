@@ -1,5 +1,8 @@
 {
-  "name": { "it": "Tunnel SSH", "en": "SSH Tunnels" },
+  "name": {
+    "it": "Tunnel SSH",
+    "en": "SSH Tunnels"
+  },
   "code": "tunnels",
   "version": "1.0.0",
   "description": {
@@ -17,8 +20,14 @@
   "export": [
     {
       "id": "tunnels",
-      "label": { "it": "Tunnel SSH", "en": "SSH tunnels" },
-      "description": { "it": "Gruppi e server", "en": "Groups and servers" },
+      "label": {
+        "it": "Tunnel SSH",
+        "en": "SSH tunnels"
+      },
+      "description": {
+        "it": "Gruppi e server",
+        "en": "Groups and servers"
+      },
       "sections": [
         "groups",
         "servers"
@@ -28,17 +37,61 @@
   "backend": {
     "module": "server.js",
     "routes": [
-      { "method": "GET",     "path": "/state",            "handler": "state" },
-      { "method": "POST",    "path": "/tunnels",          "handler": "startTunnel" },
-      { "method": "DELETE",  "path": "/tunnels",          "handler": "stopAll" },
-      { "method": "DELETE",  "path": "/tunnels/:id",      "handler": "stopTunnel" },
-      { "method": "GET",     "path": "/tunnels/:id/logs", "handler": "tunnelLogs" },
-      { "method": "POST",    "path": "/groups",           "handler": "createGroup" },
-      { "method": "PUT",     "path": "/groups/:key",      "handler": "updateGroup" },
-      { "method": "DELETE",  "path": "/groups/:key",      "handler": "deleteGroup" },
-      { "method": "POST",    "path": "/servers",          "handler": "createServer" },
-      { "method": "PUT",     "path": "/servers/:key",     "handler": "updateServer" },
-      { "method": "DELETE",  "path": "/servers/:key",     "handler": "deleteServer" }
+      {
+        "method": "GET",
+        "path": "/state",
+        "handler": "state"
+      },
+      {
+        "method": "POST",
+        "path": "/tunnels",
+        "handler": "startTunnel"
+      },
+      {
+        "method": "DELETE",
+        "path": "/tunnels",
+        "handler": "stopAll"
+      },
+      {
+        "method": "DELETE",
+        "path": "/tunnels/:id",
+        "handler": "stopTunnel"
+      },
+      {
+        "method": "GET",
+        "path": "/tunnels/:id/logs",
+        "handler": "tunnelLogs"
+      },
+      {
+        "method": "POST",
+        "path": "/groups",
+        "handler": "createGroup"
+      },
+      {
+        "method": "PUT",
+        "path": "/groups/:key",
+        "handler": "updateGroup"
+      },
+      {
+        "method": "DELETE",
+        "path": "/groups/:key",
+        "handler": "deleteGroup"
+      },
+      {
+        "method": "POST",
+        "path": "/servers",
+        "handler": "createServer"
+      },
+      {
+        "method": "PUT",
+        "path": "/servers/:key",
+        "handler": "updateServer"
+      },
+      {
+        "method": "DELETE",
+        "path": "/servers/:key",
+        "handler": "deleteServer"
+      }
     ]
   },
   "frontend": {
@@ -47,5 +100,19 @@
     "js": "view.js",
     "css": "style.css",
     "preload": true
+  },
+  "mcp": {
+    "tools": [
+      {
+        "name": "list",
+        "handler": "list",
+        "readOnly": true,
+        "description": "List the configured SSH tunnel servers (local port, remote host:port, SSH alias), their groups and which tunnels are currently connected.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ]
   }
 }

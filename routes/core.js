@@ -24,6 +24,20 @@ module.exports = function coreRoutes(extensions) {
     res.json({ source: SOURCE_LANG, languages: languages(path.join(ROOT, 'public/core/i18n'), extCatalogs) });
   });
 
+  // Server MCP: endpoint, token e strumenti (per il pannello MCP)
+  router.get('/mcp', (req, res) => {
+    const { getToken } = require('../lib/mcp');
+    const { PORT } = require('../lib/env');
+    res.json({
+      url: `http://127.0.0.1:${PORT}/mcp`,
+      token: getToken(),
+      tools: extensions.mcpTools().map(t => ({ name: t.name, extension: t.extension, description: t.description, readOnly: t.readOnly })),
+    });
+  });
+  router.post('/mcp/token', (req, res) => {
+    res.json({ token: require('../lib/mcp').regenerateToken() });
+  });
+
   // ?refresh=1 ricontrolla gli strumenti (es. dopo un'installazione)
   router.get('/system', (req, res) => {
     if (req.query.refresh) refreshTools();

@@ -54,5 +54,9 @@
   "core.errors.config_invalid": "Invalid config",
   "core.errors.section_invalid": "{section}: {error}",
   "core.errors.import_mode": "Invalid import mode",
-  "core.errors.import_no_sections": "The file contains no recognised sections"
+  "core.errors.import_no_sections": "The file contains no recognised sections",
+  "core.errors.mcp_browser": "The MCP server does not accept requests from the browser",
+  "core.errors.mcp_token": "Missing or invalid MCP token",
+  "core.errors.mcp_method": "The MCP server only accepts POST",
+  "core.errors.mcp_tool_unknown": "Unknown MCP tool: {name}"
 }

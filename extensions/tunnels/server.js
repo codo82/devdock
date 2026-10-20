@@ -317,6 +317,23 @@ module.exports = function createTunnels(ctx) {
 
     services: { getServer, ensureTunnel },
 
+    // Strumenti MCP (sola lettura)
+    mcp: {
+      list() {
+        const tunnels = [...active].map(([id, t]) => publicTunnel(id, t));
+        return {
+          servers: servers().map(srv => {
+            const tn = tunnels.find(x => x.serverKey === srv.key);
+            return {
+              key: srv.key, label: srv.label, type: srv.type || 'TCP', localPort: srv.port, remote: srv.remote, sshAlias: srv.alias,
+              tunnel: tn ? { connected: !tn.reconnecting, reconnecting: tn.reconnecting, port: tn.port, pid: tn.pid, startedAt: tn.startedAt } : null,
+            };
+          }),
+          groups: groups().map(g => ({ key: g.key, label: g.label, servers: g.servers })),
+        };
+      },
+    },
+
     shutdown: stopAllTunnels,
   };
 };

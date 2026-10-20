@@ -191,9 +191,66 @@ module.exports = function createGit(ctx) {
     return repo;
   };
 
+  // Branch, ahead/behind, modifiche, stash e merge in corso di un repository
+  async function statusOf(repo) {
+    const [branchR, { header, files }, stashR] = await Promise.all([
+      gitExec(repo.path, ['rev-parse', '--abbrev-ref', 'HEAD'], { allowFail: true }),
+      getGitStatus(repo.path),
+      gitExec(repo.path, ['stash', 'list'], { allowFail: true }),
+    ]);
+
+    const branch = branchR.out.trim();
+
+    // Parse ahead/behind dal ## branch
+    const aheadM   = header.match(/\[ahead (\d+)/);
+    const behindM  = header.match(/behind (\d+)/);
+    const ahead    = aheadM  ? parseInt(aheadM[1])  : 0;
+    const behind   = behindM ? parseInt(behindM[1]) : 0;
+
+    const stashCount = stashR.out.trim().split('\n').filter(Boolean).length;
+
+    // Merge in corso e file in conflitto (entrambi modificati, aggiunti o cancellati da un lato)
+    const merging = await mergeInProgress(repo.path);
+    const conflicts = files.filter(f => CONFLICT_XY.has(f.xy)).map(f => f.name);
+
+    return { branch, ahead, behind, files, stashCount, merging, conflicts };
+  }
+
   return {
     // Per le altre estensioni (es. db-client per le migration)
     services: { repos: getGitRepos },
+
+    // Strumenti MCP (sola lettura)
+    mcp: {
+      async repos() {
+        const list = [];
+        for (const repo of getGitRepos()) {
+          try {
+            const st = await statusOf(repo);
+            list.push({ id: repo.id, label: repo.label, path: repo.path, branch: st.branch, ahead: st.ahead, behind: st.behind, changedFiles: st.files.length, merging: st.merging });
+          } catch (e) { list.push({ id: repo.id, label: repo.label, path: repo.path, error: e.message }); }
+        }
+        return { repos: list };
+      },
+      async status({ repo }) {
+        const r = getGitRepos().find(x => x.id === repo);
+        if (!r) throw ctx.error(404, 'repo_not_found');
+        return { repo: r.id, ...await statusOf(r) };
+      },
+      async log({ repo, limit = 30 }) {
+        const r = getGitRepos().find(x => x.id === repo);
+        if (!r) throw ctx.error(404, 'repo_not_found');
+        const n = Math.min(Math.max(parseInt(limit) || 30, 1), 500);
+        const SEP = '\x1f';
+        const out = await gitExec(r.path, ['log', `--format=%h${SEP}%an${SEP}%aI${SEP}%D${SEP}%s`, `-${n + 1}`], { allowFail: true });
+        const lines = out.out.split('\n').filter(Boolean);
+        return {
+          repo: r.id,
+          commits: lines.slice(0, n).map(l => { const [hash, author, date, refs, subject] = l.split(SEP); return { hash, author, date, refs: refs ? refs.split(', ') : [], subject }; }),
+          truncated: lines.length > n,
+        };
+      },
+    },
 
     handlers: {
       // Lista repos (da progetti NPM che hanno .git)
@@ -204,31 +261,8 @@ module.exports = function createGit(ctx) {
       // Status: branch, ahead/behind, modifiche
       async status(req, res) {
         const repo = repoOr404(req);
-        try {
-          const [branchR, { header, files }, stashR] = await Promise.all([
-            gitExec(repo.path, ['rev-parse', '--abbrev-ref', 'HEAD'], { allowFail: true }),
-            getGitStatus(repo.path),
-            gitExec(repo.path, ['stash', 'list'], { allowFail: true }),
-          ]);
-
-          const branch = branchR.out.trim();
-
-          // Parse ahead/behind dal ## branch
-          const aheadM   = header.match(/\[ahead (\d+)/);
-          const behindM  = header.match(/behind (\d+)/);
-          const ahead    = aheadM  ? parseInt(aheadM[1])  : 0;
-          const behind   = behindM ? parseInt(behindM[1]) : 0;
-
-          const stashCount = stashR.out.trim().split('\n').filter(Boolean).length;
-
-          // Merge in corso e file in conflitto (entrambi modificati, aggiunti o cancellati da un lato)
-          const merging = await mergeInProgress(repo.path);
-          const conflicts = files.filter(f => CONFLICT_XY.has(f.xy)).map(f => f.name);
-
-          res.json({ branch, ahead, behind, files, stashCount, merging, conflicts });
-        } catch (e) {
-          throw ctx.error(500, 'command_failed', { output: e.message });
-        }
+        try { res.json(await statusOf(repo)); }
+        catch (e) { throw ctx.error(500, 'command_failed', { output: e.message }); }
       },
 
       // Log per il grafo: commit di tutti i branch (--all) con parent e ref, più la mappa hash → branch

@@ -97,6 +97,12 @@ module.exports = function createNpm(ctx) {
     }
   }
 
+  const publicProcess = pd => ({
+    id: pd.id, projectId: pd.projectId, projectLabel: pd.projectLabel,
+    script: pd.script, pid: pd.pid, ports: pd.running ? getPortsForPgid(pd.pid) : [],
+    startedAt: pd.startedAt, running: pd.running, exitCode: pd.exitCode,
+  });
+
   const projectOr404 = req => {
     const p = getProject(req.params.id);
     if (!p) throw ctx.error(404, 'project_not_found', { id: req.params.id });
@@ -111,6 +117,49 @@ module.exports = function createNpm(ctx) {
   return {
     config,
     services: { getProjects, getProject, readPackage },
+
+    // Strumenti MCP: lettura, più avvio e arresto degli script (come dall'interfaccia)
+    mcp: {
+      projects() {
+        return {
+          projects: getProjects().map(p => {
+            const pkg = readPackage(p);
+            return { id: p.id, label: p.label, path: p.path, name: pkg?.name || null, scripts: pkg?.scripts || {} };
+          }),
+        };
+      },
+      processes() {
+        return { processes: [...processes.values()].map(publicProcess) };
+      },
+      run({ project, script }) {
+        const p = getProject(project);
+        if (!p) throw ctx.error(404, 'project_not_found', { id: String(project) });
+        if (typeof script !== 'string' || !script) throw ctx.error(400, 'script_required');
+        let args;
+        if (script === 'install') args = ['install'];
+        else {
+          if (!Object.hasOwn(readPackage(p)?.scripts || {}, script)) throw ctx.error(400, 'script_not_defined', { script });
+          args = ['run', script];
+        }
+        const pd = startNpm(p, script, args);
+        return { started: true, process: publicProcess(pd) };
+      },
+      stop({ process: id }) {
+        const pd = processes.get(id);
+        if (!pd) throw ctx.error(404, 'process_not_found');
+        killGroup(pd);
+        pd.running = false;
+        processes.delete(pd.id);
+        return { stopped: true, id };
+      },
+      output({ process: id, lines = 100 }) {
+        const pd = processes.get(id);
+        if (!pd) throw ctx.error(404, 'process_not_found');
+        const n = Math.min(Math.max(parseInt(lines) || 100, 1), 2000);
+        const text = pd.logs.map(l => l.text).join('').split('\n');
+        return { ...publicProcess(pd), output: text.slice(-n).join('\n'), truncated: text.length > n };
+      },
+    },
 
     handlers: {
       listProjects(req, res) {
@@ -219,11 +268,7 @@ module.exports = function createNpm(ctx) {
       },
 
       listProcesses(req, res) {
-        res.json([...processes.values()].map(pd => ({
-          id: pd.id, projectId: pd.projectId, projectLabel: pd.projectLabel,
-          script: pd.script, pid: pd.pid, ports: pd.running ? getPortsForPgid(pd.pid) : [],
-          startedAt: pd.startedAt, running: pd.running, exitCode: pd.exitCode,
-        })));
+        res.json([...processes.values()].map(publicProcess));
       },
 
       stopProcess(req, res) {

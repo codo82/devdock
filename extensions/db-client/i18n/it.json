@@ -431,5 +431,8 @@
   "migrate.done": "Modifica applicata (nessuna migration)",
   "confirm.runOnly": "Esegui soltanto",
   "confirm.saveMigration": "Salva come migration…",
-  "confirm.migrationHint": "È una modifica di schema e la connessione è collegata a una cartella di migration: puoi salvarla come migration (anteprima del file prima di applicarla) o eseguirla soltanto."
+  "confirm.migrationHint": "È una modifica di schema e la connessione è collegata a una cartella di migration: puoi salvarla come migration (anteprima del file prima di applicarla) o eseguirla soltanto.",
+  "errors.mcp_vault_locked": "Vault bloccato: sbloccalo dall'interfaccia di DevDock (sezione Database) per usare i database dall'agente",
+  "errors.mcp_read_only": "Gli agenti possono eseguire solo letture (SELECT, SHOW, DESCRIBE, EXPLAIN): {verb} non consentito",
+  "errors.mcp_database_required": "Indica il database (la connessione non ne ha uno predefinito)"
 }

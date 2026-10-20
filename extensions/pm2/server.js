@@ -7,7 +7,45 @@ module.exports = function createPm2(ctx) {
   const { PM2_TARGET_RE } = ctx.lib.validate;
   const npm = ctx.require('npm'); // opzionale: serve solo per avviare gli script dei progetti
 
+  // Esegue pm2 con args e restituisce { code, out, err } (code null se pm2 non c'è)
+  function runPm2(args, timeout = 15000) {
+    return new Promise(resolve => {
+      let out = '', err = '', done = false;
+      const proc = spawn('pm2', args, { env: { ...process.env } });
+      const finish = code => { if (!done) { done = true; clearTimeout(timer); resolve({ code, out, err }); } };
+      const timer = setTimeout(() => { try { proc.kill(); } catch {} finish(-1); }, timeout);
+      proc.stdout.on('data', d => out += d.toString());
+      proc.stderr.on('data', d => err += d.toString());
+      proc.on('error', () => finish(null));
+      proc.on('close', finish);
+    });
+  }
+
+  const processList = out => JSON.parse(out).map(p => ({
+    id: p.pm_id, name: p.name, status: p.pm2_env?.status,
+    pid: p.pid, cpu: p.monit?.cpu, memory: p.monit?.memory,
+    uptime: p.pm2_env?.pm_uptime, restarts: p.pm2_env?.restart_time,
+  }));
+
   return {
+    // Strumenti MCP (sola lettura)
+    mcp: {
+      async list() {
+        const r = await runPm2(['jlist']);
+        if (r.code === null) throw ctx.error(503, 'not_installed');
+        try { return { processes: processList(r.out).map(p => ({ ...p, uptime: p.uptime ? new Date(p.uptime).toISOString() : null })) }; }
+        catch { return { processes: [] }; }
+      },
+      async logs({ name, lines = 100 }) {
+        if (typeof name !== 'string' || !PM2_TARGET_RE.test(name)) throw ctx.error(400, 'invalid_target');
+        const n = Math.min(Math.max(parseInt(lines) || 100, 1), 1000);
+        const r = await runPm2(['logs', name, '--lines', String(n), '--nostream', '--raw']);
+        if (r.code === null) throw ctx.error(503, 'not_installed');
+        const text = (r.out + r.err).split('\n');
+        return { name, lines: text.slice(-n).join('\n'), truncated: text.length > n };
+      },
+    },
+
     handlers: {
       // Lista processi (pm2 jlist); vuota se pm2 non è installato
       list(req, res) {

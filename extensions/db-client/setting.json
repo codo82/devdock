@@ -11,49 +11,203 @@
   "position": "tab",
   "order": 25,
   "dependencies": [
-    { "code": "tunnels", "required": false },
-    { "code": "npm",     "required": false },
-    { "code": "git",     "required": false }
+    {
+      "code": "tunnels",
+      "required": false
+    },
+    {
+      "code": "npm",
+      "required": false
+    },
+    {
+      "code": "git",
+      "required": false
+    }
   ],
-  "config": ["dbConnections", "vault"],
+  "config": [
+    "dbConnections",
+    "vault"
+  ],
   "export": [
-    { "id": "connections", "label": { "it": "Connessioni database", "en": "Database connections" }, "description": { "it": "Connessioni e password cifrate (servono la stessa master password)", "en": "Connections and encrypted passwords (the same master password is needed)" }, "sections": ["dbConnections", "vault"] }
+    {
+      "id": "connections",
+      "label": {
+        "it": "Connessioni database",
+        "en": "Database connections"
+      },
+      "description": {
+        "it": "Connessioni e password cifrate (servono la stessa master password)",
+        "en": "Connections and encrypted passwords (the same master password is needed)"
+      },
+      "sections": [
+        "dbConnections",
+        "vault"
+      ]
+    }
   ],
   "backend": {
     "module": "server.js",
     "routes": [
-      { "method": "GET",    "path": "/info",                  "handler": "info" },
-      { "method": "GET",    "path": "/connections",           "handler": "listConnections" },
-      { "method": "POST",   "path": "/connections",           "handler": "createConnection" },
-      { "method": "PUT",    "path": "/connections/:id",       "handler": "updateConnection" },
-      { "method": "DELETE", "path": "/connections/:id",       "handler": "deleteConnection" },
-      { "method": "POST",   "path": "/connections/import",   "handler": "importConnections" },
-      { "method": "POST",   "path": "/connections/:id/test",  "handler": "testConnection" },
-      { "method": "GET",    "path": "/connections/:id/databases", "handler": "databases" },
-      { "method": "GET",    "path": "/connections/:id/databases/:db/tables", "handler": "tables" },
-      { "method": "GET",    "path": "/connections/:id/databases/:db/tables/:table", "handler": "tableInfo" },
-      { "method": "POST",   "path": "/connections/:id/databases/:db/tables/:table/rows", "handler": "rows" },
-      { "method": "POST",   "path": "/connections/:id/databases/:db/tables/:table/row", "handler": "row" },
-      { "method": "POST",   "path": "/connections/:id/databases/:db/create-table", "handler": "createTable" },
-      { "method": "GET",    "path": "/connections/:id/databases/:db/tables/:table/definition", "handler": "tableDefinition" },
-      { "method": "POST",   "path": "/connections/:id/databases/:db/migrate", "handler": "migrate" },
-      { "method": "POST",   "path": "/connections/:id/exports",  "handler": "createExport" },
-      { "method": "GET",    "path": "/connections/:id/exports/:exportId", "handler": "downloadExport" },
-      { "method": "POST",   "path": "/connections/:id/query",  "handler": "query" },
-      { "method": "GET",    "path": "/migrations/repos",      "handler": "migrationRepos" },
-      { "method": "GET",    "path": "/migrations/repos/:repo/folders", "handler": "migrationFolders" },
-      { "method": "POST",   "path": "/migrations/repos/:repo/folders", "handler": "createMigrationFolder" },
-      { "method": "GET",    "path": "/migrations/repos/:repo/scan", "handler": "migrationScan" },
-      { "method": "GET",    "path": "/connections/:id/migrations", "handler": "migrationStatus" },
-      { "method": "PUT",    "path": "/connections/:id/migrations", "handler": "linkMigrations" },
-      { "method": "DELETE", "path": "/connections/:id/migrations", "handler": "unlinkMigrations" },
-      { "method": "GET",    "path": "/vault",                 "handler": "vaultStatus" },
-      { "method": "POST",   "path": "/vault/init",            "handler": "vaultInit" },
-      { "method": "POST",   "path": "/vault/unlock",          "handler": "vaultUnlock" },
-      { "method": "POST",   "path": "/vault/lock",            "handler": "vaultLock" },
-      { "method": "POST",   "path": "/vault/change",          "handler": "vaultChange" },
-      { "method": "POST",   "path": "/vault/reset",           "handler": "vaultReset" },
-      { "method": "POST",   "path": "/vault/settings",        "handler": "vaultSettings" }
+      {
+        "method": "GET",
+        "path": "/info",
+        "handler": "info"
+      },
+      {
+        "method": "GET",
+        "path": "/connections",
+        "handler": "listConnections"
+      },
+      {
+        "method": "POST",
+        "path": "/connections",
+        "handler": "createConnection"
+      },
+      {
+        "method": "PUT",
+        "path": "/connections/:id",
+        "handler": "updateConnection"
+      },
+      {
+        "method": "DELETE",
+        "path": "/connections/:id",
+        "handler": "deleteConnection"
+      },
+      {
+        "method": "POST",
+        "path": "/connections/import",
+        "handler": "importConnections"
+      },
+      {
+        "method": "POST",
+        "path": "/connections/:id/test",
+        "handler": "testConnection"
+      },
+      {
+        "method": "GET",
+        "path": "/connections/:id/databases",
+        "handler": "databases"
+      },
+      {
+        "method": "GET",
+        "path": "/connections/:id/databases/:db/tables",
+        "handler": "tables"
+      },
+      {
+        "method": "GET",
+        "path": "/connections/:id/databases/:db/tables/:table",
+        "handler": "tableInfo"
+      },
+      {
+        "method": "POST",
+        "path": "/connections/:id/databases/:db/tables/:table/rows",
+        "handler": "rows"
+      },
+      {
+        "method": "POST",
+        "path": "/connections/:id/databases/:db/tables/:table/row",
+        "handler": "row"
+      },
+      {
+        "method": "POST",
+        "path": "/connections/:id/databases/:db/create-table",
+        "handler": "createTable"
+      },
+      {
+        "method": "GET",
+        "path": "/connections/:id/databases/:db/tables/:table/definition",
+        "handler": "tableDefinition"
+      },
+      {
+        "method": "POST",
+        "path": "/connections/:id/databases/:db/migrate",
+        "handler": "migrate"
+      },
+      {
+        "method": "POST",
+        "path": "/connections/:id/exports",
+        "handler": "createExport"
+      },
+      {
+        "method": "GET",
+        "path": "/connections/:id/exports/:exportId",
+        "handler": "downloadExport"
+      },
+      {
+        "method": "POST",
+        "path": "/connections/:id/query",
+        "handler": "query"
+      },
+      {
+        "method": "GET",
+        "path": "/migrations/repos",
+        "handler": "migrationRepos"
+      },
+      {
+        "method": "GET",
+        "path": "/migrations/repos/:repo/folders",
+        "handler": "migrationFolders"
+      },
+      {
+        "method": "POST",
+        "path": "/migrations/repos/:repo/folders",
+        "handler": "createMigrationFolder"
+      },
+      {
+        "method": "GET",
+        "path": "/migrations/repos/:repo/scan",
+        "handler": "migrationScan"
+      },
+      {
+        "method": "GET",
+        "path": "/connections/:id/migrations",
+        "handler": "migrationStatus"
+      },
+      {
+        "method": "PUT",
+        "path": "/connections/:id/migrations",
+        "handler": "linkMigrations"
+      },
+      {
+        "method": "DELETE",
+        "path": "/connections/:id/migrations",
+        "handler": "unlinkMigrations"
+      },
+      {
+        "method": "GET",
+        "path": "/vault",
+        "handler": "vaultStatus"
+      },
+      {
+        "method": "POST",
+        "path": "/vault/init",
+        "handler": "vaultInit"
+      },
+      {
+        "method": "POST",
+        "path": "/vault/unlock",
+        "handler": "vaultUnlock"
+      },
+      {
+        "method": "POST",
+        "path": "/vault/lock",
+        "handler": "vaultLock"
+      },
+      {
+        "method": "POST",
+        "path": "/vault/change",
+        "handler": "vaultChange"
+      },
+      {
+        "method": "POST",
+        "path": "/vault/reset",
+        "handler": "vaultReset"
+      },
+      {
+        "method": "POST",
+        "path": "/vault/settings",
+        "handler": "vaultSettings"
+      }
     ]
   },
   "frontend": {
@@ -61,5 +215,118 @@
     "sidebar": "sidebar.html",
     "js": "view.js",
     "css": "style.css"
+  },
+  "mcp": {
+    "tools": [
+      {
+        "name": "connections",
+        "handler": "connections",
+        "readOnly": true,
+        "description": "List the MySQL/MariaDB connections configured in DevDock (no credentials). Requires the DevDock vault to be unlocked from its UI.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "databases",
+        "handler": "databases",
+        "readOnly": true,
+        "description": "List the databases visible from a connection.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "connection": {
+              "type": "string",
+              "description": "Connection id, from db_client_connections"
+            }
+          },
+          "required": [
+            "connection"
+          ]
+        }
+      },
+      {
+        "name": "tables",
+        "handler": "tables",
+        "readOnly": true,
+        "description": "List tables and views of a database with engine, estimated rows and comment.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "connection": {
+              "type": "string",
+              "description": "Connection id, from db_client_connections"
+            },
+            "database": {
+              "type": "string",
+              "description": "Database name (default: the connection's database)"
+            }
+          },
+          "required": [
+            "connection"
+          ]
+        }
+      },
+      {
+        "name": "describe",
+        "handler": "describe",
+        "readOnly": true,
+        "description": "Structure of a table: columns (type, length, nullable, default, auto increment, comment), primary key, indexes and foreign keys.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "connection": {
+              "type": "string",
+              "description": "Connection id, from db_client_connections"
+            },
+            "database": {
+              "type": "string",
+              "description": "Database name (default: the connection's database)"
+            },
+            "table": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "connection",
+            "table"
+          ]
+        }
+      },
+      {
+        "name": "query",
+        "handler": "query",
+        "readOnly": true,
+        "description": "Run a read-only statement (SELECT, SHOW, DESCRIBE, EXPLAIN) inside a READ ONLY transaction, with a row limit. Writes are rejected.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "connection": {
+              "type": "string",
+              "description": "Connection id, from db_client_connections"
+            },
+            "database": {
+              "type": "string",
+              "description": "Database name (default: the connection's database)"
+            },
+            "sql": {
+              "type": "string",
+              "description": "One read-only statement"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          },
+          "required": [
+            "connection",
+            "sql"
+          ]
+        }
+      }
+    ]
   }
 }

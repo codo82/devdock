@@ -33,5 +33,6 @@
   "errors.project_not_found": "Progetto non trovato: {id}",
   "errors.script_not_defined": "Script non definito in package.json: {script}",
   "errors.invalid_target": "Processo PM2 non valido",
-  "errors.command_failed": "pm2: {output}"
+  "errors.command_failed": "pm2: {output}",
+  "errors.not_installed": "PM2 non è installato o non è nel PATH del server"
 }

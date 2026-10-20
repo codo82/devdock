@@ -19,9 +19,22 @@
   "backend": {
     "module": "server.js",
     "routes": [
-      { "method": "GET",   "path": "/list",   "handler": "list" },
-      { "method": "POST",  "path": "/action", "handler": "action" },
-      { "method": "GET",   "path": "/logs",   "handler": "logs", "stream": true }
+      {
+        "method": "GET",
+        "path": "/list",
+        "handler": "list"
+      },
+      {
+        "method": "POST",
+        "path": "/action",
+        "handler": "action"
+      },
+      {
+        "method": "GET",
+        "path": "/logs",
+        "handler": "logs",
+        "stream": true
+      }
     ]
   },
   "frontend": {
@@ -29,5 +42,43 @@
     "sidebar": "sidebar.html",
     "js": "view.js",
     "css": "style.css"
+  },
+  "mcp": {
+    "tools": [
+      {
+        "name": "list",
+        "handler": "list",
+        "readOnly": true,
+        "description": "List PM2 processes with status, pid, CPU %, memory (bytes), start time and restart count.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "logs",
+        "handler": "logs",
+        "readOnly": true,
+        "description": "Last lines of the logs (stdout and stderr) of a PM2 process.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "PM2 process name or id"
+            },
+            "lines": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      }
+    ]
   }
 }

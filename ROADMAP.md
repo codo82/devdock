@@ -215,15 +215,15 @@ Goal: expose DevDock to AI agents (Claude Code, Claude Desktop, any MCP client) 
 
 First version (agreed scope): **read-only** tools for every extension, plus running npm scripts; nothing else changes state. DB tools work only while the vault is unlocked from the DevDock UI — the master password never goes through the agent.
 
-- [ ] **M8.1** MCP endpoint served by DevDock itself over **Streamable HTTP** at `/mcp` (same process, same port, same services as the UI), built on the official `@modelcontextprotocol/sdk`, stateless
-- [ ] **M8.2** Authentication: random bearer token generated on first start and stored outside `config.json` (not exported), regenerable from the UI; requests with an `Origin` header (browsers) rejected
-- [ ] **M8.3** Server `instructions` describing DevDock and the loaded extensions
-- [ ] **M8.4** Optional `mcp.tools` block in `setting.json` (`name`, `description`, JSON Schema `inputSchema`, `handler`, `readOnly`); handlers live in the extension backend (`instance.mcp`), with the same `ctx` and services as the HTTP routes. Documented in `docs/EXTENSIONS.md`
-- [ ] **M8.5** Tools namespaced by extension code (`git_repo_status`, `db_client_query`); disabled extensions expose nothing
-- [ ] **M8.6** Results as structured JSON plus text, long outputs limited by parameters and truncated with a flag; errors as MCP tool errors with the M6 error codes
-- [ ] **M8.7** Tools: Tunnels (servers and active tunnels); PM2 (processes, log tail); Git (repos with branch and ahead/behind, status, log); npm (projects and scripts, running processes, output of a process; **run a script** and **stop a process**); DB client (connections without credentials, tables, structure of a table, read-only query with row limit run in a `READ ONLY` transaction) — only with the vault unlocked, otherwise a clear error
+- [x] **M8.1** MCP endpoint served by DevDock itself over **Streamable HTTP** at `/mcp` (same process, same port, same services as the UI), built on the official `@modelcontextprotocol/sdk`, stateless
+- [x] **M8.2** Authentication: random bearer token generated on first start and stored outside `config.json` (not exported), regenerable from the UI; requests with an `Origin` header (browsers) rejected
+- [x] **M8.3** Server `instructions` describing DevDock and the loaded extensions
+- [x] **M8.4** Optional `mcp.tools` block in `setting.json` (`name`, `description`, JSON Schema `inputSchema`, `handler`, `readOnly`); handlers live in the extension backend (`instance.mcp`), with the same `ctx` and services as the HTTP routes. Documented in `docs/EXTENSIONS.md`
+- [x] **M8.5** Tools namespaced by extension code (`git_repo_status`, `db_client_query`); disabled extensions expose nothing
+- [x] **M8.6** Results as structured JSON plus text, long outputs limited by parameters and truncated with a flag; errors as MCP tool errors with the M6 error codes
+- [x] **M8.7** Tools: Tunnels (servers and active tunnels); PM2 (processes, log tail); Git (repos with branch and ahead/behind, status, log); npm (projects and scripts, running processes, output of a process; **run a script** and **stop a process**); DB client (connections without credentials, tables, structure of a table, read-only query with row limit run in a `READ ONLY` transaction) — only with the vault unlocked, otherwise a clear error
 - [ ] **M8.8** "MCP" panel: endpoint, token (show, copy, regenerate), ready-to-copy setup for Claude Code and Claude Desktop, list of the tools per extension
-- [ ] **M8.9** Tests with the SDK client: initialize, list and call tools, rejection without token or with a browser `Origin`, DB tools with the vault locked and unlocked, secrets never returned
+- [x] **M8.9** Tests with the SDK client: initialize, list and call tools, rejection without token or with a browser `Origin`, DB tools with the vault locked and unlocked, secrets never returned
 - [ ] **M8.10** Docs: README section "MCP server" and the `mcp` manifest block in `docs/EXTENSIONS.md`
 
 **Later (not in the first version)**

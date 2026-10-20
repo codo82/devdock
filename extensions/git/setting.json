@@ -19,13 +19,42 @@
   "backend": {
     "module": "server.js",
     "routes": [
-      { "method": "GET",   "path": "/repos",                  "handler": "listRepos" },
-      { "method": "GET",   "path": "/repos/:id/status",       "handler": "status" },
-      { "method": "GET",   "path": "/repos/:id/branches",     "handler": "branches" },
-      { "method": "GET",   "path": "/repos/:id/merge-preview", "handler": "mergePreview" },
-      { "method": "GET",   "path": "/repos/:id/log",          "handler": "log" },
-      { "method": "GET",   "path": "/repos/:id/commit/:hash", "handler": "commitMessage" },
-      { "method": "POST",  "path": "/repos/:id/action",       "handler": "action", "stream": true }
+      {
+        "method": "GET",
+        "path": "/repos",
+        "handler": "listRepos"
+      },
+      {
+        "method": "GET",
+        "path": "/repos/:id/status",
+        "handler": "status"
+      },
+      {
+        "method": "GET",
+        "path": "/repos/:id/branches",
+        "handler": "branches"
+      },
+      {
+        "method": "GET",
+        "path": "/repos/:id/merge-preview",
+        "handler": "mergePreview"
+      },
+      {
+        "method": "GET",
+        "path": "/repos/:id/log",
+        "handler": "log"
+      },
+      {
+        "method": "GET",
+        "path": "/repos/:id/commit/:hash",
+        "handler": "commitMessage"
+      },
+      {
+        "method": "POST",
+        "path": "/repos/:id/action",
+        "handler": "action",
+        "stream": true
+      }
     ]
   },
   "frontend": {
@@ -33,5 +62,61 @@
     "sidebar": "sidebar.html",
     "js": "view.js",
     "css": "style.css"
+  },
+  "mcp": {
+    "tools": [
+      {
+        "name": "repos",
+        "handler": "repos",
+        "readOnly": true,
+        "description": "List the Git repositories of the DevDock projects with current branch, commits ahead/behind the upstream, number of changed files and whether a merge is in progress.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "status",
+        "handler": "status",
+        "readOnly": true,
+        "description": "Status of a repository: branch, ahead/behind, changed files with their git status code, stash count, merge in progress and conflicted files.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "repo": {
+              "type": "string",
+              "description": "Repository id, from git_repos"
+            }
+          },
+          "required": [
+            "repo"
+          ]
+        }
+      },
+      {
+        "name": "log",
+        "handler": "log",
+        "readOnly": true,
+        "description": "Latest commits of the current branch of a repository (hash, author, ISO date, refs, subject).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "repo": {
+              "type": "string",
+              "description": "Repository id, from git_repos"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 30
+            }
+          },
+          "required": [
+            "repo"
+          ]
+        }
+      }
+    ]
   }
 }

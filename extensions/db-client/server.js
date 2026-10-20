@@ -202,6 +202,21 @@ module.exports = function createDbClient(ctx) {
     }
   }
 
+  // ---- MCP ----
+  const mcpUnlocked = () => { if (vaultState() !== 'unlocked') throw ctx.error(423, 'mcp_vault_locked'); };
+  function mcpConnection(id) {
+    mcpUnlocked();
+    const conn = findConnection(id);
+    if (!conn) throw ctx.error(404, 'connection_not_found', { id: String(id) });
+    return conn;
+  }
+  function mcpDatabase(conn, database) {
+    const db = database || conn.database;
+    if (!db) throw ctx.error(400, 'mcp_database_required');
+    if (!DB_NAME_RE.test(db)) throw ctx.error(400, 'database_invalid');
+    return db;
+  }
+
   const connectionOr404 = id => {
     const conn = findConnection(id);
     if (!conn) throw ctx.error(404, 'connection_not_found', { id: String(id) });
@@ -379,18 +394,25 @@ module.exports = function createDbClient(ctx) {
   const confirmToken = (conn, database, sql) =>
     crypto.createHmac('sha256', confirmSecret).update(`${conn.id}\0${database || ''}\0${sql}`).digest('hex');
 
-  // Esegue l'istruzione: le righe arrivano in streaming e oltre il limite si interrompe
-  function execute(pool, sql, limit) {
+  // Esegue l'istruzione: le righe arrivano in streaming e oltre il limite si interrompe.
+  // readOnly: dentro una transazione READ ONLY (annullata alla fine), per gli agenti MCP
+  function execute(pool, sql, limit, { readOnly = false } = {}) {
     return new Promise((resolve, reject) => {
       pool.getConnection((err, connection) => {
         if (err) return reject(err);
+        if (!readOnly) return run(connection);
+        connection.query('START TRANSACTION READ ONLY', e => (e ? (connection.release(), reject(e)) : run(connection)));
+      });
+      function run(connection) {
         const started = Date.now();
         let fields = null, header = null, truncated = false, settled = false;
         const rows = [];
         const finish = (error, destroy) => {
           if (settled) return;
           settled = true;
-          if (destroy) connection.destroy(); else connection.release();
+          if (destroy) connection.destroy();
+          else if (readOnly) connection.query('ROLLBACK', () => connection.release());
+          else connection.release();
           if (error) return reject(error);
           const ms = Date.now() - started;
           if (fields) {
@@ -416,7 +438,7 @@ module.exports = function createDbClient(ctx) {
           rows.push(r.map(cell));
         });
         q.on('end', () => finish(null, false));
-      });
+      }
     });
   }
 
@@ -1054,6 +1076,50 @@ module.exports = function createDbClient(ctx) {
     },
 
     services: { decryptPassword },
+
+    // Strumenti MCP: solo letture e solo con il vault sbloccato dall'interfaccia
+    // (l'agente non riceve né può inserire la master password)
+    mcp: {
+      async connections() {
+        mcpUnlocked();
+        return {
+          connections: connections().map(c => ({
+            id: c.id, label: c.label, host: c.tunnel ? null : c.host, port: c.tunnel ? null : c.port,
+            tunnel: c.tunnel || null, database: c.database || null, readOnly: !!c.readOnly,
+          })),
+        };
+      },
+      async databases({ connection }) {
+        const conn = mcpConnection(connection);
+        const r = await execute(await poolFor(conn), 'SHOW DATABASES', MAX_ROW_LIMIT, { readOnly: true });
+        return { databases: r.rows.map(row => row[0]) };
+      },
+      async tables({ connection, database }) {
+        const conn = mcpConnection(connection);
+        const db = mcpDatabase(conn, database);
+        const [rows] = await (await poolFor(conn)).promise().query(
+          `SELECT TABLE_NAME AS name, TABLE_TYPE AS type, ENGINE AS engine, TABLE_ROWS AS rowsEstimate, TABLE_COMMENT AS comment
+             FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME`, [db]);
+        return { database: db, tables: rows.map(t => ({ ...t, view: t.type === 'VIEW', type: undefined })) };
+      },
+      async describe({ connection, database, table }) {
+        const conn = mcpConnection(connection);
+        const db = mcpDatabase(conn, database);
+        if (!DB_NAME_RE.test(table || '')) throw ctx.error(400, 'name_invalid');
+        const schema = await introspect((await poolFor(conn)).promise(), db, [table]);
+        if (!schema.tables[table]) throw ctx.error(404, 'table_not_found', { table });
+        return { database: db, table, ...schema.tables[table] };
+      },
+      async query({ connection, database, sql, limit = 100 }) {
+        const conn = mcpConnection(connection);
+        const db = database ? mcpDatabase(conn, database) : conn.database || null;
+        const c = classify(sql);
+        if (c.kind !== 'read') throw ctx.error(400, 'mcp_read_only', { verb: c.verb || '?' });
+        const n = Math.min(Math.max(parseInt(limit) || 100, 1), 1000);
+        const r = await execute(await poolFor(conn, db), sql, n, { readOnly: true });
+        return { database: db, columns: r.columns.map(col => col.name), rows: r.rows, rowCount: r.rowCount, truncated: r.truncated, ms: r.ms };
+      },
+    },
 
     shutdown() { closePools(); },
   };
