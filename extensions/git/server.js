@@ -211,6 +211,37 @@ module.exports = function createGit(ctx) {
         }
       },
 
+      // Branch locali (upstream, ahead/behind, ultimo commit, già uniti in HEAD) e remoti
+      async branches(req, res) {
+        const repo = getGitRepos().find(r => r.id === req.params.id);
+        if (!repo) return res.status(404).json({ error: 'Repo non trovato' });
+        const SEP = '\x1f';
+        const fmt = ['%(refname)', '%(refname:short)', '%(upstream:short)', '%(upstream:track)', '%(objectname:short)', '%(committerdate:relative)', '%(subject)'].join(SEP);
+        const [refs, current, merged] = await Promise.all([
+          gitExec(repo.path, ['for-each-ref', `--format=${fmt}`, '--sort=-committerdate', 'refs/heads/', 'refs/remotes/'], { allowFail: true }),
+          gitExec(repo.path, ['branch', '--show-current'], { allowFail: true }),
+          gitExec(repo.path, ['branch', '--merged', 'HEAD', '--format=%(refname:short)'], { allowFail: true }),
+        ]);
+        const mergedSet = new Set(merged.out.split('\n').map(x => x.trim()).filter(Boolean));
+        const local = [], remote = [];
+        for (const line of refs.out.split('\n').filter(Boolean)) {
+          const [full, name, upstream, track, hash, relDate, subject] = line.split(SEP);
+          if (full.endsWith('/HEAD')) continue; // origin/HEAD è solo un alias
+          const lastCommit = { hash, relDate, subject };
+          if (full.startsWith('refs/heads/')) {
+            const ahead = Number(/ahead (\d+)/.exec(track)?.[1] || 0);
+            const behind = Number(/behind (\d+)/.exec(track)?.[1] || 0);
+            local.push({ name, upstream: upstream || null, gone: track === '[gone]', ahead, behind, merged: mergedSet.has(name), lastCommit });
+          } else {
+            const slash = name.indexOf('/');
+            remote.push({ name, remote: name.slice(0, slash), branch: name.slice(slash + 1), lastCommit });
+          }
+        }
+        const localNames = new Set(local.map(b => b.name));
+        for (const r of remote) r.hasLocal = localNames.has(r.branch);
+        res.json({ current: current.out.trim() || null, detached: !current.out.trim(), local, remote });
+      },
+
       // Messaggio completo di un commit (subject + body)
       async commitMessage(req, res) {
         const repos = getGitRepos();

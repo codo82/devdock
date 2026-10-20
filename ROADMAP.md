@@ -125,7 +125,7 @@ Built as an extension on the M3 architecture.
 
 ## M4 — Branch switch / create *(Backlog #3)* — inside the Git extension
 
-- [ ] **M4.1** Backend: `GET /api/ext/git/repos/:id/branches` (local + remote, current branch)
+- [x] **M4.1** Backend: `GET /api/ext/git/repos/:id/branches` (local + remote, current branch)
 - [ ] **M4.2** Backend: `checkout` action (validated in M1.6) and new `checkout_new` (`git checkout -b <name>`, optional start point)
 - [ ] **M4.3** Pre-check: uncommitted changes → structured response the UI uses to offer "Stash and switch" / "Cancel"
 - [ ] **M4.4** Pre-check: branch already exists → clear error; remote branch not yet local → `checkout --track`

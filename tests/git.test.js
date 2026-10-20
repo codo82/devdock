@@ -129,3 +129,22 @@ test('pull_push si ferma se il pull fallisce', async () => {
   assert.notEqual(exitOf(r), 0);
   assert.doesNotMatch(r.text, /\$ git push/);
 });
+
+test('branch: locali con upstream e stato, remoti con copia locale', async () => {
+  git(repo, 'checkout', '-q', 'main');
+  git(repo, 'branch', '-f', 'unito', 'main');                   // già unito in main
+  git(repo, 'checkout', '-q', '-b', 'nuovo-lavoro');
+  commitFile(repo, 'lavoro.txt');                                // non unito
+  git(repo, 'checkout', '-q', 'main');
+  const r = await srv.request('GET', '/api/ext/git/repos/r/branches');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.current, 'main');
+  const local = Object.fromEntries(r.json.local.map(b => [b.name, b]));
+  assert.equal(local.main.upstream, null); // il test non imposta l'upstream
+  assert.equal(local.unito.merged, true);
+  assert.equal(local['nuovo-lavoro'].merged, false);
+  assert.equal(local['nuovo-lavoro'].lastCommit.subject, 'add lavoro.txt');
+  const remote = r.json.remote.find(b => b.name === 'origin/main');
+  assert.deepEqual([remote.remote, remote.branch, remote.hasLocal], ['origin', 'main', true]);
+  assert.ok(!r.json.remote.some(b => b.name.endsWith('/HEAD')));
+});
