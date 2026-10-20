@@ -12,7 +12,8 @@
   "order": 25,
   "dependencies": [
     { "code": "tunnels", "required": false },
-    { "code": "npm",     "required": false }
+    { "code": "npm",     "required": false },
+    { "code": "git",     "required": false }
   ],
   "config": ["dbConnections", "vault"],
   "export": [
@@ -37,6 +38,13 @@
       { "method": "POST",   "path": "/connections/:id/exports",  "handler": "createExport" },
       { "method": "GET",    "path": "/connections/:id/exports/:exportId", "handler": "downloadExport" },
       { "method": "POST",   "path": "/connections/:id/query",  "handler": "query" },
+      { "method": "GET",    "path": "/migrations/repos",      "handler": "migrationRepos" },
+      { "method": "GET",    "path": "/migrations/repos/:repo/folders", "handler": "migrationFolders" },
+      { "method": "POST",   "path": "/migrations/repos/:repo/folders", "handler": "createMigrationFolder" },
+      { "method": "GET",    "path": "/migrations/repos/:repo/scan", "handler": "migrationScan" },
+      { "method": "GET",    "path": "/connections/:id/migrations", "handler": "migrationStatus" },
+      { "method": "PUT",    "path": "/connections/:id/migrations", "handler": "linkMigrations" },
+      { "method": "DELETE", "path": "/connections/:id/migrations", "handler": "unlinkMigrations" },
       { "method": "GET",    "path": "/vault",                 "handler": "vaultStatus" },
       { "method": "POST",   "path": "/vault/init",            "handler": "vaultInit" },
       { "method": "POST",   "path": "/vault/unlock",          "handler": "vaultUnlock" },

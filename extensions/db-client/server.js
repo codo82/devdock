@@ -1,15 +1,17 @@
 // Database: connessioni MySQL/MariaDB (sezione "dbConnections"), password cifrate
 // con una master password (sezione "vault"), query con timeout e limite di righe.
 const crypto = require('crypto');
+const fs = require('fs');
 const mysqlCb = require('mysql2');
 const mysql = require('mysql2/promise');
 const vaultLib = require('./vault');
 const { classify } = require('./sql');
 const ddl = require('./ddl');
+const mig = require('./migrations');
 
 const DEFAULT_LOCK_MINUTES = 30;
 
-const CONNECTION_FIELDS = ['id', 'label', 'type', 'host', 'port', 'database', 'user', 'password', 'projectId', 'tunnel', 'readOnly'];
+const CONNECTION_FIELDS = ['id', 'label', 'type', 'host', 'port', 'database', 'user', 'password', 'projectId', 'tunnel', 'readOnly', 'migrations'];
 const HOST_RE = /^(\[[0-9a-f:.]+\]|[A-Za-z0-9._-]{1,253})$/i;  // nome host, IPv4 o [IPv6]
 const DB_NAME_RE = /^[^`\\/\x00]{1,64}$/;                       // nome database MySQL (niente backtick, slash, NUL)
 const CONNECT_TIMEOUT_MS = 8000;
@@ -59,6 +61,8 @@ module.exports = function createDbClient(ctx) {
   const { ApiError, errorBody } = ctx.lib.errors;
   const { KEY_RE, isPort, isText } = ctx.lib.validate;
   const tunnels = ctx.require('tunnels'); // opzionale: senza, niente connessioni via tunnel
+  const git = ctx.require('git');         // opzionale: repository e branch remoto per le migration
+  const npm = ctx.require('npm');         // opzionale: progetti come repository se git manca
 
   const vault = () => ctx.config.get('vault');
   let allowVaultSwitch = false; // vero solo durante il cambio della master password
@@ -118,6 +122,11 @@ module.exports = function createDbClient(ctx) {
     if (c.password != null && !vaultLib.isBox(c.password)) throw bad('password');
     if (c.projectId != null && !KEY_RE.test(c.projectId)) throw bad('project');
     if (c.readOnly != null && typeof c.readOnly !== 'boolean') throw bad('read_only');
+    if (c.migrations != null) {
+      const m = c.migrations;
+      if (typeof m !== 'object' || Array.isArray(m) || Object.keys(m).some(k => k !== 'repo' && k !== 'dir')
+          || !KEY_RE.test(m.repo || '') || !mig.isValidDir(m.dir)) throw bad('migrations');
+    }
   }
 
   // Ciò che vede il frontend: mai la password, solo se c'è
@@ -132,6 +141,49 @@ module.exports = function createDbClient(ctx) {
     else e = ctx.error(e?.status || status, 'mysql', { error: e?.message || String(e), ...(e?.code ? { mysqlCode: e.code } : {}) });
     return res.status(e.status).json({ ...errorBody(e), ...extra });
   }
+  // ---- migration: repository, cartelle, numerazione ----
+
+  // Repository selezionabili: quelli dell'estensione Git, altrimenti le cartelle dei progetti npm
+  function migrationRepos() {
+    if (git) return { source: 'git', repos: git.repos() };
+    if (npm) return { source: 'npm', repos: npm.getProjects().map(p => ({ id: p.id, label: p.label, path: p.path })) };
+    return { source: null, repos: [] };
+  }
+  const repoOr404 = id => {
+    const repo = migrationRepos().repos.find(r => r.id === id);
+    if (!repo) throw ctx.error(404, 'repo_not_found', { id: String(id) });
+    return repo;
+  };
+  // Errori di migrations.js → errori con codice (dir_not_found è 404)
+  const migCall = fn => {
+    try { return fn(); } catch (e) {
+      if (e instanceof mig.MigrationError) throw ctx.error(e.key === 'dir_not_found' ? 404 : 400, e.key, e.params);
+      throw e;
+    }
+  };
+
+  // Numerazione della cartella: file locali e, se il branch ha un upstream, quelli del
+  // remoto non ancora presenti in locale (migration di altri). next tiene conto di entrambi.
+  async function numbering(repo, dir, { fetch = false } = {}) {
+    const local = migCall(() => mig.scan(mig.folderFiles(repo.path, dir)));
+    let upstream = null;
+    if (git) {
+      const fetched = fetch ? await git.fetch(repo.path) : null;
+      const ref = await git.upstreamOf(repo.path);
+      if (ref) {
+        const remote = mig.scan(await git.filesAt(repo.path, ref, dir));
+        const names = new Set(local.files.map(f => f.name));
+        upstream = { ref, current: remote.current, width: remote.width, fetched, missing: remote.files.filter(f => !names.has(f.name)) };
+      }
+    }
+    const current = Math.max(local.current, upstream?.current || 0);
+    const width = Math.max(local.width, upstream?.width || 0);
+    return {
+      exists: !!mig.resolveInside(repo.path, dir) && fs.existsSync(mig.resolveInside(repo.path, dir)),
+      ...local, upstream, current, width, next: current + 1, nextPrefix: mig.pad(current + 1, width),
+    };
+  }
+
   const connectionOr404 = id => {
     const conn = findConnection(id);
     if (!conn) throw ctx.error(404, 'connection_not_found', { id: String(id) });
@@ -705,6 +757,62 @@ module.exports = function createDbClient(ctx) {
         } catch (e) {
           sendFailure(res, e);
         }
+      },
+
+      // ---- migration ----
+
+      migrationRepos(req, res) {
+        const { source, repos } = migrationRepos();
+        res.json({ source, repos: repos.map(r => ({ id: r.id, label: r.label })) });
+      },
+
+      // Sottocartelle di ?dir= nel repository (browser delle cartelle)
+      migrationFolders(req, res) {
+        const repo = repoOr404(req.params.repo);
+        res.json(migCall(() => mig.listFolders(repo.path, String(req.query.dir ?? ''))));
+      },
+
+      // Nuova cartella { parent, name } (creata solo su richiesta dell'utente)
+      createMigrationFolder(req, res) {
+        const repo = repoOr404(req.params.repo);
+        const dir = migCall(() => mig.createFolder(repo.path, String(req.body.parent ?? ''), req.body.name));
+        res.json({ ok: true, dir });
+      },
+
+      // Anteprima della numerazione di una cartella (prima di collegarla); ?fetch=1 aggiorna il remoto
+      async migrationScan(req, res) {
+        const repo = repoOr404(req.params.repo);
+        res.json(await numbering(repo, String(req.query.dir ?? ''), { fetch: req.query.fetch === '1' }));
+      },
+
+      // Stato delle migration di una connessione
+      async migrationStatus(req, res) {
+        const conn = connectionOr404(req.params.id);
+        if (!conn.migrations) return res.json({ linked: false });
+        const repo = migrationRepos().repos.find(r => r.id === conn.migrations.repo);
+        if (!repo) return res.json({ linked: true, repo: { id: conn.migrations.repo, missing: true }, dir: conn.migrations.dir });
+        res.json({
+          linked: true, repo: { id: repo.id, label: repo.label }, dir: conn.migrations.dir,
+          ...await numbering(repo, conn.migrations.dir, { fetch: req.query.fetch === '1' }),
+        });
+      },
+
+      // Collega repository e cartella (la cartella deve esistere)
+      linkMigrations(req, res) {
+        const conn = connectionOr404(req.params.id);
+        const repo = repoOr404(req.body.repo);
+        const dir = String(req.body.dir ?? '');
+        migCall(() => mig.listFolders(repo.path, dir)); // valida ed esiste
+        const list = connections().map(c => c.id === conn.id ? { ...c, migrations: { repo: repo.id, dir } } : c);
+        ctx.config.set('dbConnections', list);
+        res.json({ ok: true, migrations: { repo: repo.id, dir } });
+      },
+
+      unlinkMigrations(req, res) {
+        const conn = connectionOr404(req.params.id);
+        const list = connections().map(c => c.id === conn.id ? { ...c, migrations: null } : c);
+        ctx.config.set('dbConnections', list);
+        res.json({ ok: true });
       },
 
       // ---- vault ----

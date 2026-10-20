@@ -191,7 +191,27 @@ module.exports = function createGit(ctx) {
     return repo;
   };
 
+  // Branch remoto seguito dal branch corrente (es. origin/main), null se non c'è
+  async function upstreamOf(cwd) {
+    const r = await gitExec(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { allowFail: true });
+    return r.code === 0 ? r.out.trim() : null;
+  }
+
+  // File (solo nomi) di una cartella in un ref, es. origin/main:database/migrations
+  async function filesAt(cwd, ref, dir) {
+    const r = await gitExec(cwd, ['ls-tree', '--name-only', `${ref}:${dir}`, '--'], { allowFail: true });
+    return r.code === 0 ? r.out.split('\n').filter(Boolean) : [];
+  }
+
   return {
+    // Per le altre estensioni (es. db-client per le migration)
+    services: {
+      repos: getGitRepos,
+      upstreamOf,
+      filesAt,
+      fetch: cwd => gitExec(cwd, ['fetch', '--quiet'], { allowFail: true }).then(r => r.code === 0),
+    },
+
     handlers: {
       // Lista repos (da progetti NPM che hanno .git)
       listRepos(req, res) {

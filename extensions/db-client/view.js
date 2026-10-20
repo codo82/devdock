@@ -639,12 +639,157 @@ export default {
         <span class="db-conn-meta">${esc(c.user)}@${esc(target(c))}${c.database ? ` / ${esc(c.database)}` : ''}</span>
         ${c.readOnly ? `<span class="db-badge">${esc(t('conn.readOnly'))}</span>` : ''}
         ${c.hasPassword ? '' : `<span class="db-badge db-badge-warn">${esc(t('conn.noPassword'))}</span>`}
+        <span class="db-mig-badge" data-role="mig-badge"></span>
         <div class="db-conn-actions">
+          <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].migrationsDialog(${js(c.id)})" title="${esc(t('mig.buttonTitle'))}">${esc(t('mig.button'))}</button>
           <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].testConnection(${js(c.id)})">${esc(t('conn.test'))}</button>
           <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].editConnection(${js(c.id)})">${esc(t('conn.edit'))}</button>
           <button class="btn btn-ghost btn-sm db-danger" onclick="Ext['db-client'].deleteConnection(${js(c.id)})" title="${esc(t('core.action.delete'))}">🗑</button>
         </div>`;
+      renderMigBadge();
     }
+
+    // ---- migration: collegamento a repository e cartella, numerazione NNN_ ----
+    const migStatus = new Map(); // id connessione → stato (GET /connections/:id/migrations)
+
+    async function loadMigStatus(c, fetch = false) {
+      try { migStatus.set(c.id, await ctx.api.get(`/connections/${encodeURIComponent(c.id)}/migrations${fetch ? '?fetch=1' : ''}`)); }
+      catch (e) { migStatus.set(c.id, { linked: false, error: e.message }); }
+      if (active()?.id === c.id) renderMigBadge();
+    }
+
+    function renderMigBadge() {
+      const el = $(ctx.root, 'mig-badge');
+      const c = active();
+      if (!el || !c) return;
+      const st = migStatus.get(c.id);
+      if (!st) { el.innerHTML = ''; loadMigStatus(c); return; }
+      if (!st.linked) { el.innerHTML = `<span class="db-muted">${esc(t('mig.notLinked'))}</span>`; return; }
+      if (st.repo?.missing) { el.innerHTML = `<span class="db-badge db-badge-warn">${esc(t('mig.repoMissing', { repo: st.repo.id }))}</span>`; return; }
+      const behind = st.upstream?.missing?.length;
+      el.innerHTML = `<span class="db-badge" title="${esc(`${st.repo.label} / ${st.dir || '.'}`)}">📁 ${esc(st.repo.label)}/${esc(st.dir || '.')} · ${esc(t('mig.next', { prefix: st.nextPrefix }))}</span>`
+        + (behind ? ` <span class="db-badge db-badge-warn">${esc(t('mig.behindShort', { count: behind }))}</span>` : '');
+    }
+
+    // Stato del dialog: connessione, repository e cartella in esame
+    let migDlg = null;
+
+    async function migrationsDialog(connId) {
+      const c = connections.find(x => x.id === connId);
+      if (!c) return;
+      let repos;
+      try { repos = await ctx.api.get('/migrations/repos'); } catch (e) { toast(e.message, 'error'); return; }
+      const st = migStatus.get(c.id) || await ctx.api.get(`/connections/${encodeURIComponent(c.id)}/migrations`).catch(() => ({ linked: false }));
+      const linkedRepo = st.linked && repos.repos.some(r => r.id === st.repo?.id) ? st.repo.id : null;
+      migDlg = { connId: c.id, linked: !!st.linked, repos, repo: linkedRepo || repos.repos[0]?.id || null, dir: linkedRepo ? st.dir : '', folders: null, scan: null };
+      openModal(t('mig.title', { name: c.label }), '<div data-role="mig-dialog"></div>',
+        `${st.linked ? `<button class="btn btn-ghost db-danger" onclick="Ext['db-client'].migUnlink()">${esc(t('mig.unlink'))}</button>` : ''}
+         <button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" data-role="mig-link" onclick="Ext['db-client'].migLink()">${esc(t('mig.link'))}</button>`);
+      await migLoad();
+    }
+
+    // Cartelle e numerazione della cartella corrente, poi il disegno del dialog
+    async function migLoad(fetch = false) {
+      const d = migDlg;
+      if (!d) return;
+      if (d.repo) {
+        const base = `/migrations/repos/${encodeURIComponent(d.repo)}`;
+        const q = `?dir=${encodeURIComponent(d.dir)}`;
+        try {
+          [d.folders, d.scan] = await Promise.all([ctx.api.get(`${base}/folders${q}`), ctx.api.get(`${base}/scan${q}${fetch ? '&fetch=1' : ''}`)]);
+          d.error = null;
+        } catch (e) { d.error = e.message; d.folders = null; d.scan = null; }
+      }
+      if (migDlg === d) renderMigDialog();
+    }
+
+    function renderMigDialog() {
+      const d = migDlg;
+      const el = document.querySelector('[data-role="mig-dialog"]');
+      if (!el || !d) return;
+      const linkBtn = document.querySelector('[data-role="mig-link"]');
+      if (linkBtn) linkBtn.disabled = !d.repo || !d.folders;
+      if (!d.repos.repos.length) {
+        el.innerHTML = `<p class="db-muted">${esc(t(d.repos.source ? 'mig.noRepos' : 'mig.noReposExt'))}</p>`;
+        return;
+      }
+      const parts = d.dir ? d.dir.split('/') : [];
+      const crumbs = [`<button class="db-mig-crumb" onclick="Ext['db-client'].migNav('')">${esc(d.repos.repos.find(r => r.id === d.repo)?.label || d.repo)}</button>`,
+        ...parts.map((p, i) => `<button class="db-mig-crumb" onclick="Ext['db-client'].migNav(${js(parts.slice(0, i + 1).join('/'))})">${esc(p)}</button>`)].join('<span class="db-muted">/</span>');
+      const sc = d.scan;
+      const up = sc?.upstream;
+      el.innerHTML = `
+        <div class="form-row"><label>${esc(t('mig.repo'))}</label>
+          <select class="form-input" onchange="Ext['db-client'].migRepo(this.value)">${d.repos.repos.map(r =>
+            `<option value="${esc(r.id)}" ${r.id === d.repo ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}</select>
+          ${d.repos.source === 'npm' ? `<p class="db-muted">${esc(t('mig.npmFallback'))}</p>` : ''}</div>
+        <div class="form-row"><label>${esc(t('mig.folder'))}</label>
+          <div class="db-mig-crumbs">${crumbs}</div>
+          <div class="db-mig-folders">
+            ${d.dir ? `<button class="db-mig-folder" onclick="Ext['db-client'].migNav(${js(parts.slice(0, -1).join('/'))})">↑ ..</button>` : ''}
+            ${d.error ? `<div class="db-error">${esc(d.error)}</div>` : ''}
+            ${(d.folders?.folders || []).map(f => `<button class="db-mig-folder" onclick="Ext['db-client'].migNav(${js(d.dir ? `${d.dir}/${f}` : f)})">📁 ${esc(f)}</button>`).join('')
+              || (d.error ? '' : `<span class="db-muted">${esc(t('mig.noSubfolders'))}</span>`)}
+          </div>
+          <div class="db-mig-new">
+            <input class="form-input" id="f_mig_folder" placeholder="${esc(t('mig.newFolderPlaceholder'))}">
+            <button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].migNewFolder()">${esc(t('mig.newFolder'))}</button>
+          </div>
+        </div>
+        ${sc ? `<div class="db-mig-scan">
+          <div><strong>${esc(t('mig.selected', { dir: d.dir || '.' }))}</strong></div>
+          <div>${esc(t('mig.found', { count: sc.files.length }))}${sc.files.length ? ` · ${esc(t('mig.last', { name: sc.files[sc.files.length - 1].name }))}` : ''}</div>
+          <div>${esc(t('mig.nextFile', { prefix: sc.nextPrefix }))} <code>${esc(sc.nextPrefix)}_${esc(t('mig.example'))}.sql</code></div>
+          ${up ? (up.missing.length
+              ? `<div class="db-mig-warn">⚠ ${esc(t('mig.behind', { count: up.missing.length, ref: up.ref }))}<ul>${up.missing.map(f => `<li>${esc(f.name)}</li>`).join('')}</ul></div>`
+              : `<div class="db-muted">✓ ${esc(t('mig.upToDate', { ref: up.ref }))}</div>`)
+            : `<div class="db-muted">${esc(t('mig.noUpstream'))}</div>`}
+          ${up?.fetched === false ? `<div class="db-mig-warn">⚠ ${esc(t('mig.fetchFailed'))}</div>` : ''}
+          ${sc.duplicates.length ? `<div class="db-mig-warn">⚠ ${esc(t('mig.duplicates', { numbers: sc.duplicates.map(n => String(n)).join(', ') }))}</div>` : ''}
+          ${sc.ignored.length ? `<div class="db-muted">${esc(t('mig.ignored', { files: sc.ignored.join(', ') }))}</div>` : ''}
+          ${up ? `<button class="btn btn-ghost btn-sm" onclick="Ext['db-client'].migFetch()">${esc(t('mig.fetch'))}</button>` : ''}
+        </div>` : ''}`;
+    }
+
+    const migActions = {
+      migrationsDialog,
+      migRepo(id) { migDlg.repo = id; migDlg.dir = ''; migLoad(); },
+      migNav(dir) { migDlg.dir = dir; migLoad(); },
+      migFetch() { migLoad(true); },
+      async migNewFolder() {
+        const name = (document.getElementById('f_mig_folder')?.value || '').trim();
+        if (!name) return;
+        try {
+          const r = await ctx.api.post(`/migrations/repos/${encodeURIComponent(migDlg.repo)}/folders`, { parent: migDlg.dir, name });
+          migDlg.dir = r.dir;
+          await migLoad();
+        } catch (e) { toast(e.message, 'error'); }
+      },
+      async migLink() {
+        const d = migDlg;
+        try {
+          await ctx.api.put(`/connections/${encodeURIComponent(d.connId)}/migrations`, { repo: d.repo, dir: d.dir });
+          closeModal();
+          migDlg = null;
+          toast(t('mig.linked', { dir: d.dir || '.' }), 'success');
+          await loadConnections();
+          loadMigStatus(connections.find(x => x.id === d.connId));
+        } catch (e) { toast(e.message, 'error'); }
+      },
+      async migUnlink() {
+        const d = migDlg;
+        if (!confirm(t('mig.confirmUnlink'))) return;
+        try {
+          await ctx.api.del(`/connections/${encodeURIComponent(d.connId)}/migrations`);
+          closeModal();
+          migDlg = null;
+          toast(t('mig.unlinked'), 'success');
+          await loadConnections();
+          loadMigStatus(connections.find(x => x.id === d.connId));
+        } catch (e) { toast(e.message, 'error'); }
+      },
+    };
 
     async function connectionForm(c = {}) {
       const tunnelServers = tunnelsAvailable
@@ -907,6 +1052,7 @@ export default {
     }
 
     const actions = {
+      ...migActions,
       lock, saveVault,
       run: () => run(),
       importConnections() {
@@ -1084,13 +1230,14 @@ export default {
     renderLimitOptions();
 
     this.show = loadVault;
-    this.refresh = async () => { cache.clear(); await loadVault(); reopen(); };
+    this.refresh = async () => { cache.clear(); migStatus.clear(); await loadVault(); reopen(); };
     // Cambio di lingua: testi dinamici di nuovo, senza ricaricare dati né perdere l'editor
     this.languageChanged = () => {
       renderLimitOptions();
       if (vault.state !== 'unlocked') { render(); return; }
       renderConnections();
       renderWorkspace();
+      renderMigDialog();
       if (designer) renderDesigner();
       else if (grid?.data) renderGrid();
       else if (lastResult) renderResult(lastResult, true);

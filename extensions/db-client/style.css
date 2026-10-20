@@ -116,3 +116,16 @@
 .db-history-item:hover{border-color:var(--ext-color)}
 .db-history-meta{font-size:11px;color:var(--muted)}
 .db-history-item code{font-family:var(--font);font-size:11.5px;white-space:pre-wrap;word-break:break-word}
+
+/* migration: badge nell'intestazione e dialog di collegamento */
+.db-mig-badge{display:inline-flex;gap:4px;align-items:center;font-size:12px}
+.db-mig-crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}
+.db-mig-crumb{background:none;border:none;color:var(--accent,#388bfd);cursor:pointer;font-family:var(--font);font-size:12px;padding:2px 4px}
+.db-mig-crumb:hover{text-decoration:underline}
+.db-mig-folders{display:flex;flex-direction:column;max-height:180px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:4px}
+.db-mig-folder{background:none;border:none;text-align:start;color:var(--text);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:13px}
+.db-mig-folder:hover{background:var(--surface2)}
+.db-mig-new{display:flex;gap:6px;margin-top:6px}
+.db-mig-scan{display:flex;flex-direction:column;gap:4px;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:var(--radius);margin-top:8px}
+.db-mig-scan ul{margin:4px 0 0;padding-inline-start:18px;font-family:var(--font);font-size:12px}
+.db-mig-warn{color:var(--warning,#d29922)}
