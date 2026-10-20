@@ -254,6 +254,17 @@ Goal: see at a glance which variables a project's `.env` is missing compared wit
 - [x] **M10.4b** MCP tool `env_check`: files and keys with the differences, **without values** (no write tools)
 - [x] **M10.5** Tests (fixtures with missing and extra keys, parser edge cases), README, CHANGELOG
 
+## M11 — HTTP client — new extension `http-client`
+
+Goal: send requests to the local APIs of a project and keep the useful ones. Minimal version.
+
+- [ ] **M11.1** Requests (method, URL, headers, query, JSON or text body) saved in collections per npm project, in its own config section, with an Export/Import checkbox
+- [ ] **M11.2** Sending through the DevDock backend (no CORS limits), with timeout and response size limit; response shown with status, time, size, headers and body (JSON formatted)
+- [ ] **M11.3** Variables per project (`{{baseUrl}}`, `{{token}}`) used in URL, headers and body; variables marked as secret are encrypted with the master password vault of the DB client (optional dependency: without it secrets can't be saved)
+- [ ] **M11.4** Import of the operations of an OpenAPI file (YAML/JSON) as requests of a collection
+- [ ] **M11.5** Tests (local test server: methods, headers, body, timeout, variables, secrets never in clear in `config.json`), README, CHANGELOG
+
+
 ## M12 — Tab order — core
 
 Goal: let the user put the extension tabs in the order they prefer. It is part of the shell, so it lives in the core.
@@ -281,4 +292,5 @@ Goal: let the user put the extension tabs in the order they prefer. It is part o
 | M8 MCP server | L | after M6 and M7; core server + contract first, then read-only tools per extension, write tools opt-in |
 | M9 Ports in use | S | `lib/ports.js` extended; Windows through `netstat` |
 | M10 Environment files | S | read and write, comments and order kept; values never stored in DevDock or sent to agents |
+| M11 HTTP client | M | secrets through the DB client vault (optional dependency) |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
