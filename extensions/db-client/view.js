@@ -527,6 +527,13 @@ export default {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => { grid.search = e.target.value; grid.page = 1; loadGrid(); }, 300);
     });
+    $(ctx.root, 'results').addEventListener('click', e => {
+      const th = e.target.closest('[data-result-sort]');
+      if (!th || !lastResult || grid || designer) return;
+      const col = Number(th.dataset.resultSort);
+      resultSort = resultSort?.col !== col ? { col, dir: 'asc' } : resultSort.dir === 'asc' ? { col, dir: 'desc' } : null;
+      renderResult(lastResult, true);
+    });
     $(ctx.root, 'results').addEventListener('dblclick', e => {
       const td = e.target.closest('td.db-editable');
       if (td && grid) editCell(td);
@@ -704,6 +711,28 @@ export default {
       return (sel.trim() ? sel : sqlInput.value).trim();
     };
 
+    // ---- storico delle query (sessionStorage: dura quanto la scheda) ----
+    const HISTORY_KEY = 'devdock.db-client.history';
+    const HISTORY_MAX = 100;
+    const readHistory = () => { try { return JSON.parse(sessionStorage.getItem(HISTORY_KEY)) || []; } catch { return []; } };
+    function addHistory(entry) {
+      const list = readHistory().filter(h => !(h.sql === entry.sql && h.connId === entry.connId && h.db === entry.db));
+      list.unshift(entry);
+      try { sessionStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, HISTORY_MAX))); } catch {}
+    }
+
+    function showHistory() {
+      const list = readHistory();
+      const label = id => connections.find(c => c.id === id)?.label || id;
+      openModal('Storico della sessione', list.length ? `
+        <div class="db-history">${list.map((h, i) => `
+          <button class="db-history-item" onclick="Ext['db-client'].useHistory(${i})" title="Carica nell'editor">
+            <span class="db-history-meta">${esc(new Date(h.at).toLocaleTimeString())} · ${esc(label(h.connId))}${h.db ? ` / ${esc(h.db)}` : ''} · ${h.ok ? `✓ ${esc(h.summary)}` : '✖ errore'}</span>
+            <code>${esc(h.sql.length > 300 ? h.sql.slice(0, 300) + '…' : h.sql)}</code>
+          </button>`).join('')}</div>` : '<p class="db-muted">Nessuna query eseguita in questa sessione.</p>',
+        `${list.length ? `<button class="btn btn-ghost" onclick="Ext['db-client'].clearHistory()">Svuota</button>` : ''}<button class="btn btn-primary" onclick="UI.closeModal()">Chiudi</button>`);
+    }
+
     let running = false;
     async function run(confirmToken) {
       const c = active();
@@ -722,9 +751,13 @@ export default {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
+        const record = (ok, summary) => addHistory({ sql, connId: c.id, db: body.database, at: Date.now(), ok, summary });
         if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token }));
-        else if (!res.ok) renderError(data.error || `HTTP ${res.status}`, sql);
-        else renderResult(data, sql);
+        else if (!res.ok) { renderError(data.error || `HTTP ${res.status}`, sql); record(false); }
+        else {
+          renderResult(data);
+          record(true, data.kind === 'rows' ? `${data.rowCount} righe` : `${data.affectedRows} righe interessate`);
+        }
       } catch (e) {
         renderError(e.message, sql);
       } finally {
@@ -749,8 +782,23 @@ export default {
       $(ctx.root, 'results').innerHTML = `<div class="db-error">✖ ${esc(message)}</div>`;
     }
 
-    function renderResult(data) {
+    // Ordinamento lato client dei risultati dell'editor (numeri come numeri, NULL in fondo)
+    let lastResult = null, resultSort = null;
+    function sortedRows(data) {
+      if (!resultSort) return data.rows;
+      const { col, dir } = resultSort;
+      const numeric = data.rows.every(r => r[col] === null || (r[col] !== '' && !isNaN(Number(r[col]))));
+      const cmp = (a, b) => {
+        if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
+        return numeric ? Number(a) - Number(b) : String(a).localeCompare(String(b), undefined, { numeric: true });
+      };
+      return [...data.rows].sort((x, y) => (dir === 'desc' ? -1 : 1) * cmp(x[col], y[col]));
+    }
+
+    function renderResult(data, keepSort) {
       const el = $(ctx.root, 'results');
+      if (!keepSort) resultSort = null;
+      lastResult = data;
       if (data.kind === 'result') {
         el.innerHTML = `<div class="db-ok">✓ ${esc(data.affectedRows)} righe interessate${data.insertId ? ` · insertId ${esc(data.insertId)}` : ''}${data.info ? ` · ${esc(data.info)}` : ''} <span class="db-muted">(${esc(data.ms)} ms)</span></div>`;
         return;
@@ -758,8 +806,8 @@ export default {
       el.innerHTML = `
         <div class="db-result-meta">${esc(data.rowCount)} righe${data.truncated ? ` (limitate a ${esc(data.limit)})` : ''} · ${esc(data.ms)} ms</div>
         <div class="db-table-wrap"><table class="data-table db-table">
-          <thead><tr>${data.columns.map(col => `<th title="${esc(col.type)}">${esc(col.name)}</th>`).join('')}</tr></thead>
-          <tbody>${data.rows.map(row => `<tr>${row.map(v => v === null ? '<td class="db-null">NULL</td>' : `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody>
+          <thead><tr>${data.columns.map((col, i) => `<th data-result-sort="${i}" title="${esc(col.type)} · clic per ordinare">${esc(col.name)}${resultSort?.col === i ? (resultSort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
+          <tbody>${sortedRows(data).map(row => `<tr>${row.map(v => v === null ? '<td class="db-null">NULL</td>' : `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody>
         </table></div>`;
     }
 
@@ -849,6 +897,18 @@ export default {
     const actions = {
       lock, saveVault,
       run: () => run(),
+      useHistory(i) {
+        const h = readHistory()[i];
+        if (!h) return;
+        closeModal();
+        if (h.connId !== activeId && connections.some(c => c.id === h.connId)) actions.select(h.connId);
+        if (h.db) activeDb.set(h.connId, h.db);
+        renderActiveDb();
+        sqlInput.value = h.sql;
+        sqlInput.dispatchEvent(new Event('input'));
+        sqlInput.focus();
+      },
+      clearHistory() { try { sessionStorage.removeItem(HISTORY_KEY); } catch {} closeModal(); toast('Storico svuotato'); },
       saveRowDialog(r) {
         const editing = r != null;
         const row = editing ? grid.data.rows[r] : null;
@@ -925,6 +985,7 @@ export default {
       if (a === 'vault-reset') resetVault();
       else if (a === 'run') run();
       else if (a === 'export-query') exportQuery(e.target.closest('[data-action]'));
+      else if (a === 'history') showHistory();
       else if (a === 'new-table') { const c = active(); if (c) openDesigner(c, activeDb.get(c.id)); }
     });
     // Albero: freccia apre/chiude; clic sulla connessione la seleziona, sul database lo rende
