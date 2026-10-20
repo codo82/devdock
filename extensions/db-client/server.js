@@ -5,6 +5,7 @@ const mysqlCb = require('mysql2');
 const mysql = require('mysql2/promise');
 const vaultLib = require('./vault');
 const { classify } = require('./sql');
+const ddl = require('./ddl');
 
 const DEFAULT_LOCK_MINUTES = 30;
 
@@ -370,7 +371,10 @@ module.exports = function createDbClient(ctx) {
 
     handlers: {
       info(req, res) {
-        res.json({ driver: 'mysql2', version: require('mysql2/package.json').version, ready: typeof mysql.createPool === 'function' });
+        res.json({
+          driver: 'mysql2', version: require('mysql2/package.json').version, ready: typeof mysql.createPool === 'function',
+          ddl: { types: ddl.TYPES, fkActions: ddl.FK_ACTIONS, engines: ddl.ENGINES },
+        });
       },
 
       // ---- connessioni ----
@@ -630,6 +634,31 @@ module.exports = function createDbClient(ctx) {
           res.json({ ...result, sql });
         } catch (e) {
           res.status(e.status || 400).json({ error: e.message, code: e.code || null });
+        }
+      },
+
+      // Creazione di una tabella da una definizione strutturata: il CREATE TABLE è
+      // generato qui e, come ogni modifica, eseguito solo dopo la conferma del testo esatto
+      // (la risposta 428 fa anche da anteprima per il designer)
+      async createTable(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const { db } = req.params;
+        if (!DB_NAME_RE.test(db)) return res.status(400).json({ error: 'Nome database non valido' });
+        if (conn.readOnly) return res.status(403).json({ error: 'Connessione in sola lettura' });
+        let sql;
+        try { sql = ddl.createTableSql(db, req.body.definition); }
+        catch (e) { if (e instanceof ddl.DdlError) return res.status(400).json({ error: e.message }); throw e; }
+        const token = confirmToken(conn, db, sql);
+        const given = typeof req.body.confirm === 'string' ? Buffer.from(req.body.confirm) : Buffer.alloc(0);
+        if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
+          return res.status(428).json({ needsConfirmation: true, token, verb: 'CREATE', database: db, sql });
+        }
+        try {
+          const result = await execute(await poolFor(conn, db), sql, 1);
+          res.json({ ...result, sql });
+        } catch (e) {
+          res.status(e.status || 400).json({ error: e.message, code: e.code || null, sql });
         }
       },
 

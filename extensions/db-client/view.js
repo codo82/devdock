@@ -183,6 +183,7 @@ export default {
     let grid = null; // { connId, db, table, page, pageSize, search, filters, sort, data }
 
     function openGrid(c, db, table) {
+      designer = null;
       grid = { connId: c.id, db, table, page: 1, pageSize: 50, search: '', filters: [], sort: null, data: null };
       loadGrid();
     }
@@ -244,6 +245,167 @@ export default {
         </table></div>`;
       if (hadFocus) { const i = el.querySelector('[data-grid="search"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
     }
+
+    // ---- designer di nuove tabelle (il CREATE TABLE è generato e confermato dal server) ----
+    let designer = null; // { connId, db, def }
+    let ddlInfo = null;
+    const newColumn = (over = {}) => ({ name: '', type: 'VARCHAR', length: 255, nullable: true, default: { kind: 'none' }, ...over });
+
+    async function openDesigner(c, db) {
+      if (c.readOnly) { toast('Connessione in sola lettura', 'error'); return; }
+      if (!db) { toast('Scegli prima un database dalla sidebar', 'error'); return; }
+      ddlInfo = ddlInfo || (await ctx.api.get('/info')).ddl;
+      grid = null;
+      designer = {
+        connId: c.id, db,
+        def: { name: '', engine: 'InnoDB', charset: 'utf8mb4', comment: '',
+               columns: [newColumn({ name: 'id', type: 'INT', length: '', unsigned: true, nullable: false, autoIncrement: true, pk: true })],
+               indexes: [], foreignKeys: [] },
+      };
+      renderDesigner();
+    }
+
+    const sel = (name, options, value, attrs = '') =>
+      `<select class="form-input db-dz" data-dz="${name}" ${attrs}>${options.map(o => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+    const txt = (name, value, attrs = '') => `<input class="form-input db-dz" data-dz="${name}" value="${esc(value ?? '')}" ${attrs}>`;
+    const chk = (name, value) => `<input type="checkbox" data-dz="${name}" ${value ? 'checked' : ''}>`;
+
+    function renderDesigner(sqlPreview) {
+      const { def, db } = designer;
+      const colNames = def.columns.map(c => c.name).filter(Boolean);
+      const tables = (cache.get(nodeKey('d', designer.connId, db)) || []).map?.(t => t.name) || [];
+      $(ctx.root, 'results').innerHTML = `
+        <div class="db-designer">
+          <div class="db-designer-head">
+            <strong>Nuova tabella in ${esc(db)}</strong>
+            ${txt('name', def.name, 'placeholder="nome_tabella" data-scope="table"')}
+            ${sel('engine', ddlInfo.engines, def.engine, 'data-scope="table"')}
+            ${txt('charset', def.charset, 'placeholder="charset" data-scope="table" style="width:100px"')}
+            ${txt('comment', def.comment, 'placeholder="commento" data-scope="table"')}
+          </div>
+          <h4>Colonne <button class="btn btn-ghost btn-sm" data-dz-act="add-col">+ Colonna</button></h4>
+          <table class="data-table db-dz-table"><thead><tr><th>Nome</th><th>Tipo</th><th>Lungh./prec.</th><th>Scala</th><th>Valori ENUM</th><th>UNSIGNED</th><th>NULL</th><th>Default</th><th>AI</th><th>PK</th><th>Commento</th><th></th></tr></thead>
+          <tbody>${def.columns.map((c, i) => `<tr data-col="${i}">
+            <td>${txt('name', c.name, 'placeholder="colonna"')}</td>
+            <td>${sel('type', ddlInfo.types, c.type)}</td>
+            <td>${txt('length', c.length, 'style="width:70px"')}</td>
+            <td>${c.type === 'DECIMAL' ? txt('scale', c.scale ?? 0, 'style="width:50px"') : ''}</td>
+            <td>${['ENUM', 'SET'].includes(c.type) ? txt('values', (c.values || []).join(','), 'placeholder="a,b,c"') : ''}</td>
+            <td>${chk('unsigned', c.unsigned)}</td>
+            <td>${chk('nullable', c.nullable)}</td>
+            <td class="db-dz-default">${sel('defaultKind', ['none', 'null', 'value', 'current_timestamp'], c.default.kind)}${c.default.kind === 'value' ? txt('defaultValue', c.default.value, 'style="width:90px"') : ''}</td>
+            <td>${chk('autoIncrement', c.autoIncrement)}</td>
+            <td>${chk('pk', c.pk)}</td>
+            <td>${txt('comment', c.comment)}</td>
+            <td><button class="btn btn-ghost btn-sm" data-dz-act="del-col" title="Rimuovi">✕</button></td>
+          </tr>`).join('')}</tbody></table>
+          <h4>Indici <button class="btn btn-ghost btn-sm" data-dz-act="add-index">+ Indice</button></h4>
+          ${def.indexes.map((ix, i) => `<div class="db-dz-line" data-index="${i}">
+            ${txt('name', ix.name, 'placeholder="nome indice (opzionale)"')}
+            ${txt('columns', ix.columns.join(','), `placeholder="colonne: ${esc(colNames.join(','))}"`)}
+            <label class="db-check">${chk('unique', ix.unique)} univoco</label>
+            <button class="btn btn-ghost btn-sm" data-dz-act="del-index">✕</button></div>`).join('') || '<p class="db-muted db-pad">Nessun indice</p>'}
+          <h4>Chiavi esterne <button class="btn btn-ghost btn-sm" data-dz-act="add-fk">+ Chiave esterna</button></h4>
+          ${def.foreignKeys.map((fk, i) => `<div class="db-dz-line" data-fk="${i}">
+            ${txt('columns', fk.columns.join(','), 'placeholder="colonne"')} →
+            ${tables.length ? sel('refTable', ['', ...tables], fk.refTable) : txt('refTable', fk.refTable, 'placeholder="tabella"')}
+            ${txt('refColumns', fk.refColumns.join(','), 'placeholder="colonne riferite"')}
+            ON DELETE ${sel('onDelete', ['', ...ddlInfo.fkActions], fk.onDelete || '')}
+            ON UPDATE ${sel('onUpdate', ['', ...ddlInfo.fkActions], fk.onUpdate || '')}
+            <button class="btn btn-ghost btn-sm" data-dz-act="del-fk">✕</button></div>`).join('') || '<p class="db-muted db-pad">Nessuna chiave esterna</p>'}
+          <div class="db-dz-actions">
+            <button class="btn btn-ghost btn-sm" data-dz-act="preview">Anteprima SQL</button>
+            <button class="btn btn-primary btn-sm" data-dz-act="create">Crea tabella</button>
+            <button class="btn btn-ghost btn-sm" data-dz-act="cancel">Annulla</button>
+          </div>
+          ${sqlPreview ? `<pre class="db-confirm-sql">${highlightSql(sqlPreview, esc)}</pre>` : ''}
+        </div>`;
+    }
+
+    // Aggiorna la definizione dal campo modificato
+    function designerInput(el) {
+      const { def } = designer;
+      const field = el.dataset.dz;
+      const value = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.dataset.scope === 'table') { def[field] = value; return false; }
+      const colRow = el.closest('[data-col]'), ixRow = el.closest('[data-index]'), fkRow = el.closest('[data-fk]');
+      const list = v => String(v).split(',').map(x => x.trim()).filter(Boolean);
+      if (colRow) {
+        const c = def.columns[Number(colRow.dataset.col)];
+        if (field === 'defaultKind') { c.default = { kind: value, value: c.default.value ?? '' }; return true; }
+        if (field === 'defaultValue') { c.default.value = value; return false; }
+        if (field === 'values') { c.values = list(value); return false; }
+        c[field] = value;
+        return field === 'type'; // cambia le celle disponibili (scala, valori ENUM)
+      }
+      if (ixRow) { const ix = def.indexes[Number(ixRow.dataset.index)]; ix[field] = field === 'columns' ? list(value) : value; }
+      if (fkRow) { const fk = def.foreignKeys[Number(fkRow.dataset.fk)]; fk[field] = ['columns', 'refColumns'].includes(field) ? list(value) : value; }
+      return false;
+    }
+
+    // Definizione da inviare: chiave primaria dalle caselle PK, campi vuoti tolti
+    function designerDefinition() {
+      const d = designer.def;
+      const num = v => v === '' || v == null ? undefined : Number(v);
+      return {
+        name: d.name.trim(), engine: d.engine, charset: d.charset.trim() || undefined, comment: d.comment || undefined,
+        columns: d.columns.map(c => ({
+          name: c.name.trim(), type: c.type, length: num(c.length), scale: num(c.scale), values: c.values,
+          unsigned: !!c.unsigned, nullable: !!c.nullable, autoIncrement: !!c.autoIncrement,
+          default: c.default, comment: c.comment || undefined,
+        })),
+        primaryKey: d.columns.filter(c => c.pk).map(c => c.name.trim()),
+        indexes: d.indexes.filter(i => i.columns.length),
+        foreignKeys: d.foreignKeys.filter(f => f.columns.length).map(f => ({ ...f, onDelete: f.onDelete || undefined, onUpdate: f.onUpdate || undefined })),
+      };
+    }
+
+    async function designerSubmit(execute) {
+      const c = connections.find(x => x.id === designer.connId);
+      const url = `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(designer.db)}/create-table`;
+      const definition = designerDefinition();
+      try {
+        const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ definition }) });
+        const data = await res.json().catch(() => ({}));
+        if (res.status !== 428) { toast(data.error || `HTTP ${res.status}`, 'error'); return; }
+        renderDesigner(data.sql);
+        if (!execute) return;
+        askConfirmation(data, async token => {
+          try {
+            await ctx.api.post(url, { definition, confirm: token });
+            toast(`Tabella ${definition.name} creata`, 'success');
+            const { db } = designer;
+            designer = null;
+            cache.delete(nodeKey('d', c.id, db));
+            open.add(nodeKey('d', c.id, db));
+            await loadTables(c, db);
+            showStructure(c, db, definition.name);
+          } catch (e) { toast(e.message, 'error'); }
+        }, true);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    $(ctx.root, 'results').addEventListener('change', e => {
+      if (designer && e.target.dataset.dz && designerInput(e.target)) renderDesigner();
+    });
+    $(ctx.root, 'results').addEventListener('input', e => {
+      if (designer && e.target.dataset.dz && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') designerInput(e.target);
+    });
+    $(ctx.root, 'results').addEventListener('click', e => {
+      const a = e.target.closest('[data-dz-act]')?.dataset.dzAct;
+      if (!a || !designer) return;
+      const d = designer.def;
+      if (a === 'add-col') d.columns.push(newColumn());
+      else if (a === 'del-col') d.columns.splice(Number(e.target.closest('[data-col]').dataset.col), 1);
+      else if (a === 'add-index') d.indexes.push({ name: '', columns: [], unique: false });
+      else if (a === 'del-index') d.indexes.splice(Number(e.target.closest('[data-index]').dataset.index), 1);
+      else if (a === 'add-fk') d.foreignKeys.push({ name: '', columns: [], refTable: '', refColumns: [], onDelete: '', onUpdate: '' });
+      else if (a === 'del-fk') d.foreignKeys.splice(Number(e.target.closest('[data-fk]').dataset.fk), 1);
+      else if (a === 'preview') return designerSubmit(false);
+      else if (a === 'create') return designerSubmit(true);
+      else if (a === 'cancel') { designer = null; $(ctx.root, 'results').innerHTML = ''; return; }
+      renderDesigner();
+    });
 
     // ---- export (il server genera il file in streaming; qui si avvia solo il download) ----
     async function startExport(c, format, source) {
@@ -553,6 +715,7 @@ export default {
       };
       running = true;
       grid = null;
+      designer = null;
       $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">Esecuzione...</div>';
       try {
         const res = await fetch(ctx.api.url(`/connections/${encodeURIComponent(c.id)}/query`), {
@@ -762,6 +925,7 @@ export default {
       if (a === 'vault-reset') resetVault();
       else if (a === 'run') run();
       else if (a === 'export-query') exportQuery(e.target.closest('[data-action]'));
+      else if (a === 'new-table') { const c = active(); if (c) openDesigner(c, activeDb.get(c.id)); }
     });
     // Albero: freccia apre/chiude; clic sulla connessione la seleziona, sul database lo rende
     // attivo, sulla tabella apre il menu contestuale (anche con il tasto destro)
@@ -789,7 +953,18 @@ export default {
       }
     }
     ctx.sidebar.addEventListener('click', e => onTree(e, false));
-    ctx.sidebar.addEventListener('contextmenu', e => { if (e.target.closest('[data-tree="table"]')) onTree(e, true); });
+    ctx.sidebar.addEventListener('contextmenu', e => {
+      if (e.target.closest('[data-tree="table"]')) return onTree(e, true);
+      const dbRow = e.target.closest('[data-tree="db"]');
+      if (!dbRow) return;
+      e.preventDefault();
+      const c = connections.find(x => x.id === dbRow.dataset.conn);
+      const db = dbRow.dataset.db;
+      ctx.ui.contextMenu(e.clientX, e.clientY, [
+        { icon: '＋', label: 'Nuova tabella…', disabled: c.readOnly, action: () => { setActiveDb(c, db); openDesigner(c, db); } },
+        { icon: '↻', label: 'Aggiorna tabelle', action: () => { cache.delete(nodeKey('d', c.id, db)); open.add(nodeKey('d', c.id, db)); loadTables(c, db); } },
+      ]);
+    });
     ctx.sidebar.addEventListener('click', e => {
       if (e.target.closest('[data-action="vault-menu"]')) vaultMenu();
       else if (e.target.closest('[data-action="add-connection"]')) actions.addConnection();

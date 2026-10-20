@@ -447,3 +447,61 @@ test('export CSV, JSON e SQL di tabelle (con filtri) e di SELECT', async t => {
     await mysqlDb.stop();
   }
 });
+
+test('creazione tabella da definizione strutturata, solo dopo conferma', async t => {
+  const mysqlDb = await startMysql();
+  if (!mysqlDb) return t.skip('mysqld non installato');
+  const s = await startServer();
+  try {
+    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    await api('POST', '/vault/init', { password: 'master-password-db' });
+    const base = { label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass' };
+    await api('POST', '/connections', { ...base, id: 'c' });
+    await api('POST', '/connections', { ...base, id: 'ro', readOnly: true });
+    const create = (body, id = 'c') => api('POST', `/connections/${id}/databases/app/create-table`, body);
+    const definition = {
+      name: 'ordini', engine: 'InnoDB', charset: 'utf8mb4', comment: "ordini d'acquisto",
+      columns: [
+        { name: 'id', type: 'INT', autoIncrement: true },
+        { name: 'cliente_id', type: 'INT' },
+        { name: 'stato', type: 'ENUM', values: ['nuovo', 'spedito'], default: { kind: 'value', value: 'nuovo' } },
+        { name: 'totale', type: 'DECIMAL', length: 10, scale: 2, default: { kind: 'value', value: '0' } },
+        { name: 'creato', type: 'DATETIME', default: { kind: 'current_timestamp' } },
+        { name: 'note', type: 'TEXT', nullable: true },
+      ],
+      primaryKey: ['id'],
+      indexes: [{ name: 'i_stato', columns: ['stato'] }],
+      foreignKeys: [{ name: 'fk_cliente', columns: ['cliente_id'], refTable: 'clienti', refColumns: ['id'], onDelete: 'CASCADE' }],
+    };
+
+    let r = await create({ definition });
+    assert.equal(r.status, 428);
+    assert.match(r.json.sql, /^CREATE TABLE `app`.`ordini` \(/);
+    assert.equal((await api('GET', '/connections/c/databases/app/tables')).json.tables.length, 1); // ancora nulla
+    r = await create({ definition, confirm: r.json.token });
+    assert.equal(r.status, 200, r.text);
+    const info = (await api('GET', '/connections/c/databases/app/tables/ordini')).json;
+    assert.deepEqual(info.columns.map(c => c.name), ['id', 'cliente_id', 'stato', 'totale', 'creato', 'note']);
+    assert.deepEqual(info.foreignKeys.map(f => f.refTable), ['clienti']);
+
+    // definizioni non valide: nessun SQL arbitrario passa
+    for (const bad of [
+      { ...definition, name: '' },
+      { ...definition, columns: [{ name: 'a', type: 'INT); DROP TABLE clienti; --' }] },
+      { ...definition, columns: [{ name: 'a', type: 'VARCHAR' }] },
+      { ...definition, foreignKeys: [{ columns: ['cliente_id'], refTable: 'clienti', refColumns: ['id'], onDelete: 'DROP' }] },
+      { ...definition, engine: 'InnoDB; DROP' },
+      { ...definition, primaryKey: ['inesistente'] },
+    ]) assert.equal((await create({ definition: bad })).status, 400, JSON.stringify(bad).slice(0, 80));
+
+    assert.equal((await create({ definition: { ...definition, name: 'altro' } }, 'ro')).status, 403);
+    // errore di MySQL (tabella già esistente) restituito con il testo
+    r = await create({ definition });
+    r = await create({ definition, confirm: r.json.token });
+    assert.equal(r.status, 400);
+    assert.equal(r.json.code, 'ER_TABLE_EXISTS_ERROR');
+  } finally {
+    await s.stop();
+    await mysqlDb.stop();
+  }
+});

@@ -95,3 +95,15 @@
 .db-row-actions{width:74px}
 .db-row-actions input[type=checkbox]{vertical-align:middle;margin-right:4px;cursor:pointer}
 .db-selected td{background:color-mix(in srgb,var(--danger) 8%,transparent)}
+
+/* designer di tabelle */
+.db-designer{padding:12px 16px;overflow:auto}
+.db-designer h4{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 0 6px;display:flex;align-items:center;gap:8px}
+.db-designer-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.db-designer-head strong{color:var(--ext-color);font-size:13px}
+.db-dz{padding:3px 6px;font-size:12px;width:auto;min-width:0}
+.db-dz-table td{padding:3px 4px}
+.db-dz-table input[type=text],.db-dz-table .db-dz{max-width:150px}
+.db-dz-default{white-space:nowrap}
+.db-dz-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;color:var(--muted)}
+.db-dz-actions{display:flex;gap:8px;margin:14px 0 10px}
