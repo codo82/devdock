@@ -17,5 +17,20 @@
   <div class="empty-state" data-role="no-connection"><div class="icon">🗄️</div><p>Seleziona una connessione dalla sidebar</p></div>
   <div class="db-workspace" data-role="workspace" hidden>
     <div class="db-conn-header" data-role="conn-header"></div>
+    <div class="db-toolbar">
+      <select class="form-input db-select" data-role="database" title="Database"></select>
+      <select class="form-input db-select db-limit" data-role="limit" title="Righe massime">
+        <option value="100">100 righe</option>
+        <option value="1000" selected>1000 righe</option>
+        <option value="10000">10000 righe</option>
+      </select>
+      <button class="btn btn-primary btn-sm" data-action="run" title="Esegui (Ctrl/Cmd+Invio): la selezione o tutto il testo">▶ Esegui</button>
+      <span class="db-hint">Ctrl/Cmd+Invio · le modifiche a dati e schema chiedono sempre conferma</span>
+    </div>
+    <div class="db-editor" data-role="editor">
+      <pre class="db-editor-highlight" aria-hidden="true"><code data-role="highlight"></code></pre>
+      <textarea class="db-editor-input" data-role="sql" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="SELECT * FROM …"></textarea>
+    </div>
+    <div class="db-results" data-role="results"></div>
   </div>
 </div>

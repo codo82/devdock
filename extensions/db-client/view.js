@@ -1,5 +1,26 @@
 // Database: vault della master password, connessioni, editor delle query e risultati
 
+const SQL_KEYWORDS = new Set(`ADD ALL ALTER AND AS ASC AUTO_INCREMENT BETWEEN BIGINT BINARY BLOB BY CASCADE CASE CHAR CHARACTER CHARSET CHECK
+COLLATE COLUMN COMMENT CONSTRAINT CREATE CROSS DATABASE DATABASES DATE DATETIME DECIMAL DEFAULT DELETE DESC DESCRIBE DISTINCT DOUBLE DROP
+ELSE END ENGINE ENUM EXISTS EXPLAIN FALSE FLOAT FOR FOREIGN FROM FULL GROUP HAVING IF IGNORE IN INDEX INNER INSERT INT INTEGER INTERVAL INTO
+IS JOIN JSON KEY KEYS LEFT LIKE LIMIT LONGTEXT MEDIUMTEXT MODIFY NOT NULL OFFSET ON OR ORDER OUTER PRIMARY REFERENCES RENAME REPLACE RIGHT
+SELECT SET SHOW SMALLINT TABLE TABLES TEXT THEN TIME TIMESTAMP TINYINT TRUE TRUNCATE UNION UNIQUE UNSIGNED UPDATE USING VALUES VARCHAR VIEW
+WHEN WHERE WITH`.split(/\s+/));
+
+// Evidenziazione leggera: commenti, stringhe, identificatori quotati, numeri, parole chiave
+function highlightSql(sql, esc) {
+  const re = /(--[^\n]*|#[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|('(?:[^'\\]|\\.|'')*'?|"(?:[^"\\]|\\.|"")*"?)|(`(?:[^`]|``)*`?)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_$]*)/g;
+  let out = '', last = 0, m;
+  while ((m = re.exec(sql))) {
+    out += esc(sql.slice(last, m.index));
+    const [tok, comment, str, ident, num, word] = m;
+    const cls = comment ? 'c' : str ? 's' : ident ? 'i' : num ? 'n' : word && SQL_KEYWORDS.has(word.toUpperCase()) ? 'k' : null;
+    out += cls ? `<span class="sql-${cls}">${esc(tok)}</span>` : esc(tok);
+    last = m.index + tok.length;
+  }
+  return out + esc(sql.slice(last)) + '\n'; // la riga finale vuota mantiene allineata la textarea
+}
+
 export default {
   async mount(ctx) {
     const { esc, js, toast, openModal, closeModal } = ctx.ui;
@@ -11,6 +32,7 @@ export default {
     let activeId = null;
 
     const active = () => connections.find(c => c.id === activeId) || null;
+    const editors = new Map(); // testo dell'editor per connessione
 
     // ---- vault ----
     async function loadVault() {
@@ -78,6 +100,9 @@ export default {
       $(ctx.root, 'no-connection').hidden = !!c;
       $(ctx.root, 'workspace').hidden = !c;
       if (!c) return;
+      $(ctx.root, 'sql').value = editors.get(c.id) || '';
+      syncHighlight();
+      loadDatabases(c);
       $(ctx.root, 'conn-header').innerHTML = `
         <h3>🗄️ ${esc(c.label)}</h3>
         <span class="db-conn-meta">${esc(c.user)}@${esc(target(c))}${c.database ? ` / ${esc(c.database)}` : ''}</span>
@@ -133,6 +158,97 @@ export default {
         readOnly: !!document.getElementById('f_db_readonly')?.checked,
         password: document.getElementById('f_db_clear')?.checked ? null : password,
       };
+    }
+
+    // ---- editor ----
+    const sqlInput = $(ctx.root, 'sql');
+    function syncHighlight() {
+      $(ctx.root, 'highlight').innerHTML = highlightSql(sqlInput.value, esc);
+      const pre = $(ctx.root, 'highlight').parentElement;
+      pre.scrollTop = sqlInput.scrollTop;
+      pre.scrollLeft = sqlInput.scrollLeft;
+    }
+    sqlInput.addEventListener('input', () => { if (activeId) editors.set(activeId, sqlInput.value); syncHighlight(); });
+    sqlInput.addEventListener('scroll', syncHighlight);
+    sqlInput.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+      else if (e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        sqlInput.setRangeText('  ', sqlInput.selectionStart, sqlInput.selectionEnd, 'end');
+        sqlInput.dispatchEvent(new Event('input'));
+      }
+    });
+
+    async function loadDatabases(c) {
+      const select = $(ctx.root, 'database');
+      select.innerHTML = c.database ? `<option>${esc(c.database)}</option>` : '<option value="">— nessuno —</option>';
+      try {
+        const r = await ctx.api.get(`/connections/${encodeURIComponent(c.id)}/databases`);
+        if (activeId !== c.id) return;
+        select.innerHTML = `<option value="">— nessuno —</option>` + r.databases.map(d => `<option ${d === (select.dataset.chosen || r.default) ? 'selected' : ''}>${esc(d)}</option>`).join('');
+      } catch { /* senza connessione resta il database configurato */ }
+    }
+
+    // Testo da eseguire: la selezione, se c'è, altrimenti tutto
+    const statement = () => {
+      const sel = sqlInput.value.slice(sqlInput.selectionStart, sqlInput.selectionEnd);
+      return (sel.trim() ? sel : sqlInput.value).trim();
+    };
+
+    let running = false;
+    async function run(confirmToken) {
+      const c = active();
+      const sql = typeof confirmToken === 'object' ? confirmToken.sql : statement();
+      if (!c || !sql || running) return;
+      const body = {
+        sql, database: $(ctx.root, 'database').value || null, limit: Number($(ctx.root, 'limit').value),
+        ...(typeof confirmToken === 'object' ? { confirm: confirmToken.token } : {}),
+      };
+      running = true;
+      $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">Esecuzione...</div>';
+      try {
+        const res = await fetch(ctx.api.url(`/connections/${encodeURIComponent(c.id)}/query`), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 428 && data.needsConfirmation) askConfirmation(data);
+        else if (!res.ok) renderError(data.error || `HTTP ${res.status}`, sql);
+        else renderResult(data, sql);
+      } catch (e) {
+        renderError(e.message, sql);
+      } finally {
+        running = false;
+      }
+    }
+
+    // Nessuna modifica parte senza che l'utente veda e confermi l'istruzione esatta
+    let pendingConfirm = null;
+    function askConfirmation(data) {
+      pendingConfirm = data;
+      $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">In attesa di conferma…</div>';
+      openModal('Conferma modifica', `
+        <p class="db-confirm-text">Questa istruzione <strong>${esc(data.verb || 'sconosciuta')}</strong> può modificare dati o schema${data.database ? ` del database <strong>${esc(data.database)}</strong>` : ''} su <strong>${esc(active()?.label || '')}</strong>.${data.reason ? ` <span class="db-muted">(${esc(data.reason)})</span>` : ''}</p>
+        <pre class="db-confirm-sql">${highlightSql(data.sql, esc)}</pre>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].cancelConfirm()">Annulla</button>
+         <button class="btn btn-danger" onclick="Ext['db-client'].confirmRun()">Esegui</button>`);
+    }
+
+    function renderError(message, sql) {
+      $(ctx.root, 'results').innerHTML = `<div class="db-error">✖ ${esc(message)}</div>`;
+    }
+
+    function renderResult(data) {
+      const el = $(ctx.root, 'results');
+      if (data.kind === 'result') {
+        el.innerHTML = `<div class="db-ok">✓ ${esc(data.affectedRows)} righe interessate${data.insertId ? ` · insertId ${esc(data.insertId)}` : ''}${data.info ? ` · ${esc(data.info)}` : ''} <span class="db-muted">(${esc(data.ms)} ms)</span></div>`;
+        return;
+      }
+      el.innerHTML = `
+        <div class="db-result-meta">${esc(data.rowCount)} righe${data.truncated ? ` (limitate a ${esc(data.limit)})` : ''} · ${esc(data.ms)} ms</div>
+        <div class="db-table-wrap"><table class="data-table db-table">
+          <thead><tr>${data.columns.map(col => `<th title="${esc(col.type)}">${esc(col.name)}</th>`).join('')}</tr></thead>
+          <tbody>${data.rows.map(row => `<tr>${row.map(v => v === null ? '<td class="db-null">NULL</td>' : `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table></div>`;
     }
 
     const modalButtons = (label, call) =>
@@ -220,6 +336,17 @@ export default {
 
     const actions = {
       lock, saveVault,
+      run: () => run(),
+      confirmRun() {
+        const data = pendingConfirm;
+        pendingConfirm = null;
+        closeModal();
+        if (data) run({ sql: data.sql, token: data.token });
+      },
+      cancelConfirm() {
+        pendingConfirm = null;
+        $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">Esecuzione annullata: nessuna modifica.</div>';
+      },
       select(id) { activeId = id; renderConnections(); renderWorkspace(); },
       async addConnection() { openModal('Nuova connessione', await connectionForm(), modalButtons('Crea', "Ext['db-client'].saveConnection()")); },
       async editConnection(id) {
@@ -259,7 +386,12 @@ export default {
     };
 
     $(ctx.root, 'gate-form').addEventListener('submit', submitGate);
-    ctx.root.addEventListener('click', e => { if (e.target.closest('[data-action="vault-reset"]')) resetVault(); });
+    ctx.root.addEventListener('click', e => {
+      const a = e.target.closest('[data-action]')?.dataset.action;
+      if (a === 'vault-reset') resetVault();
+      else if (a === 'run') run();
+    });
+    $(ctx.root, 'database').addEventListener('change', e => { e.target.dataset.chosen = e.target.value; });
     ctx.sidebar.addEventListener('click', e => {
       if (e.target.closest('[data-action="vault-menu"]')) vaultMenu();
       else if (e.target.closest('[data-action="add-connection"]')) actions.addConnection();
