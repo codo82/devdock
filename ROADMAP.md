@@ -222,7 +222,7 @@ First version (agreed scope): **read-only** tools for every extension, plus runn
 - [x] **M8.5** Tools namespaced by extension code (`git_repo_status`, `db_client_query`); disabled extensions expose nothing
 - [x] **M8.6** Results as structured JSON plus text, long outputs limited by parameters and truncated with a flag; errors as MCP tool errors with the M6 error codes
 - [x] **M8.7** Tools: Tunnels (servers and active tunnels); PM2 (processes, log tail); Git (repos with branch and ahead/behind, status, log); npm (projects and scripts, running processes, output of a process; **run a script** and **stop a process**); DB client (connections without credentials, tables, structure of a table, read-only query with row limit run in a `READ ONLY` transaction) — only with the vault unlocked, otherwise a clear error
-- [x] **M8.8** "MCP" panel: endpoint, token (show, copy, regenerate), ready-to-copy setup for Claude Code and Claude Desktop, list of the tools per extension
+- [x] **M8.8** "MCP" dialog in the core header (🤖): endpoint, token (show, copy, regenerate), ready-to-copy setup for Claude Code and Claude Desktop, list of the tools per extension
 - [x] **M8.9** Tests with the SDK client: initialize, list and call tools, rejection without token or with a browser `Origin`, DB tools with the vault locked and unlocked, secrets never returned
 - [x] **M8.10** Docs: README section "MCP server" and the `mcp` manifest block in `docs/EXTENSIONS.md`
 

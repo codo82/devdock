@@ -13,7 +13,7 @@ Read before changing code:
 - Commit messages in Italian; ROADMAP.md, README.md, CHANGELOG.md and docs in English.
 - UI text never written in the code: it goes in the catalogs (`public/core/i18n/<lang>.json`, `extensions/<code>/i18n/<lang>.json`) and is used through `t()` / `ctx.t()` and `data-i18n` attributes. Italian (`it.json`) is the source language and must always be complete; keep `en.json` in step. API errors are `throw ctx.error(status, name, params)` with the message in `errors.<name>`. Dates and numbers go through `fmt` (Intl). `npm test` checks the catalogs and flags hard-coded Italian text.
 - A milestone is closed with a minor version: CHANGELOG `[Unreleased]` → version, `npm version <x.y.0> --no-git-tag-version`, annotated tag `v<x.y.0>`, merge into `main`.
-- New features go in `extensions/<code>/`, not in the core (`lib/`, `routes/core.js`, `public/core/`). The core changes only for things every extension needs, and the contract change goes in docs/EXTENSIONS.md.
+- An extension is a feature that can be added or removed (`extensions/<code>/`); what is always there belongs to the core (`lib/`, `routes/core.js`, `public/core/`): shell, header, configuration, security, languages, MCP server. The core changes only for those and for things every extension needs, and contract changes go in docs/EXTENSIONS.md.
 - Validate every value that reaches a command (`ctx.lib.validate`, `ConfigError`); in generated HTML escape text with `esc()` and inline-handler arguments with `js()`.
 
 ## Running and testing

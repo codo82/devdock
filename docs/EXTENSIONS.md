@@ -1,6 +1,6 @@
 # DevDock extensions
 
-Every feature of DevDock is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, a few shared services and the UI shell (navigation, header, dialogs).
+Every feature that can be added or removed is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, a few shared services and the UI shell (navigation, header, dialogs).
 
 ## Existing extensions
 
@@ -12,7 +12,6 @@ Every feature of DevDock is an **extension**: a folder under `extensions/` that 
 | `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `npm`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | `npm` (required) | no |
 | `swagger` | tab | 40 | — | — | — | no |
-| `mcp` | header | 20 | — | — | — | no |
 
 Services offered to other extensions (`ctx.require(code)`): `npm` → `getProjects()`, `getProject(id)`, `readPackage(project)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
 
@@ -191,7 +190,7 @@ Steps to enable MCP for an extension:
 
 1. Add the `mcp.tools` block to `setting.json` (the extension needs a `backend`).
 2. Implement each `handler` in `instance.mcp` of `server.js`, reusing the same services and validation as the HTTP routes; errors are thrown with `ctx.error`, so their messages go in `i18n/<lang>.json` under `errors.<name>`.
-3. Restart DevDock: the tools appear in the 🤖 *MCP server* panel and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
+3. Restart DevDock: the tools appear in the 🤖 *MCP server* dialog of the header and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
 4. Try them from a client: copy the setup from the panel (for Claude Code `claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"`), or in a test with the SDK client as in `tests/mcp.test.js`.
 
 The extensions shipped with DevDock expose: `tunnels_list`; `pm2_list`, `pm2_logs`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI).
@@ -307,7 +306,7 @@ Inline handlers call the functions published with `ctx.expose`, always escaping 
 
 Inside the panel, the sidebar and the pills the CSS variable `--ext-color` holds the extension colour; the `hidden` attribute always hides an element; elements with `data-uptime="<ISO date>"` show an elapsed time that updates every second. Shared classes (`btn`, `sidebar-head`, `sb-item`, `empty-state`, `data-table`, `form-row`, `pill`, `tool-notice`, …) are defined in `public/core/shell.css`.
 
-The header (notifications, Export/Import dialogs built from the extensions' checkboxes, ↻) belongs to the core.
+The header (language, notifications, Export/Import dialogs built from the extensions' checkboxes, 🤖 MCP server, ↻) belongs to the core.
 
 ## Translations
 

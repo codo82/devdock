@@ -62,7 +62,7 @@ A connection can be linked to a **migrations folder in a repository** (📁 Migr
 
 ## MCP server
 
-DevDock is also an **MCP server**, so AI agents (Claude Code, Claude Desktop, any MCP client) can look at your development environment: tunnels, PM2 processes, Git repositories, npm projects and databases. Open the 🤖 panel in the header for the endpoint, the token and ready-to-copy setup:
+DevDock is also an **MCP server**, so AI agents (Claude Code, Claude Desktop, any MCP client) can look at your development environment: tunnels, PM2 processes, Git repositories, npm projects and databases. Click 🤖 in the header for the endpoint, the token and ready-to-copy setup:
 
 ```bash
 claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"
@@ -70,7 +70,7 @@ claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Auth
 
 - **What an agent can do**: read tunnels and their status, PM2 processes and logs, Git repositories (branch, ahead/behind, status, log), npm projects and scripts, the output of npm processes; **start and stop npm scripts**; on databases list connections (without credentials), databases, tables and table structures, and run read-only queries (row limit, run in a `READ ONLY` transaction). Nothing else changes state.
 - **Databases need the vault unlocked from the DevDock UI**: the master password never goes through the agent. When the vault is locked the tools answer with a clear error asking you to unlock it.
-- **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.devdock-mcp-token` next to `config.json` (not exported, regenerable from the panel). Requests coming from a browser are rejected.
+- **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.devdock-mcp-token` next to `config.json` (not exported, regenerable from the 🤖 dialog). Requests coming from a browser are rejected.
 - Tool names are prefixed with the extension (`git_status`, `npm_run`, `db_client_query`); errors carry the same codes as the API.
 
 ## Configuration

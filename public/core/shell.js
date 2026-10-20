@@ -365,6 +365,84 @@ window.Shell = (() => {
     } catch (e) { toast(t('core.import.error', { error: e.message }), 'error'); }
   }
 
+  // ---- server MCP: endpoint, token, configurazione dei client, strumenti ----
+  let mcpData = null, mcpShowToken = false;
+
+  async function openMcp() {
+    try { mcpData = await apiClient('/api/core').get('/mcp'); }
+    catch (e) { toast(e.message, 'error'); return; }
+    mcpShowToken = false;
+    renderMcp();
+  }
+
+  function mcpSnippets() {
+    const auth = `Bearer ${mcpData.token}`;
+    return {
+      url: mcpData.url,
+      token: mcpData.token,
+      claudeCode: `claude mcp add --transport http devdock ${mcpData.url} --header "Authorization: ${auth}"`,
+      desktop: JSON.stringify({ mcpServers: { devdock: { command: 'npx', args: ['-y', 'mcp-remote', mcpData.url, '--header', `Authorization:${auth}`] } } }, null, 2),
+    };
+  }
+
+  function renderMcp() {
+    const sn = mcpSnippets();
+    const masked = mcpShowToken ? mcpData.token : `${mcpData.token.slice(0, 6)}${'•'.repeat(20)}`;
+    const hide = text => (mcpShowToken ? text : text.split(mcpData.token).join(masked));
+    const block = (id, text) => `<div class="mcp-row"><pre class="mcp-code">${esc(hide(text))}</pre>
+      <button class="btn btn-ghost btn-sm" onclick="Shell.mcpCopy(${js(id)})">${esc(t('core.mcp.copy'))}</button></div>`;
+    const names = new Map(extList.map(e => [e.code, `${e.icon ? e.icon + ' ' : ''}${pick(e.name)}`]));
+    const byExt = new Map();
+    for (const tool of mcpData.tools) byExt.set(tool.extension, [...(byExt.get(tool.extension) || []), tool]);
+    openModal(t('core.mcp.title'), `
+      <div class="mcp-body">
+        <p class="mcp-muted">${esc(t('core.mcp.intro'))}</p>
+        <div class="mcp-section">
+          <h4>${esc(t('core.mcp.endpoint'))}</h4>
+          ${block('url', sn.url)}
+          <h4>${esc(t('core.mcp.token'))}</h4>
+          <div class="mcp-row"><pre class="mcp-code">${esc(masked)}</pre>
+            <button class="btn btn-ghost btn-sm" onclick="Shell.mcpToggle()">${esc(t(mcpShowToken ? 'core.mcp.hide' : 'core.mcp.show'))}</button>
+            <button class="btn btn-ghost btn-sm" onclick="Shell.mcpCopy('token')">${esc(t('core.mcp.copy'))}</button>
+            <button class="btn btn-ghost btn-sm" onclick="Shell.mcpRegenerate()">${esc(t('core.mcp.regenerate'))}</button></div>
+          <p class="mcp-muted">${esc(t('core.mcp.tokenHint'))}</p>
+        </div>
+        <div class="mcp-section">
+          <h4>${esc(t('core.mcp.claudeCode'))}</h4>
+          ${block('claudeCode', sn.claudeCode)}
+          <h4>${esc(t('core.mcp.claudeDesktop'))}</h4>
+          <p class="mcp-muted">${esc(t('core.mcp.claudeDesktopHint'))}</p>
+          ${block('desktop', sn.desktop)}
+          <p class="mcp-muted">${esc(t('core.mcp.otherClients'))}</p>
+        </div>
+        <div class="mcp-section">
+          <h4>${esc(t('core.mcp.tools', { count: mcpData.tools.length }))}</h4>
+          <p class="mcp-muted">${esc(t('core.mcp.toolsHint'))}</p>
+          <div class="mcp-tools">${[...byExt].map(([ext, tools]) => `
+            <div class="mcp-ext">${esc(names.get(ext) || ext)}</div>
+            ${tools.map(tool => `<div class="mcp-tool-name">${esc(tool.name)}<span class="mcp-badge ${tool.readOnly ? '' : 'write'}">${esc(t(tool.readOnly ? 'core.mcp.read' : 'core.mcp.write'))}</span></div>
+              <div class="mcp-muted">${esc(tool.description)}</div>`).join('')}`).join('')}
+          </div>
+        </div>
+      </div>`,
+      `<button class="btn btn-primary" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>`);
+    document.getElementById('modal').classList.add('modal-mcp');
+  }
+
+  async function mcpCopy(what) {
+    try { await navigator.clipboard.writeText(mcpSnippets()[what]); toast(t('core.mcp.copied'), 'success'); }
+    catch { toast(t('core.mcp.copyFailed'), 'error'); }
+  }
+
+  async function mcpRegenerate() {
+    if (!confirm(t('core.mcp.confirmRegenerate'))) return;
+    try {
+      mcpData.token = (await apiClient('/api/core').post('/mcp/token')).token;
+      toast(t('core.mcp.regenerated'), 'success');
+      renderMcp();
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
   // ---- lingua: pulsante nell'header (solo con più di una lingua) e cambio senza ricaricare ----
   function renderLanguageButton() {
     const btn = document.getElementById('langBtn');
@@ -445,5 +523,8 @@ window.Shell = (() => {
       `<div class="empty-state"><div class="icon">🧩</div><p>${esc(t('core.extensions.none'))}</p></div>`;
   })();
 
-  return { has, activate, open, refresh, toggleNotifications, exportConfig, doExport, importConfig, doImport, chooseLanguage };
+  return {
+    has, activate, open, refresh, toggleNotifications, exportConfig, doExport, importConfig, doImport, chooseLanguage,
+    openMcp, mcpCopy, mcpRegenerate, mcpToggle() { mcpShowToken = !mcpShowToken; renderMcp(); },
+  };
 })();
