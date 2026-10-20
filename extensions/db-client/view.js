@@ -198,8 +198,17 @@ export default {
       } catch (e) { if (grid === g) renderError(e.message); }
     }
 
+    // Modifica possibile solo con chiave primaria e connessione scrivibile
+    const gridEditable = () => grid?.data?.primaryKey.length > 0 && !connections.find(x => x.id === grid.connId)?.readOnly;
+    const isAuto = col => /auto_increment/i.test(col.extra || '');
+    // Valore cambiato? (i campi del form sono stringhe, i dati possono essere numeri o NULL)
+    const changed = (next, prev) => next === null ? prev !== null : prev === null || next !== String(prev);
+    const keyOf = row => Object.fromEntries(grid.data.primaryKey.map(k => [k, row[grid.data.columns.findIndex(c => c.name === k)]]));
+
     function renderGrid() {
       const { data, sort } = grid;
+      const editable = gridEditable();
+      const canInsert = !connections.find(x => x.id === grid.connId)?.readOnly;
       const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
       const el = $(ctx.root, 'results');
       const hadFocus = document.activeElement?.dataset?.grid === 'search';
@@ -208,6 +217,8 @@ export default {
           <strong class="db-grid-title">${esc(grid.db)}.${esc(grid.table)}</strong>
           <input class="form-input db-grid-search" data-grid="search" placeholder="Cerca in tutte le colonne…" value="${esc(grid.search)}">
           <button class="btn btn-ghost btn-sm" data-grid="add-filter">+ Filtro</button>
+          ${canInsert ? '<button class="btn btn-ghost btn-sm" data-grid="insert-dialog">+ Riga</button>' : ''}
+          ${!data.primaryKey.length ? '<span class="db-badge db-badge-warn" title="Senza chiave primaria le righe non si possono identificare">senza chiave primaria: modifica non disponibile</span>' : ''}
           ${grid.filters.map((f, i) => `<span class="db-chip">${esc(f.column)} ${esc(FILTER_LABELS[f.op])}${f.op === 'null' || f.op === 'notnull' ? '' : ` <b>${esc(f.value)}</b>`}<button data-grid="remove-filter" data-i="${i}" title="Rimuovi">✕</button></span>`).join('')}
           <div class="db-pager">
             <button class="btn btn-ghost btn-sm" data-grid="page" data-p="1" ${grid.page <= 1 ? 'disabled' : ''}>«</button>
@@ -219,11 +230,85 @@ export default {
           </div>
         </div>
         <div class="db-table-wrap"><table class="data-table db-table">
-          <thead><tr>${data.columns.map(col => `<th data-grid="sort" data-col="${esc(col.name)}" title="${esc(col.type)}${col.key === 'PRI' ? ' · chiave primaria' : ''}">${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)}${sort?.column === col.name ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
-          <tbody>${data.rows.map(row => `<tr>${row.map(v => v === null ? '<td class="db-null">NULL</td>' : `<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`).join('')
-            || `<tr><td class="db-muted" colspan="${data.columns.length}">Nessuna riga</td></tr>`}</tbody>
+          <thead><tr>${editable ? '<th class="db-row-actions"></th>' : ''}${data.columns.map(col => `<th data-grid="sort" data-col="${esc(col.name)}" title="${esc(col.type)}${col.key === 'PRI' ? ' · chiave primaria' : ''}">${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)}${sort?.column === col.name ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
+          <tbody>${data.rows.map((row, r) => `<tr data-r="${r}">${editable ? `<td class="db-row-actions">
+              <button data-grid="edit-dialog" data-r="${r}" title="Modifica">✏️</button><button data-grid="delete-row" data-r="${r}" title="Elimina">🗑</button></td>` : ''}${row.map((v, c) =>
+              `<td data-c="${c}" class="${v === null ? 'db-null' : ''}${editable ? ' db-editable' : ''}" title="${esc(v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`).join('')}</tr>`).join('')
+            || `<tr><td class="db-muted" colspan="${data.columns.length + (editable ? 1 : 0)}">Nessuna riga</td></tr>`}
+            ${canInsert ? `<tr class="db-new-row">${editable ? '<td class="db-row-actions"><button data-grid="insert-inline" title="Inserisci la riga">＋</button></td>' : ''}${data.columns.map(col =>
+              `<td><input class="db-cell-input" data-new="${esc(col.name)}" placeholder="${isAuto(col) ? 'auto' : esc(col.default ?? (col.nullable ? 'NULL' : ''))}"></td>`).join('')}
+              ${editable ? '' : '<td><button class="btn btn-ghost btn-sm" data-grid="insert-inline">＋ Inserisci</button></td>'}</tr>` : ''}</tbody>
         </table></div>`;
       if (hadFocus) { const i = el.querySelector('[data-grid="search"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+    }
+
+    // ---- scrittura delle righe: sempre tramite conferma dell'SQL generato ----
+    async function saveRow(op, key, values) {
+      const c = connections.find(x => x.id === grid.connId);
+      const url = tableUrl(c, grid.db, grid.table) + '/row';
+      const send = async confirm => {
+        try {
+          const r = await ctx.api.post(url, { op, key, values, ...(confirm ? { confirm } : {}) });
+          const label = { insert: 'Riga inserita', update: 'Riga modificata', delete: 'Riga eliminata' }[op];
+          toast(r.affectedRows ? `${label}${r.insertId ? ` (id ${r.insertId})` : ''}` : 'Nessuna riga modificata (già uguale o non trovata)', r.affectedRows ? 'success' : 'info');
+          loadGrid();
+        } catch (e) { toast(e.message, 'error'); }
+      };
+      try {
+        const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, key, values }) });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 428 && data.needsConfirmation) askConfirmation(data, send, true);
+        else toast(data.error || `HTTP ${res.status}`, 'error'); // le scritture chiedono sempre conferma
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // Modifica in linea: doppio clic sulla cella
+    function editCell(td) {
+      if (!gridEditable() || td.querySelector('input')) return;
+      const r = Number(td.parentElement.dataset.r), c = Number(td.dataset.c);
+      const col = grid.data.columns[c];
+      const value = grid.data.rows[r][c];
+      td.innerHTML = `<div class="db-cell-edit"><input class="db-cell-input" value="${esc(value ?? '')}" placeholder="${value === null ? 'NULL' : ''}">
+        ${col.nullable ? '<button title="Imposta NULL" data-null>NULL</button>' : ''}</div>`;
+      const input = td.querySelector('input');
+      input.focus();
+      input.select();
+      let done = false;
+      const finish = (save, setNull) => {
+        if (done) return;
+        done = true;
+        const next = setNull ? null : input.value;
+        if (!save || !changed(next, value) || (next === '' && value === null)) { renderGrid(); return; }
+        saveRow('update', keyOf(grid.data.rows[r]), { [col.name]: next });
+      };
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        else if (e.key === 'Escape') finish(false);
+      });
+      input.addEventListener('blur', () => setTimeout(() => finish(false), 150));
+      td.querySelector('[data-null]')?.addEventListener('mousedown', e => { e.preventDefault(); finish(true, true); });
+    }
+
+    // Dialog con un campo per colonna (inserimento o modifica)
+    const LONG_TYPES = /text|blob|json|geometry/i;
+    function rowDialog(r) {
+      const editing = r != null;
+      const row = editing ? grid.data.rows[r] : null;
+      const fields = grid.data.columns.map((col, c) => {
+        const v = editing ? row[c] : null;
+        const id = `f_row_${c}`;
+        const input = LONG_TYPES.test(col.dataType)
+          ? `<textarea class="form-input" id="${id}" rows="3">${esc(v ?? '')}</textarea>`
+          : `<input class="form-input" id="${id}" value="${esc(v ?? '')}" placeholder="${!editing && isAuto(col) ? 'automatico' : esc(col.type)}">`;
+        return `<div class="form-row">
+          <label>${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)} <span class="db-muted">${esc(col.type)}</span></label>
+          ${input}
+          ${col.nullable ? `<label class="db-check"><input type="checkbox" id="${id}_null" ${editing && v === null ? 'checked' : ''}> NULL</label>` : ''}
+        </div>`;
+      }).join('');
+      openModal(editing ? 'Modifica riga' : 'Nuova riga', `<div class="db-row-form">${fields}</div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">Annulla</button>
+         <button class="btn btn-primary" onclick="Ext['db-client'].saveRowDialog(${editing ? r : 'null'})">${editing ? 'Salva' : 'Inserisci'}</button>`);
     }
 
     function addFilter() {
@@ -244,6 +329,10 @@ export default {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => { grid.search = e.target.value; grid.page = 1; loadGrid(); }, 300);
     });
+    $(ctx.root, 'results').addEventListener('dblclick', e => {
+      const td = e.target.closest('td.db-editable');
+      if (td && grid) editCell(td);
+    });
     $(ctx.root, 'results').addEventListener('change', e => {
       if (e.target.dataset.grid === 'page-size') { grid.pageSize = Number(e.target.value); grid.page = 1; loadGrid(); }
     });
@@ -258,6 +347,14 @@ export default {
         grid.page = 1;
         loadGrid();
       } else if (a === 'add-filter') addFilter();
+      else if (a === 'insert-dialog') rowDialog(null);
+      else if (a === 'edit-dialog') rowDialog(Number(t.dataset.r));
+      else if (a === 'delete-row') saveRow('delete', keyOf(grid.data.rows[Number(t.dataset.r)]));
+      else if (a === 'insert-inline') {
+        const values = {};
+        for (const input of $(ctx.root, 'results').querySelectorAll('[data-new]')) if (input.value !== '') values[input.dataset.new] = input.value;
+        saveRow('insert', null, values);
+      }
       else if (a === 'remove-filter') { grid.filters.splice(Number(t.dataset.i), 1); grid.page = 1; loadGrid(); }
     });
 
@@ -416,7 +513,7 @@ export default {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
-        if (res.status === 428 && data.needsConfirmation) askConfirmation(data);
+        if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token }));
         else if (!res.ok) renderError(data.error || `HTTP ${res.status}`, sql);
         else renderResult(data, sql);
       } catch (e) {
@@ -428,9 +525,10 @@ export default {
 
     // Nessuna modifica parte senza che l'utente veda e confermi l'istruzione esatta
     let pendingConfirm = null;
-    function askConfirmation(data) {
-      pendingConfirm = data;
-      $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">In attesa di conferma…</div>';
+    // onConfirm(token) rimanda la stessa richiesta con il token della conferma
+    function askConfirmation(data, onConfirm, keepResults = false) {
+      pendingConfirm = { data, onConfirm, keepResults };
+      if (!keepResults) $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">In attesa di conferma…</div>';
       openModal('Conferma modifica', `
         <p class="db-confirm-text">Questa istruzione <strong>${esc(data.verb || 'sconosciuta')}</strong> può modificare dati o schema${data.database ? ` del database <strong>${esc(data.database)}</strong>` : ''} su <strong>${esc(active()?.label || '')}</strong>.${data.reason ? ` <span class="db-muted">(${esc(data.reason)})</span>` : ''}</p>
         <pre class="db-confirm-sql">${highlightSql(data.sql, esc)}</pre>`,
@@ -542,6 +640,19 @@ export default {
     const actions = {
       lock, saveVault,
       run: () => run(),
+      saveRowDialog(r) {
+        const editing = r != null;
+        const row = editing ? grid.data.rows[r] : null;
+        const values = {};
+        grid.data.columns.forEach((col, c) => {
+          const isNull = document.getElementById(`f_row_${c}_null`)?.checked;
+          const v = isNull ? null : document.getElementById(`f_row_${c}`).value;
+          if (editing ? changed(v, row[c]) : (v !== '' || isNull)) values[col.name] = v; // solo i campi cambiati / compilati
+        });
+        if (editing && !Object.keys(values).length) { toast('Nessuna modifica'); return; }
+        closeModal();
+        saveRow(editing ? 'update' : 'insert', editing ? keyOf(row) : null, values);
+      },
       applyFilter() {
         const op = document.getElementById('f_flt_op').value;
         grid.filters.push({ column: document.getElementById('f_flt_col').value, op, value: document.getElementById('f_flt_val').value });
@@ -550,14 +661,16 @@ export default {
         loadGrid();
       },
       confirmRun() {
-        const data = pendingConfirm;
+        const p = pendingConfirm;
         pendingConfirm = null;
         closeModal();
-        if (data) run({ sql: data.sql, token: data.token });
+        if (p) p.onConfirm(p.data.token);
       },
       cancelConfirm() {
+        const p = pendingConfirm;
         pendingConfirm = null;
-        $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">Esecuzione annullata: nessuna modifica.</div>';
+        if (p && !p.keepResults) $(ctx.root, 'results').innerHTML = '<div class="db-muted db-pad">Esecuzione annullata: nessuna modifica.</div>';
+        else toast('Nessuna modifica eseguita');
       },
       select(id) { activeId = id; renderConnections(); renderWorkspace(); },
       async addConnection() { openModal('Nuova connessione', await connectionForm(), modalButtons('Crea', "Ext['db-client'].saveConnection()")); },

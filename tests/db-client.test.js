@@ -326,3 +326,55 @@ test('anteprima dati: pagine, ricerca, filtri, ordinamento con parametri', async
     await mysqlDb.stop();
   }
 });
+
+test('righe: insert, update e delete generati dal server e solo dopo conferma', async t => {
+  const mysqlDb = await startMysql();
+  if (!mysqlDb) return t.skip('mysqld non installato');
+  const s = await startServer();
+  try {
+    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    await api('POST', '/vault/init', { password: 'master-password-db' });
+    const base = { label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass' };
+    await api('POST', '/connections', { ...base, id: 'c' });
+    await api('POST', '/connections', { ...base, id: 'ro', readOnly: true });
+    const row = (body, id = 'c') => api('POST', `/connections/${id}/databases/app/tables/clienti/row`, body);
+    const count = async () => (await api('POST', '/connections/c/query', { sql: 'SELECT COUNT(*) FROM app.clienti' })).json.rows[0][0];
+
+    // update: prima il 428 con l'SQL generato (valori escapati), nessuna modifica
+    const upd = { op: 'update', key: { id: 2 }, values: { note: "l'aggiornata", nome: 'Bianchi' } };
+    let r = await row(upd);
+    assert.equal(r.status, 428);
+    assert.equal(r.json.sql, "UPDATE `app`.`clienti` SET `note` = 'l\\'aggiornata', `nome` = 'Bianchi' WHERE `id` = 2 LIMIT 1");
+    r = await row({ ...upd, confirm: r.json.token });
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.json.affectedRows, 1);
+    // il token non vale per valori diversi
+    const other = await row({ ...upd, values: { note: 'altro' } });
+    assert.equal((await row({ op: 'update', key: { id: 2 }, values: { note: 'altro' }, confirm: r.json.token })).status, 428);
+    assert.equal(other.status, 428);
+
+    // insert con NULL
+    const ins = { op: 'insert', values: { nome: 'Gialli', note: null } };
+    r = await row(ins);
+    assert.match(r.json.sql, /^INSERT INTO `app`.`clienti` \(`nome`, `note`\) VALUES \('Gialli', NULL\)$/);
+    r = await row({ ...ins, confirm: r.json.token });
+    assert.equal(r.json.insertId, 4);
+    assert.equal(await count(), '4');
+
+    // delete
+    r = await row({ op: 'delete', key: { id: 4 } });
+    assert.equal(r.json.sql, 'DELETE FROM `app`.`clienti` WHERE `id` = 4 LIMIT 1');
+    await row({ op: 'delete', key: { id: 4 }, confirm: r.json.token });
+    assert.equal(await count(), '3');
+
+    // controlli
+    assert.equal((await row({ op: 'update', values: { nome: 'x' } })).status, 400);                       // senza chiave
+    assert.equal((await row({ op: 'update', key: { id: 1 }, values: { 'nome`=1;--': 'x' } })).status, 400); // colonna sconosciuta
+    assert.equal((await row({ op: 'update', key: { id: 1 }, values: { nome: { toSqlString: () => 'x' } } })).status, 400);
+    assert.equal((await row({ op: 'truncate' })).status, 400);
+    assert.equal((await row(ins, 'ro')).status, 403);
+  } finally {
+    await s.stop();
+    await mysqlDb.stop();
+  }
+});

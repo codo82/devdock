@@ -428,6 +428,73 @@ module.exports = function createDbClient(ctx) {
         }
       },
 
+      // Inserimento, modifica o eliminazione di una riga. L'istruzione è generata qui
+      // (valori escapati da mysql2) e, come ogni modifica, eseguita solo dopo la conferma
+      // del testo esatto: la prima risposta è 428 con l'SQL e il token.
+      async row(req, res) {
+        const conn = findConnection(req.params.id);
+        if (!conn) return res.status(404).json({ error: 'Connessione non trovata' });
+        const { db, table } = req.params;
+        if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) return res.status(400).json({ error: 'Nome non valido' });
+        const { op, key, values, confirm } = req.body;
+        if (!['insert', 'update', 'delete'].includes(op)) return res.status(400).json({ error: 'Operazione non valida' });
+        if (conn.readOnly) return res.status(403).json({ error: 'Connessione in sola lettura' });
+        try {
+          const q = (await poolFor(conn, db)).promise();
+          const [columns] = await q.query(
+            `SELECT COLUMN_NAME AS name, COLUMN_KEY AS \`key\` FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`, [db, table]);
+          if (!columns.length) return res.status(404).json({ error: 'Tabella non trovata' });
+          const names = new Set(columns.map(c => c.name));
+          const pk = columns.filter(c => c.key === 'PRI').map(c => c.name);
+          const from = `${quoteId(db)}.${quoteId(table)}`;
+
+          const vals = values && typeof values === 'object' ? values : {};
+          const unknown = Object.keys(vals).filter(k => !names.has(k));
+          if (unknown.length) return res.status(400).json({ error: `Colonne sconosciute: ${unknown.join(', ')}` });
+          const scalar = v => v === null || ['string', 'number', 'boolean'].includes(typeof v);
+          if (!Object.values(vals).every(scalar)) return res.status(400).json({ error: 'Valori non validi' });
+
+          // WHERE sulla chiave primaria completa (niente modifiche senza)
+          let whereSql = '', whereParams = [];
+          if (op !== 'insert') {
+            if (!pk.length) return res.status(400).json({ error: 'La tabella non ha una chiave primaria: modifica non disponibile' });
+            if (!key || typeof key !== 'object' || pk.some(k => !(k in key) || !scalar(key[k]) || key[k] === null)) {
+              return res.status(400).json({ error: `Chiave primaria mancante: ${pk.join(', ')}` });
+            }
+            whereSql = pk.map(k => `${quoteId(k)} = ?`).join(' AND ');
+            whereParams = pk.map(k => key[k]);
+          }
+
+          let template, params;
+          const cols = Object.keys(vals);
+          if (op === 'insert') {
+            template = cols.length
+              ? `INSERT INTO ${from} (${cols.map(quoteId).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`
+              : `INSERT INTO ${from} () VALUES ()`;
+            params = cols.map(c => vals[c]);
+          } else if (op === 'update') {
+            if (!cols.length) return res.status(400).json({ error: 'Nessun valore da modificare' });
+            template = `UPDATE ${from} SET ${cols.map(c => `${quoteId(c)} = ?`).join(', ')} WHERE ${whereSql} LIMIT 1`;
+            params = [...cols.map(c => vals[c]), ...whereParams];
+          } else {
+            template = `DELETE FROM ${from} WHERE ${whereSql} LIMIT 1`;
+            params = whereParams;
+          }
+          const sql = mysqlCb.format(template, params);
+
+          const token = confirmToken(conn, db, sql);
+          const given = typeof confirm === 'string' ? Buffer.from(confirm) : Buffer.alloc(0);
+          if (given.length !== token.length || !crypto.timingSafeEqual(given, Buffer.from(token))) {
+            return res.status(428).json({ needsConfirmation: true, token, verb: op.toUpperCase(), database: db, sql });
+          }
+          const result = await execute(await poolFor(conn, db), sql, 1);
+          res.json({ ...result, sql });
+        } catch (e) {
+          res.status(e.status || 400).json({ error: e.message, code: e.code || null });
+        }
+      },
+
       // Esegue una istruzione. Le letture partono subito; tutto ciò che può modificare
       // dati o schema richiede il token di conferma di quella esatta istruzione (428).
       async query(req, res) {

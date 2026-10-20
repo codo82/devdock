@@ -80,3 +80,15 @@
 .db-page-size{min-width:0;width:70px}
 .db-table th[data-grid="sort"]{cursor:pointer;user-select:none}
 .db-table th[data-grid="sort"]:hover{color:var(--text)}
+
+/* modifica righe */
+.db-row-actions{width:52px;white-space:nowrap}
+.db-row-actions button{background:none;border:none;cursor:pointer;font-size:12px;padding:0 3px;opacity:.6}
+.db-row-actions button:hover{opacity:1}
+.db-editable{cursor:text}
+.db-cell-edit{display:flex;gap:4px;align-items:center}
+.db-cell-edit button{font-size:9px;font-family:var(--font);background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:3px;cursor:pointer;padding:1px 4px}
+.db-cell-input{width:100%;min-width:60px;background:var(--bg);border:1px solid var(--ext-color);border-radius:3px;color:var(--text);font-family:var(--font);font-size:12px;padding:2px 5px}
+.db-new-row td{background:color-mix(in srgb,var(--ext-color) 4%,transparent)}
+.db-new-row .db-cell-input{border-color:var(--border)}
+.db-row-form{max-height:60vh;overflow:auto}
