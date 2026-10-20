@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-20 — M7 DB migrations
+
+### Added
+- Database connections can be linked to a migrations folder in a repository (Git extension repositories, or npm projects when Git is not active), chosen with a folder browser that can also create folders; paths are validated to stay inside the repository.
+- Migration files `NNN_<table>_<operation>.sql` with an incremental number (at least 3 digits) computed from the files that actually exist, in the folder and on the tracked remote branch (optional fetch); unpulled remote migrations are reported. The number is recomputed right before writing and files are created exclusively, never overwritten.
+- Table designer for existing tables (*Edit structure*): add, change, rename, reorder and drop columns, primary key, indexes, foreign keys, engine and comment. The server computes the operations from the current structure read from the database.
+- Preview of every schema change with the SQL and the migration file side by side, editable table/operation in the file name, and an explicit confirmation for changes that may lose data.
+- Pipeline: migration file → DDL; when a statement fails the file is removed or reduced to the statements that ran.
+- `CREATE` / `ALTER` / `RENAME` / `DROP` statements typed in the SQL editor can be saved as migrations; table and operation are recognised for the file name.
+- Schema snapshot `.devdock-schema.json` next to the migrations, *Migrations status* (in sync / changes not in a migration / snapshot ahead of the database), migrations generated for changes made outside DevDock (with rename-or-drop choice), and baseline with an optional initial migration.
+- Git extension services `repos`, `upstreamOf`, `filesAt`, `fetch` for other extensions.
+
+### Changed
+- The new-table designer goes through the same preview and migration pipeline; it also supports `ON UPDATE CURRENT_TIMESTAMP`.
+- Dialogs can be wider (`modal-wide`) for side-by-side previews.
+
 ## [1.7.0] - 2026-10-20 — M6 Internationalization
 
 ### Added

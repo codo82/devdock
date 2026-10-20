@@ -142,6 +142,7 @@ Planned after the current milestones, independent of the work in progress. Order
 ## DB client — PostgreSQL
 
 - [ ] **M5.7** PostgreSQL support in the `db-client` extension (it appears among the configured server types): driver, classification of statements, schema browser, data browser and export
+- [ ] **M7.15** Migrations: shadow-database mode (apply all repository migrations to a temporary DB and introspect it) as an alternative reference state; PostgreSQL migrations once M5.7 is done
 
 ## M6 — Internationalization (i18n) ✅ (1.7.0)
 
@@ -175,7 +176,7 @@ Goal: the whole UI (core and extensions) translatable into **any language**, wit
 - [x] **M6.17** Docs: README section "Languages" (how to switch, how to add a new language step by step: copy the source catalog, translate, fill `_meta`, run the report), update the M3.10 convention "Italian UI messages" → "UI messages through `t()`, Italian as source language"
 
 
-## M7 — DB client: repository-linked migrations — inside the `db-client` extension
+## M7 — DB client: repository-linked migrations — inside the `db-client` extension ✅ (1.8.0)
 
 Goal: link a DB connection to a project repository so that **every structural change to the tables (create and alter) ends up in a migration file** in the repository, instead of being written by hand. The main path is capturing the changes made through DevDock itself (table designer and SQL editor); a schema diff covers the changes made outside DevDock. Data changes (`INSERT`/`UPDATE`/`DELETE` on rows) never produce migrations. Depends on M5 (connections per project); the Git extension is an optional dependency.
 
@@ -205,9 +206,8 @@ Migration format (decided): **one SQL file per migration, `NNN_<table>_<operatio
 
 **Safety and tests**
 - [x] **M7.13** Never overwrite an existing migration file: the number is recomputed right before writing and the file is created with an exclusive open (a concurrent file with the same number makes the write fail, nothing is lost); file names validated; writes are atomic (temp file + rename); no automatic commit (at the end, link to the Git extension, if present, to review and commit)
-- [ ] **M7.14** Tests: operation model and SQL parser on statement fixtures; diff engine on JSON fixtures (no DB needed); numbering (gaps, wider numbers, names out of format, upstream ahead); the generator on fixed operation lists with expected-file snapshots; rollback of the file when the DDL fails; an integration test against MySQL skipped when `DEVDOCK_TEST_MYSQL` is not set
-- [ ] **M7.15** Later: shadow-database mode (apply all repository migrations to a temporary DB and introspect it) as an alternative reference state; PostgreSQL once M5.7 is done
-- [ ] **M7.16** Docs: README section "DB migrations" (linking, file format, numbering)
+- [x] **M7.14** Tests: operation model and statement recogniser on fixtures; diff engine on JSON fixtures (no DB needed); numbering (gaps, wider numbers, names out of format, upstream ahead); the generator on fixed operation lists with expected SQL; exclusive writes; rollback of the file when the DDL fails; an integration test against a disposable MySQL (skipped when `mysqld` is not installed): pipeline, introspection round trip, outside changes, baseline
+- [x] **M7.16** Docs: README section "DB migrations" (linking, file format, numbering)
 
 ## M8 — MCP server
 

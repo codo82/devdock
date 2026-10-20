@@ -9,9 +9,11 @@ Every feature of DevDock is an **extension**: a folder under `extensions/` that 
 | `tunnels` | tab | 10 | `groups`, `servers` | Tunnel SSH | — | yes |
 | `pm2` | header | 10 | — | — | `npm` (optional) | no |
 | `npm` | tab | 20 | `projects` | Progetti NPM | — | yes |
-| `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `npm` (optional) | no |
+| `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `npm`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | `npm` (required) | no |
 | `swagger` | tab | 40 | — | — | — | no |
+
+Services offered to other extensions (`ctx.require(code)`): `npm` → `getProjects()`, `getProject(id)`, `readPackage(project)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`; `git` → `repos()`, `upstreamOf(path)`, `filesAt(path, ref, dir)`, `fetch(path)`; `db-client` → `decryptPassword(connection)`.
 
 ## Folder layout
 

@@ -48,7 +48,22 @@ The header also holds desktop notifications (🔔), **Export**/**Import** of the
 - **Master password**: the first time you open the Database section you create it (at least 10 characters). It encrypts the stored database passwords (scrypt + AES-256-GCM) and is never saved: only a verifier is kept in `config.json`. The key stays in the server's memory until you lock it (🔒), restart DevDock or after the inactivity timeout (30 minutes by default). If you forget it, the stored passwords are deleted and must be entered again; the connections remain.
 - **Connections** can point to a host and port, or to a server of the Tunnels section (only if that extension is active): the tunnel is started when needed.
 - **Confirmations**: reads (`SELECT`, `SHOW`, `DESCRIBE`, `EXPLAIN`) run immediately; anything else — `INSERT`, `UPDATE`, `DELETE`, DDL, unknown statements — is shown in a confirmation dialog with the exact SQL and runs only after you confirm it. The same applies to rows edited in the data browser and to tables created with the designer.
+- **Table designer**: create a table (database context menu or ＋ Tabella) or change an existing one (table context menu → *Edit structure*): columns with type, length, default, NULL, auto increment, position (↑ ↓), renames, primary key, indexes, foreign keys, engine and comment. The changes are applied together after a preview of the SQL; changes that may lose data (dropped columns or tables, narrower types) need an explicit confirmation.
 - **Moving connections**: export them with the "Connessioni database" checkbox (passwords travel encrypted together with the vault). On a machine with a different master password, import them from the Database section (⤒) entering the file's master password: they are re-encrypted with yours.
+
+## DB migrations
+
+A connection can be linked to a **migrations folder in a repository** (📁 Migrations in the connection header): choose the repository (the Git extension's repositories, or the npm projects when Git is not active) and browse to the folder, or create it. From then on every structural change made through DevDock is written as a migration in that folder before it is applied to the database.
+
+- **File format**: one SQL file per migration, `NNN_<table>_<operation>.sql` — for example `003_orders_add_status.sql`, `004_orders_alter.sql`, `005_schema_baseline.sql`. `NNN` is an incremental number with at least 3 digits (more when the folder already uses more); an empty folder starts at `001`. The file contains a short header comment (file, connection, database, date) and the statements, exactly as they run on the database.
+- **Numbering**: the next number is computed from the files that actually exist — the folder and, when the branch tracks a remote branch, the files on that branch (use *Check the remote* to fetch first). Migrations on the remote that you haven't pulled yet are listed with a warning and the number skips past them. The number is computed again right before writing and a file is never overwritten.
+- **Where changes come from**: the table designer, and `CREATE` / `ALTER` / `RENAME` / `DROP` statements typed in the SQL editor (*Save as migration…* in the confirmation dialog). Both show the SQL and the migration file side by side; table and operation in the file name are proposed and can be changed. If a statement fails, the file is removed (or reduced to the statements that did run), so the repository and the database stay consistent. Data changes (`INSERT` / `UPDATE` / `DELETE`) never produce migrations.
+- **Snapshot**: next to the migrations DevDock keeps `.devdock-schema.json`, the schema after the last migration; commit it with the migrations. *Migrations status…* (database context menu, or the 📁 badge) compares it with the real schema:
+  - **in sync**;
+  - **changes not in a migration** — made outside DevDock: DevDock lists them, asks whether a dropped + added column is a rename, and generates the migration (only the file: the database already has the changes);
+  - **snapshot ahead of the database** — migrations pulled from teammates and not yet applied here: they are listed.
+- **Baseline**: for an existing database without a snapshot, the baseline takes the current schema as the starting point, optionally with an initial migration that creates every table.
+- Nothing is committed automatically: review and commit the files from the Git section.
 
 ## Configuration
 

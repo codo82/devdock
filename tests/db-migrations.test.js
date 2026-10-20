@@ -44,6 +44,19 @@ test('cartelle: solo dentro il repository', () => {
   assert.throws(() => mig.createFolder(root, 'db', '..'), /folder_name_invalid/);
 });
 
+test('scrittura: mai sovrascrivere, contenuto con intestazione, snapshot ordinato', () => {
+  const dir = tmpDir();
+  mig.writeExclusive(dir, '001_a_create.sql', 'uno');
+  assert.throws(() => mig.writeExclusive(dir, '001_a_create.sql', 'due'), /file_exists/);
+  assert.equal(fs.readFileSync(path.join(dir, '001_a_create.sql'), 'utf8'), 'uno');
+  assert.deepEqual(fs.readdirSync(dir), ['001_a_create.sql'], 'nessun file temporaneo rimasto');
+  const content = mig.migrationContent('002_a_alter.sql', { connection: 'Locale', database: 'app', date: new Date('2026-01-02T03:04:05Z') }, ['ALTER TABLE a ADD b INT', 'CREATE INDEX i ON a (b)']);
+  assert.equal(content, '-- 002_a_alter.sql\n-- DevDock · Locale · app · 2026-01-02T03:04:05.000Z\n\nALTER TABLE a ADD b INT;\n\nCREATE INDEX i ON a (b);\n');
+  const snap = JSON.parse(mig.snapshotContent('app', '002_a_alter.sql', { tables: { z: {}, a: {} } }));
+  assert.deepEqual(Object.keys(snap.tables), ['a', 'z']);
+  assert.equal(snap.lastMigration, '002_a_alter.sql');
+});
+
 let srv, repo, base;
 before(async () => {
   base = tmpDir();
