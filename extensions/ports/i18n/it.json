@@ -23,8 +23,6 @@
   "confirm.title": "Fermare il processo sulla porta {port}?",
   "confirm.text": "Il processo {name} (PID {pid}) è in ascolto sulla porta {port}. Comando:",
   "confirm.via": "È stato avviato da DevDock ({owner}): viene fermato da lì.",
-  "confirm.force": "Forza l'arresto (SIGKILL invece di SIGTERM)",
-  "confirm.forceWin": "Forza l'arresto (taskkill /F)",
   "stopped.npm": "Script npm fermato (porta {port})",
   "stopped.pm2": "Processo PM2 fermato (porta {port})",
   "stopped.tunnel": "Tunnel fermato (porta {port})",
@@ -33,5 +31,11 @@
   "errors.self": "È DevDock stesso: non si può fermare da qui",
   "errors.not_owner": "Il processo appartiene all'utente {user}: si possono fermare solo i propri",
   "errors.kill_failed": "Arresto non riuscito: {error}",
-  "errors.stop_failed": "Arresto non riuscito tramite {via}"
+  "errors.stop_failed": "Arresto non riuscito tramite {via}",
+  "forceStop": "Forza chiusura",
+  "forced": "chiusura forzata",
+  "confirm.forceHint": "Ferma chiede al processo di chiudersi (SIGTERM). Forza chiusura lo termina subito (SIGKILL), senza dargli il tempo di salvare o liberare le risorse.",
+  "confirm.forceHintWin": "Ferma chiede al processo di chiudersi. Forza chiusura lo termina subito (taskkill /F).",
+  "stillListening": "La porta {port} è ancora occupata: il processo non si è chiuso. Forzare la chiusura?",
+  "stillListeningForced": "La porta {port} risulta ancora occupata anche dopo la chiusura forzata"
 }

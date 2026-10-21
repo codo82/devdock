@@ -89,11 +89,13 @@ module.exports = function createNpm(ctx) {
   }
 
   // Ferma l'intero process group (anche i figli che tengono occupata la porta)
-  function killGroup(pd) {
+  // force: SIGKILL invece di SIGTERM (processi che non rispondono)
+  function killGroup(pd, force = false) {
+    const signal = force ? 'SIGKILL' : 'SIGTERM';
     try {
-      if (pd.process && pd.pid) process.kill(-pd.pid, 'SIGTERM');
+      if (pd.process && pd.pid) process.kill(-pd.pid, signal);
     } catch {
-      try { pd.process && pd.process.kill('SIGTERM'); } catch {}
+      try { pd.process && pd.process.kill(signal); } catch {}
     }
   }
 
@@ -120,10 +122,10 @@ module.exports = function createNpm(ctx) {
       getProjects, getProject, readPackage,
       // per l'estensione ports: processi avviati da DevDock (pid = process group) e arresto
       processes: () => [...processes.values()].filter(pd => pd.running).map(pd => ({ id: pd.id, pid: pd.pid, project: pd.projectLabel, script: pd.script })),
-      stopProcess(id) {
+      stopProcess(id, { force = false } = {}) {
         const pd = processes.get(id);
         if (!pd) return false;
-        killGroup(pd);
+        killGroup(pd, force);
         pd.running = false;
         processes.delete(pd.id);
         return true;

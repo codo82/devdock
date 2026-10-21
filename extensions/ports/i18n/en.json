@@ -23,8 +23,6 @@
   "confirm.title": "Stop the process on port {port}?",
   "confirm.text": "The process {name} (PID {pid}) is listening on port {port}. Command:",
   "confirm.via": "It was started by DevDock ({owner}): it is stopped from there.",
-  "confirm.force": "Force the stop (SIGKILL instead of SIGTERM)",
-  "confirm.forceWin": "Force the stop (taskkill /F)",
   "stopped.npm": "npm script stopped (port {port})",
   "stopped.pm2": "PM2 process stopped (port {port})",
   "stopped.tunnel": "Tunnel stopped (port {port})",
@@ -33,5 +31,11 @@
   "errors.self": "It is DevDock itself: it can't be stopped from here",
   "errors.not_owner": "The process belongs to the user {user}: only your own processes can be stopped",
   "errors.kill_failed": "Stop failed: {error}",
-  "errors.stop_failed": "Stop failed through {via}"
+  "errors.stop_failed": "Stop failed through {via}",
+  "forceStop": "Force stop",
+  "forced": "forced",
+  "confirm.forceHint": "Stop asks the process to exit (SIGTERM). Force stop kills it immediately (SIGKILL), without giving it time to save or release resources.",
+  "confirm.forceHintWin": "Stop asks the process to exit. Force stop kills it immediately (taskkill /F).",
+  "stillListening": "Port {port} is still in use: the process did not exit. Force it to stop?",
+  "stillListeningForced": "Port {port} is still in use even after the forced stop"
 }

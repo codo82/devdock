@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-21
+
+### Added
+- Ports: **Force stop** button next to **Stop** in the confirmation, for every process of the user, including the ones started by DevDock (npm process group, SSH tunnel and PM2 process stopped through their section with SIGKILL; PM2 is stopped first so it does not restart it). After a stop DevDock checks that the port is free and, if it is still in use, offers to force it.
+
 ## [1.13.1] - 2026-10-21
 
 ### Changed

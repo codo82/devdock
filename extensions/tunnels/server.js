@@ -150,10 +150,10 @@ module.exports = function createTunnels(ctx) {
     });
   }
 
-  function stop(t) {
+  function stop(t, force = false) {
     t.stopping = true;
     if (t.reconnectTimer) clearTimeout(t.reconnectTimer);
-    try { t.process && t.process.kill('SIGTERM'); } catch {}
+    try { t.process && t.process.kill(force ? 'SIGKILL' : 'SIGTERM'); } catch {}
   }
 
   function stopAllTunnels() {
@@ -332,10 +332,10 @@ module.exports = function createTunnels(ctx) {
       getServer, ensureTunnel,
       // per l'estensione ports: tunnel attivi (pid di ssh/autossh) e arresto
       activeTunnels: () => [...active].map(([id, t]) => ({ id, pid: t.pid, label: t.label, port: t.port })),
-      stopTunnel(id) {
+      stopTunnel(id, { force = false } = {}) {
         const t = active.get(id);
         if (!t) return false;
-        stop(t);
+        stop(t, force);
         active.delete(id);
         return true;
       },

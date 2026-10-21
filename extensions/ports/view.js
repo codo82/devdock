@@ -46,20 +46,23 @@ export default {
       openModal(t('confirm.title', { port: p.port }), `
         <p>${esc(t('confirm.text', { name: p.name || '?', pid: String(p.pid), port: String(p.port) }))}</p>
         <pre class="ports-cmd" style="white-space:pre-wrap">${esc(p.command || '')}</pre>
-        ${p.owner ? `<p class="ports-muted">${esc(t('confirm.via', { owner: ownerLabel(p.owner) }))}</p>`
-          : `<label class="ports-check"><input type="checkbox" id="f_ports_force"> ${esc(t(platform === 'win32' ? 'confirm.forceWin' : 'confirm.force'))}</label>`}`,
+        ${p.owner ? `<p class="ports-muted">${esc(t('confirm.via', { owner: ownerLabel(p.owner) }))}</p>` : ''}
+        <p class="ports-muted">${esc(t(platform === 'win32' ? 'confirm.forceHintWin' : 'confirm.forceHint'))}</p>`,
         `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
-         <button class="btn btn-danger" onclick="Ext.ports.stop(${js(port)}, ${js(pid)})">${esc(t('stop'))}</button>`);
+         <button class="btn btn-danger" onclick="Ext.ports.stop(${js(port)}, ${js(pid)}, true)">${esc(t('forceStop'))}</button>
+         <button class="btn btn-primary" onclick="Ext.ports.stop(${js(port)}, ${js(pid)}, false)">${esc(t('stop'))}</button>`);
     }
 
-    async function stop(port, pid) {
-      const force = !!document.getElementById('f_ports_force')?.checked;
+    async function stop(port, pid, force) {
       closeModal();
       try {
         const r = await ctx.api.post('/stop', { port: Number(port), pid: Number(pid), force });
-        toast(t(`stopped.${r.via}`, { port }), 'success');
+        if (r.freed) toast(t(`stopped.${r.via}`, { port }) + (r.force ? ` · ${t('forced')}` : ''), 'success');
+        // ancora in ascolto: si propone la chiusura forzata
+        else if (!r.force && confirm(t('stillListening', { port }))) return stop(port, pid, true);
+        else if (r.force) toast(t('stillListeningForced', { port }), 'error');
       } catch (e) { toast(e.message, 'error'); }
-      setTimeout(load, 600);
+      load();
     }
 
     $('search').addEventListener('input', render);

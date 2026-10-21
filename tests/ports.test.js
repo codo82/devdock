@@ -35,7 +35,7 @@ test('porta di un processo qualsiasi: trovata e fermata', { skip: process.platfo
     assert.equal(p.owner, null);
     assert.match(p.command, /createServer/);
     const r = await srv.request('POST', '/api/ext/ports/stop', { body: { port, pid: child.pid } });
-    assert.deepEqual(r.json, { ok: true, via: 'signal' });
+    assert.deepEqual(r.json, { ok: true, via: 'signal', force: false, freed: true });
     for (let i = 0; i < 30 && alive(child.pid); i++) await wait(100);
     assert.equal(alive(child.pid), false);
   } finally { if (alive(child.pid)) child.kill('SIGKILL'); }
@@ -62,4 +62,20 @@ test('DevDock stesso e porte non più in ascolto non si fermano', async () => {
   r = await srv.request('POST', '/api/ext/ports/stop', { body: { port: 1, pid: 999999 } });
   assert.equal(r.status, 404);
   assert.equal(r.json.code, 'ports.not_listening');
+});
+
+test('processo che ignora SIGTERM: "Ferma" non libera la porta, "Forza chiusura" sì', { skip: process.platform === 'win32' }, async () => {
+  const port = await freePort();
+  const child = spawn(process.execPath, ['-e', `process.on('SIGTERM', () => {}); ${listenScript(port)}`], { stdio: 'ignore' });
+  try {
+    const p = await waitPort(port);
+    assert.ok(p);
+    let r = await srv.request('POST', '/api/ext/ports/stop', { body: { port, pid: child.pid } });
+    assert.equal(r.json.freed, false);
+    assert.equal(alive(child.pid), true);
+    r = await srv.request('POST', '/api/ext/ports/stop', { body: { port, pid: child.pid, force: true } });
+    assert.deepEqual([r.json.force, r.json.freed], [true, true]);
+    for (let i = 0; i < 30 && alive(child.pid); i++) await wait(100);
+    assert.equal(alive(child.pid), false);
+  } finally { if (alive(child.pid)) child.kill('SIGKILL'); }
 });

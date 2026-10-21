@@ -35,6 +35,15 @@ module.exports = function createPorts(ctx) {
     }));
   }
 
+  // La porta è stata liberata? (si aspetta al massimo ~2 s)
+  async function freed(port, pid) {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      if (!listListeningPorts().some(p => p.port === port && p.pid === pid)) return true;
+    }
+    return false;
+  }
+
   const kill = (pid, force) => new Promise((resolve, reject) => {
     if (process.platform === 'win32') {
       execFile('taskkill', ['/PID', String(pid), ...(force ? ['/F'] : [])], err => (err ? reject(err) : resolve()));
@@ -49,8 +58,9 @@ module.exports = function createPorts(ctx) {
         res.json({ ports: await ports(), platform: process.platform });
       },
 
-      // Ferma il processo { port, pid } se è ancora in ascolto su quella porta. I processi
-      // avviati da DevDock passano dalla loro estensione, così il suo stato resta coerente.
+      // Ferma il processo { port, pid, force } se è ancora in ascolto su quella porta. I processi
+      // avviati da DevDock passano dalla loro estensione, così il suo stato resta coerente;
+      // force: chiusura forzata (SIGKILL / taskkill /F). Risponde se la porta si è liberata.
       async stop(req, res) {
         const port = Number(req.body.port), pid = Number(req.body.pid);
         const entry = (await ports()).find(p => p.port === port && p.pid === pid);
@@ -58,16 +68,19 @@ module.exports = function createPorts(ctx) {
         if (entry.owner?.type === 'devdock') throw ctx.error(400, 'self');
         if (!entry.own) throw ctx.error(403, 'not_owner', { user: entry.user || '?' });
         const via = entry.owner?.type || 'signal';
+        const force = req.body.force === true;
         let ok = true;
-        if (via === 'npm') ok = npm.stopProcess(entry.owner.id);
-        else if (via === 'pm2') ok = await pm2.stop(entry.owner.id);
-        else if (via === 'tunnel') ok = tunnels.stopTunnel(entry.owner.id);
-        else {
-          try { await kill(pid, req.body.force === true); }
-          catch (e) { throw ctx.error(e.code === 'EPERM' ? 403 : 500, 'kill_failed', { error: e.message }); }
-        }
+        try {
+          if (via === 'npm') ok = npm.stopProcess(entry.owner.id, { force });
+          else if (via === 'tunnel') ok = tunnels.stopTunnel(entry.owner.id, { force });
+          else if (via === 'pm2') {
+            // PM2 riavvierebbe un processo ucciso: prima lo si ferma in PM2, poi (forzando) il pid
+            ok = await pm2.stop(entry.owner.id);
+            if (force) await kill(pid, true).catch(() => {});
+          } else await kill(pid, force);
+        } catch (e) { throw ctx.error(e.code === 'EPERM' ? 403 : 500, 'kill_failed', { error: e.message }); }
         if (!ok) throw ctx.error(500, 'stop_failed', { via });
-        res.json({ ok: true, via });
+        res.json({ ok: true, via, force, freed: await freed(port, pid) });
       },
     },
 
