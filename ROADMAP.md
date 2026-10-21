@@ -287,6 +287,17 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 - [ ] **M13.5** Indexes of a collection (read-only list); export of a collection or of a filtered result as JSON
 - [ ] **M13.6** MCP tools (read-only, only with the vault unlocked): connections without credentials, databases, collections, `find` with filter and limit, count
 - [ ] **M13.7** Tests against a disposable `mongod` (skipped when not installed), README, CHANGELOG
+
+## M14 — Mock server — new extension `mock-server`
+
+Goal: simulate an API that doesn't exist yet or isn't reachable: every call gets a predefined response, and every incoming call is logged with its payload. Minimal version.
+
+- [ ] **M14.1** Mock servers in their own config section, with an Export/Import checkbox: name and port (listening on `127.0.0.1` only; a port already in use is reported with its owner through `lib/ports.js`). Start/stop from the UI, status in the sidebar; running mocks are stopped when DevDock shuts down
+- [ ] **M14.2** Routes per mock: method (or any), path with parameters (`/users/:id`) and `*` wildcard; predefined response with status, headers, body (JSON or text) and optional delay. The first matching route in list order answers; a call without a match gets a `404` with a JSON body that says so. Routes are edited while the mock is running, without restarting it
+- [ ] **M14.3** CORS option per mock (on by default): `Access-Control-Allow-*` headers and automatic answer to preflight `OPTIONS`, so a frontend on another local port can call the mock
+- [ ] **M14.4** Log of incoming calls, live in the UI: time, method, path, query, headers, body (JSON formatted, text, or size only for binary content; size limit), matched route (or "no match") and response status. Kept in memory with a cap per mock (latest 500 calls), with a clear button
+- [ ] **M14.5** Tests (routes with parameters and wildcard, order of match, unmatched call, delay, CORS preflight, log with JSON and text bodies, port in use), README, CHANGELOG
+
 ---
 
 ## Suggested order and size
@@ -308,3 +319,4 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 | M11 HTTP client | L | Express route discovery, authorization per user type (none, basic, manual token, login request, OAuth/OIDC with Firefox containers); secrets through the DB client vault (optional dependency) |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
 | M13 MongoDB client | L | same vault and confirmation rules as the MySQL client; read-only MCP tools |
+| M14 Mock server | M | one HTTP listener per mock on `127.0.0.1`; predefined responses, call log with payload |
