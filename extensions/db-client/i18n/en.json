@@ -445,5 +445,10 @@
   "json.format": "Format",
   "json.setNull": "Set NULL",
   "json.invalid": "Invalid JSON: {error}",
-  "json.invalidColumn": "{column}: invalid JSON ({error})"
+  "json.invalidColumn": "{column}: invalid JSON ({error})",
+  "tree.filter": "Filter tables…",
+  "tree.noMatch": "No table matches the filter",
+  "json.viewTitle": "{column} (JSON, read-only)",
+  "result.editable": "editable: {table}",
+  "result.editableHint": "Double click a cell to edit it: the value is saved on the table row, identified by the primary key, after the SQL is confirmed"
 }

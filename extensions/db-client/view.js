@@ -30,6 +30,7 @@ export default {
     let vault = { state: 'uninitialized', minLength: 10 };
     let connections = [];
     let tunnelsAvailable = false;
+    let treeFilter = '';
     let activeId = null;
 
     const active = () => connections.find(c => c.id === activeId) || null;
@@ -55,6 +56,7 @@ export default {
       $(ctx.sidebar, 'vault-btn').hidden = !unlocked;
       $(ctx.sidebar, 'add-btn').hidden = !unlocked;
       $(ctx.sidebar, 'import-btn').hidden = !unlocked;
+      $(ctx.sidebar, 'tree-search').hidden = !unlocked;
       if (!unlocked) {
         $(ctx.sidebar, 'connections').innerHTML = `<p class="db-muted db-pad">${esc(t('sidebar.locked'))}</p>`;
         renderGate();
@@ -133,9 +135,16 @@ export default {
         <div class="db-row db-row-db ${isActive ? 'active' : ''}" ${attrs('db', c, db)}>
           ${caret(k)}<span class="db-row-icon">🛢️</span><span class="db-row-label">${esc(db)}</span>
         </div>
-        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.map(tb => tableNode(c, db, tb)).join('') || `<div class="db-tree-msg">${esc(t('tree.noTables'))}</div>`}</div>` : ''}
+        ${open.has(k) ? `<div class="db-children">${loading(entry) || tablesOf(entry).map(tb => tableNode(c, db, tb)).join('')
+          || `<div class="db-tree-msg">${esc(t(entry.length ? 'tree.noMatch' : 'tree.noTables'))}</div>`}</div>` : ''}
       </div>`;
     }
+
+    // Filtro delle tabelle (barra sopra l'albero): parte del nome, senza maiuscole/minuscole
+    const tablesOf = list => {
+      const f = treeFilter.trim().toLowerCase();
+      return f ? list.filter(tb => tb.name.toLowerCase().includes(f)) : list;
+    };
 
     function tableNode(c, db, tb) {
       const k = nodeKey('t', c.id, db, tb.name);
@@ -167,6 +176,30 @@ export default {
 
     // Dopo una modifica della connessione: via i nodi in cache (anche gli errori), poi si
     // ricaricano quelli aperti con i dati nuovi
+    // Dopo una modifica di schema: tabelle e colonne di quel database rilette (anche i nodi
+    // di tabelle aperte, che tornano chiusi se la tabella non c'è più); con database null
+    // si rilegge l'elenco dei database (CREATE/DROP DATABASE)
+    async function refreshDatabase(c, db) {
+      if (!db) {
+        cache.delete(nodeKey('c', c.id));
+        if (open.has(nodeKey('c', c.id))) await loadDatabases(c);
+        return;
+      }
+      for (const k of [...cache.keys()]) {
+        const [kind, cid, kdb] = k.split('|');
+        if (cid === c.id && kdb === db && (kind === 'd' || kind === 't')) cache.delete(k);
+      }
+      if (!open.has(nodeKey('d', c.id, db))) { renderConnections(); return; }
+      await loadTables(c, db);
+      const tables = new Set((cache.get(nodeKey('d', c.id, db)) || []).map?.(tb => tb.name) || []);
+      for (const k of [...open]) {
+        const [kind, cid, kdb, table] = k.split('|');
+        if (kind !== 't' || cid !== c.id || kdb !== db) continue;
+        if (tables.has(table)) loadColumns(c, db, table); else open.delete(k);
+      }
+      renderConnections();
+    }
+
     function forgetConnection(id) {
       for (const k of [...cache.keys()]) if (k.split('|')[1] === id) cache.delete(k);
       const c = connections.find(x => x.id === id);
@@ -449,9 +482,8 @@ export default {
       migrateFlow(c, db, body, async result => {
         const name = definition.name || table;
         designer = null;
-        cache.delete(nodeKey('d', c.id, db));
         open.add(nodeKey('d', c.id, db));
-        await loadTables(c, db);
+        await refreshDatabase(c, db);
         showStructure(c, db, name);
       });
     }
@@ -625,15 +657,16 @@ export default {
     }
 
     // ---- scrittura delle righe: sempre tramite conferma dell'SQL generato ----
-    async function saveRow(op, key, values, keys) {
-      const c = connections.find(x => x.id === grid.connId);
-      const url = tableUrl(c, grid.db, grid.table) + '/row';
+    // target: { c, db, table, onSaved } — di default la tabella aperta nell'anteprima dati
+    async function saveRow(op, key, values, keys, target = null) {
+      const { c, db, table, onSaved } = target || { c: connections.find(x => x.id === grid.connId), db: grid.db, table: grid.table, onSaved: loadGrid };
+      const url = tableUrl(c, db, table) + '/row';
       const send = async confirm => {
         try {
           const r = await ctx.api.post(url, { op, key, values, keys, ...(confirm ? { confirm } : {}) });
           const label = op === 'delete-many' ? t('row.deletedMany', { count: r.affectedRows }) : t({ insert: 'row.inserted', update: 'row.updated', delete: 'row.deleted' }[op]);
           toast(r.affectedRows ? `${label}${r.insertId ? ` ${t('row.insertId', { id: String(r.insertId) })}` : ''}` : t('row.unchanged'), r.affectedRows ? 'success' : 'info');
-          loadGrid();
+          onSaved?.(r);
         } catch (e) { toast(e.message, 'error'); }
       };
       try {
@@ -672,16 +705,22 @@ export default {
       td.querySelector('[data-null]')?.addEventListener('mousedown', e => { e.preventDefault(); finish(true, true); });
     }
 
-    // Modifica di una cella JSON: testo formattato, validato prima di salvare
-    let jsonEdit = null; // { r, c }
+    // Finestra di un valore JSON: testo formattato, validato prima di salvare.
+    // readOnly: solo lettura (risultati non modificabili); onSave(next) con il testo compatto o null
+    let jsonEdit = null; // { value, onSave }
     function jsonDialog(r, c) {
       const col = grid.data.columns[c];
-      const value = grid.data.rows[r][c];
-      jsonEdit = { r, c };
-      openModal(t('json.title', { column: col.name }), `
-        <textarea class="form-input db-json-editor" id="f_json" spellcheck="false">${esc(value === null ? '' : prettyJson(value))}</textarea>
+      openJsonEditor({ title: col.name, value: grid.data.rows[r][c], nullable: col.nullable,
+        onSave: next => saveRow('update', keyOf(grid.data.rows[r]), { [col.name]: next }) });
+    }
+    function openJsonEditor({ title, value, nullable = false, readOnly = false, onSave }) {
+      jsonEdit = readOnly ? null : { value, onSave };
+      openModal(t(readOnly ? 'json.viewTitle' : 'json.title', { column: title }), `
+        <textarea class="form-input db-json-editor" id="f_json" spellcheck="false" ${readOnly ? 'readonly' : ''}>${esc(value === null ? '' : prettyJson(value))}</textarea>
         <div class="db-json-error" id="f_json_error"></div>`,
-        `${col.nullable ? `<button class="btn btn-ghost" style="margin-inline-end:auto" onclick="Ext['db-client'].saveJson(true)">${esc(t('json.setNull'))}</button>` : ''}
+        readOnly
+          ? `<button class="btn btn-primary" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>`
+          : `${nullable ? `<button class="btn btn-ghost" style="margin-inline-end:auto" onclick="Ext['db-client'].saveJson(true)">${esc(t('json.setNull'))}</button>` : ''}
          <button class="btn btn-ghost" onclick="Ext['db-client'].formatJson()">${esc(t('json.format'))}</button>
          <button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
          <button class="btn btn-primary" onclick="Ext['db-client'].saveJson(false)">${esc(t('core.action.save'))}</button>`);
@@ -746,8 +785,18 @@ export default {
       renderResult(lastResult, true);
     });
     $(ctx.root, 'results').addEventListener('dblclick', e => {
-      const td = e.target.closest('td.db-editable');
-      if (td && grid) editCell(td);
+      if (grid) {
+        const td = e.target.closest('td.db-editable');
+        if (td) return editCell(td);
+        // tabella senza chiave primaria: il JSON si guarda in sola lettura
+        const cell = e.target.closest('td[data-c]');
+        const col = cell && grid.data.columns[Number(cell.dataset.c)];
+        const value = cell && grid.data.rows[Number(cell.parentElement.dataset.r)]?.[Number(cell.dataset.c)];
+        if (col && isJsonCol(col) && value !== null && value !== undefined) openJsonEditor({ title: col.name, value, readOnly: true });
+        return;
+      }
+      const td = e.target.closest('.db-result-table td[data-c]');
+      if (td && lastResult && !designer) editResultCell(td);
     });
     $(ctx.root, 'results').addEventListener('change', e => {
       if (e.target.dataset.grid === 'page-size') { grid.pageSize = Number(e.target.value); grid.page = 1; loadGrid(); }
@@ -1113,6 +1162,10 @@ export default {
         else {
           renderResult(data);
           record(true, data.kind === 'rows' ? { rows: data.rowCount } : { affected: data.affectedRows });
+          // istruzione di schema eseguita dall'editor: l'albero si aggiorna da solo
+          if (/^\s*(CREATE|ALTER|DROP|RENAME|TRUNCATE)\b/i.test(sql.replace(/^(\s*(--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/))*/, ''))) {
+            refreshDatabase(c, /^\s*(CREATE|DROP)\s+(DATABASE|SCHEMA)\b/i.test(sql) ? null : body.database);
+          }
         }
       } catch (e) {
         renderError(e.message, sql);
@@ -1148,17 +1201,82 @@ export default {
       $(ctx.root, 'results').innerHTML = `<div class="db-error">✖ ${esc(message)}</div>`;
     }
 
-    // Ordinamento lato client dei risultati dell'editor (numeri come numeri, NULL in fondo)
+    // Ordinamento lato client dei risultati dell'editor (numeri come numeri, NULL in fondo):
+    // indici delle righe, così la riga modificata resta quella giusta
     let lastResult = null, resultSort = null;
-    function sortedRows(data) {
-      if (!resultSort) return data.rows;
+    function sortedIndexes(data) {
+      const idx = data.rows.map((_, i) => i);
+      if (!resultSort) return idx;
       const { col, dir } = resultSort;
       const numeric = data.rows.every(r => r[col] === null || (r[col] !== '' && !isNaN(Number(r[col]))));
       const cmp = (a, b) => {
         if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
         return numeric ? Number(a) - Number(b) : String(a).localeCompare(String(b), undefined, { numeric: true });
       };
-      return [...data.rows].sort((x, y) => (dir === 'desc' ? -1 : 1) * cmp(x[col], y[col]));
+      return idx.sort((x, y) => (dir === 'desc' ? -1 : 1) * cmp(data.rows[x][col], data.rows[y][col]));
+    }
+
+    // Risultati modificabili: tutte le colonne non calcolate vengono da una sola tabella e la
+    // chiave primaria è tra le colonne (anche con alias). Struttura delle tabelle in cache.
+    const tableInfoCache = new Map(); // "conn|db|table" → { pk, columns: Map(nome → colonna) } | 'loading' | null
+    function resultTarget(data) {
+      const c = active();
+      if (!c || c.readOnly || data.kind !== 'rows') return null;
+      const sources = new Set(data.columns.filter(col => col.table && col.column).map(col => `${col.db}\u0000${col.table}`));
+      if (sources.size !== 1) return null;
+      const [db, table] = [...sources][0].split('\u0000');
+      const k = `${c.id}|${db}|${table}`;
+      const info = tableInfoCache.get(k);
+      if (info === undefined) {
+        tableInfoCache.set(k, 'loading');
+        ctx.api.get(tableUrl(c, db, table)).then(r => {
+          tableInfoCache.set(k, { pk: r.columns.filter(x => x.key === 'PRI').map(x => x.name), columns: new Map(r.columns.map(x => [x.name, x])) });
+        }).catch(() => tableInfoCache.set(k, null)).then(() => { if (lastResult === data) renderResult(data, true); });
+        return null;
+      }
+      if (!info || info === 'loading' || !info.pk.length) return null;
+      const colOf = data.columns.map(col => (col.table === table && col.db === db ? col.column : null));
+      const pkIdx = info.pk.map(name => colOf.indexOf(name));
+      if (pkIdx.some(i => i === -1)) return null;
+      return { c, db, table, info, colOf, pkIdx };
+    }
+
+    function editResultCell(td) {
+      const data = lastResult;
+      const target = data && resultTarget(data);
+      const r = Number(td.parentElement.dataset.r), ci = Number(td.dataset.c);
+      const col = data?.columns[ci];
+      const value = data?.rows[r]?.[ci];
+      const isJson = /^json$/i.test(col?.type || '');
+      const name = target?.colOf[ci];
+      if (!target || !name) { if (isJson && value !== null) openJsonEditor({ title: col.name, value, readOnly: true }); return; }
+      const meta = target.info.columns.get(name) || {};
+      const key = Object.fromEntries(target.info.pk.map((pk, i) => [pk, data.rows[r][target.pkIdx[i]]]));
+      const save = next => saveRow('update', key, { [name]: next }, null, {
+        c: target.c, db: target.db, table: target.table,
+        onSaved: res => { if (res.affectedRows) data.rows[r][ci] = next; if (lastResult === data) renderResult(data, true); },
+      });
+      if (isJson) return openJsonEditor({ title: col.name, value, nullable: meta.nullable, onSave: save });
+      if (td.querySelector('input')) return;
+      td.innerHTML = `<div class="db-cell-edit"><input class="db-cell-input" value="${esc(value ?? '')}" placeholder="${value === null ? 'NULL' : ''}">
+        ${meta.nullable ? `<button title="${esc(t('grid.setNull'))}" data-null>NULL</button>` : ''}</div>`;
+      const input = td.querySelector('input');
+      input.focus();
+      input.select();
+      let done = false;
+      const finish = (ok, setNull) => {
+        if (done) return;
+        done = true;
+        const next = setNull ? null : input.value;
+        if (!ok || !changed(next, value) || (next === '' && value === null)) { renderResult(data, true); return; }
+        save(next);
+      };
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        else if (e.key === 'Escape') finish(false);
+      });
+      input.addEventListener('blur', () => setTimeout(() => finish(false), 150));
+      td.querySelector('[data-null]')?.addEventListener('mousedown', e => { e.preventDefault(); finish(true, true); });
     }
 
     function renderResult(data, keepSort) {
@@ -1169,11 +1287,17 @@ export default {
         el.innerHTML = `<div class="db-ok">${esc(t('result.affected', { count: data.affectedRows }))}${data.insertId ? ` · insertId ${esc(data.insertId)}` : ''}${data.info ? ` · ${esc(data.info)}` : ''} <span class="db-muted">(${esc(t('result.ms', { ms: data.ms }))})</span></div>`;
         return;
       }
+      const target = resultTarget(data);
+      const editable = i => !!target?.colOf[i];
       el.innerHTML = `
-        <div class="db-result-meta">${esc(t('result.rows', { count: data.rowCount }))}${data.truncated ? ` ${esc(t('result.truncated', { limit: data.limit }))}` : ''} · ${esc(t('result.ms', { ms: data.ms }))}</div>
-        <div class="db-table-wrap"><table class="data-table db-table">
+        <div class="db-result-meta">${esc(t('result.rows', { count: data.rowCount }))}${data.truncated ? ` ${esc(t('result.truncated', { limit: data.limit }))}` : ''} · ${esc(t('result.ms', { ms: data.ms }))}
+          ${target ? `<span class="db-badge" title="${esc(t('result.editableHint'))}">✎ ${esc(t('result.editable', { table: target.table }))}</span>` : ''}</div>
+        <div class="db-table-wrap"><table class="data-table db-table db-result-table">
           <thead><tr>${data.columns.map((col, i) => `<th data-result-sort="${i}" title="${esc(t('result.sortTitle', { type: col.type }))}">${esc(col.name)}${resultSort?.col === i ? (resultSort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
-          <tbody>${sortedRows(data).map(row => `<tr>${row.map(v => v === null ? '<td class="db-null">NULL</td>' : `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody>
+          <tbody>${sortedIndexes(data).map(r => `<tr data-r="${r}">${data.rows[r].map((v, i) => {
+            const cls = [v === null ? 'db-null' : '', editable(i) ? 'db-editable' : '', /^json$/i.test(data.columns[i].type) ? 'db-json-cell' : ''].filter(Boolean).join(' ');
+            return `<td data-c="${i}" class="${cls}" title="${esc(v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`;
+          }).join('')}</tr>`).join('')}</tbody>
         </table></div>`;
     }
 
@@ -1323,10 +1447,8 @@ export default {
         if (ok) { el.value = JSON.stringify(JSON.parse(ok.value), null, 2); document.getElementById('f_json_error').textContent = ''; }
       },
       saveJson(setNull) {
-        if (!jsonEdit || !grid) return;
-        const { r, c } = jsonEdit;
-        const col = grid.data.columns[c];
-        const prev = grid.data.rows[r][c];
+        if (!jsonEdit) return;
+        const { value: prev, onSave } = jsonEdit;
         let next = null;
         if (!setNull) {
           const ok = readJson('f_json', 'f_json_error');
@@ -1336,7 +1458,7 @@ export default {
         closeModal();
         jsonEdit = null;
         if (!jsonChanged(next, prev)) { toast(t('row.noChanges')); return; }
-        saveRow('update', keyOf(grid.data.rows[r]), { [col.name]: next });
+        onSave(next);
       },
       applyFilter() {
         const op = document.getElementById('f_flt_op').value;
@@ -1363,8 +1485,7 @@ export default {
         migrateFlow(c, database, { operations: [{ op: 'raw', sql, table, operation }], migration: { table: fileSlug(table) || undefined, operation } }, result => {
           addHistory({ sql, connId: c.id, db: database, at: Date.now(), ok: true, summary: { affected: 0 } });
           $(ctx.root, 'results').innerHTML = `<div class="db-ok">✓ ${esc(result.file ? t('migrate.doneFile', { file: result.file }) : t('migrate.done'))}</div>`;
-          cache.delete(nodeKey('d', c.id, database));
-          if (open.has(nodeKey('d', c.id, database))) loadTables(c, database);
+          refreshDatabase(c, database);
         });
         if (!p.keepResults) $(ctx.root, 'results').innerHTML = '';
       },
@@ -1452,6 +1573,7 @@ export default {
       }
     }
     ctx.sidebar.addEventListener('click', e => onTree(e, false));
+    $(ctx.sidebar, 'tree-filter').addEventListener('input', e => { treeFilter = e.target.value; renderConnections(); });
     ctx.sidebar.addEventListener('contextmenu', e => {
       if (e.target.closest('[data-tree="table"]')) return onTree(e, true);
       const dbRow = e.target.closest('[data-tree="db"]');
@@ -1461,7 +1583,7 @@ export default {
       const db = dbRow.dataset.db;
       ctx.ui.contextMenu(e.clientX, e.clientY, [
         { icon: '＋', label: t('menu.newTable'), disabled: c.readOnly, action: () => { setActiveDb(c, db); openDesigner(c, db); } },
-        { icon: '↻', label: t('menu.refreshTables'), action: () => { cache.delete(nodeKey('d', c.id, db)); open.add(nodeKey('d', c.id, db)); loadTables(c, db); } },
+        { icon: '↻', label: t('menu.refreshTables'), action: () => { open.add(nodeKey('d', c.id, db)); refreshDatabase(c, db); } },
       ]);
     });
     ctx.sidebar.addEventListener('click', e => {

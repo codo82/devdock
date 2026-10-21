@@ -163,3 +163,7 @@
 .db-json-editor{width:100%;min-height:340px;font-family:var(--font);font-size:12px;line-height:1.5;white-space:pre;tab-size:2}
 .db-json-field{font-family:var(--font);font-size:12px;white-space:pre}
 .db-json-error{color:var(--danger);font-size:12px;min-height:16px;margin-top:6px}
+
+/* filtro delle tabelle sopra l'albero */
+.db-tree-search{padding:6px 10px;border-bottom:1px solid var(--border)}
+.db-tree-search .form-input{padding:5px 8px;font-size:12px}

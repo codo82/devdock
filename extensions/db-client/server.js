@@ -431,7 +431,11 @@ module.exports = function createDbClient(ctx) {
           if (fields) {
             resolve({
               kind: 'rows', ms, truncated, rowCount: rows.length,
-              columns: fields.map(f => ({ name: f.name, table: f.orgTable || null, type: TYPE_NAMES[f.columnType] || String(f.columnType) })),
+              // origine di ogni colonna (anche con alias): database, tabella e colonna reali, o null se calcolata
+              columns: fields.map(f => ({
+                name: f.name, table: f.orgTable || null, db: f.orgTable ? f.schema || null : null, column: f.orgTable ? f.orgName || null : null,
+                type: TYPE_NAMES[f.columnType] || String(f.columnType),
+              })),
               rows,
             });
           } else {

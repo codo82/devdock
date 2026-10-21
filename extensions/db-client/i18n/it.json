@@ -445,5 +445,10 @@
   "json.format": "Formatta",
   "json.setNull": "Imposta NULL",
   "json.invalid": "JSON non valido: {error}",
-  "json.invalidColumn": "{column}: JSON non valido ({error})"
+  "json.invalidColumn": "{column}: JSON non valido ({error})",
+  "tree.filter": "Filtra le tabelle…",
+  "tree.noMatch": "Nessuna tabella corrisponde al filtro",
+  "json.viewTitle": "{column} (JSON, sola lettura)",
+  "result.editable": "modificabile: {table}",
+  "result.editableHint": "Doppio clic su una cella per modificarla: i valori vengono salvati sulla riga della tabella, identificata dalla chiave primaria, dopo la conferma dell'SQL"
 }
