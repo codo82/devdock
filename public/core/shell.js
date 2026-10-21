@@ -2,7 +2,7 @@
 // view.html / style.css / view.js e contesto (ctx) passato ai moduli frontend.
 // Contratto in docs/EXTENSIONS.md. Navigazione, header e avvio dell'app.
 window.Shell = (() => {
-  const { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu } = window.UI;
+  const { esc, js, cssColor, ansiToHtml, ansiState, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu } = window.UI;
   const { t, fmt } = window.I18n;
   const pick = v => window.I18n.pick(v);
 
@@ -206,19 +206,22 @@ window.Shell = (() => {
       title: panel.querySelector('.sse-title'),
       box: panel.querySelector('.sse-panel'),
     };
+    // colori ANSI: uno stato per stdout e uno per stderr, che continua tra un pezzo e l'altro
+    let ansi = { out: ansiState(), err: ansiState() };
     const output = {
       open(title) {
         delete sse.title.dataset.i18n; // titolo scelto dall'estensione: il cambio di lingua non lo sovrascrive
         sse.title.textContent = title; sse.body.innerHTML = ''; sse.box.classList.add('open');
+        ansi = { out: ansiState(), err: ansiState() };
       },
       append(text, cls = 'out') {
         const el = document.createElement('span');
         if (cls === 'sys') { el.className = 'ansi-sys'; el.textContent = text; }
-        else { el.innerHTML = ansiToHtml(String(text)); if (cls === 'err') el.classList.add('ansi-stderr'); }
+        else { el.innerHTML = ansiToHtml(String(text), cls === 'err' ? ansi.err : ansi.out); if (cls === 'err') el.classList.add('ansi-stderr'); }
         sse.body.appendChild(el);
         sse.body.scrollTop = sse.body.scrollHeight;
       },
-      clear() { sse.body.innerHTML = ''; },
+      clear() { sse.body.innerHTML = ''; ansi = { out: ansiState(), err: ansiState() }; },
       close() { sse.box.classList.remove('open'); },
     };
     panel.querySelector('[data-sse="clear"]').addEventListener('click', output.clear);

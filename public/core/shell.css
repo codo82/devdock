@@ -214,6 +214,8 @@
   .ansi-white{color:#cdd9e5}   .ansi-bright-white{color:#ffffff}
   .ansi-bg-red{background:#ff7b7222}    .ansi-bg-green{background:#3fb95022}
   .ansi-bg-yellow{background:#d2992222} .ansi-bg-blue{background:#388bfd22}
+  .ansi-bg-black{background:#484f5833}  .ansi-bg-magenta{background:#bc8cff22}
+  .ansi-bg-cyan{background:#39c5cf22}   .ansi-bg-white{background:#cdd9e522}
   .ansi-stderr{color:#d29922}
   .ansi-sys{color:#484f58;font-style:italic}
 

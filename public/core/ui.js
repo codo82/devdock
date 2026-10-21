@@ -18,39 +18,79 @@ window.UI = (() => {
   }
 
   // ---- ANSI → HTML ----
-  function ansiToHtml(text) {
-    const SGR_MAP = {
-      0:null, 1:'ansi-bold',2:'ansi-dim',3:'ansi-italic',4:'ansi-underline',
-      30:'ansi-black',31:'ansi-red',32:'ansi-green',33:'ansi-yellow',
-      34:'ansi-blue',35:'ansi-magenta',36:'ansi-cyan',37:'ansi-white',
-      90:'ansi-bright-black',91:'ansi-bright-red',92:'ansi-bright-green',
-      93:'ansi-bright-yellow',94:'ansi-bright-blue',95:'ansi-bright-magenta',
-      96:'ansi-bright-cyan',97:'ansi-bright-white',
-      40:'ansi-bg-black',41:'ansi-bg-red',42:'ansi-bg-green',43:'ansi-bg-yellow',
-      44:'ansi-bg-blue',45:'ansi-bg-magenta',46:'ansi-bg-cyan',47:'ansi-bg-white',
-    };
-    let result='', activeClasses=[], i=0;
-    function flushText(raw) {
-      if (!raw) return;
-      const safe = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      result += activeClasses.length===0 ? safe : `<span class="${activeClasses.join(' ')}">${safe}</span>`;
-    }
-    while (i < text.length) {
-      const esc = text.indexOf('\x1b[', i);
-      if (esc === -1) { flushText(text.slice(i)); break; }
-      flushText(text.slice(i, esc));
-      const end = text.indexOf('m', esc);
-      if (end === -1) { i = esc+1; continue; }
-      const codes = text.slice(esc+2, end).split(';').map(Number);
-      i = end+1;
-      const newClasses=[];
-      for (const code of codes) {
-        if (code===0) activeClasses=[];
-        else if (SGR_MAP[code]) newClasses.push(SGR_MAP[code]);
+  // Stato dei colori che continua tra un pezzo di output e il successivo (state.pending:
+  // sequenza di escape spezzata a fine pezzo). Solo le sequenze SGR (…m) cambiano lo stile;
+  // le altre (cursore, cancella riga, titoli OSC) vengono tolte senza toccare il testo.
+  const ANSI_COLORS = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
+  const ansiState = () => ({ fg: null, bg: null, bold: false, dim: false, italic: false, underline: false, pending: '' });
+
+  // colore della palette a 256 (38;5;n): 0-15 come classi, il resto come rgb
+  function color256(n) {
+    if (n < 8) return { cls: ANSI_COLORS[n] };
+    if (n < 16) return { cls: 'bright-' + ANSI_COLORS[n - 8] };
+    if (n >= 232) { const v = 8 + (n - 232) * 10; return { rgb: `rgb(${v},${v},${v})` }; }
+    const k = n - 16, f = x => (x ? 55 + x * 40 : 0);
+    return { rgb: `rgb(${f(Math.floor(k / 36))},${f(Math.floor(k / 6) % 6)},${f(k % 6)})` };
+  }
+
+  function applySgr(st, params) {
+    const codes = params === '' ? [0] : params.split(';').map(x => (x === '' ? 0 : Number(x)));
+    for (let i = 0; i < codes.length; i++) {
+      const c = codes[i];
+      if (c === 0) Object.assign(st, { fg: null, bg: null, bold: false, dim: false, italic: false, underline: false });
+      else if (c === 1) st.bold = true;
+      else if (c === 2) st.dim = true;
+      else if (c === 3) st.italic = true;
+      else if (c === 4) st.underline = true;
+      else if (c === 22) st.bold = st.dim = false;
+      else if (c === 23) st.italic = false;
+      else if (c === 24) st.underline = false;
+      else if (c >= 30 && c <= 37) st.fg = { cls: ANSI_COLORS[c - 30] };
+      else if (c >= 90 && c <= 97) st.fg = { cls: 'bright-' + ANSI_COLORS[c - 90] };
+      else if (c === 39) st.fg = null;
+      else if (c >= 40 && c <= 47) st.bg = { cls: ANSI_COLORS[c - 40] };
+      else if (c >= 100 && c <= 107) st.bg = { cls: ANSI_COLORS[c - 100] };
+      else if (c === 49) st.bg = null;
+      else if (c === 38 || c === 48) { // colori estesi: 5;n oppure 2;r;g;b
+        let col = null;
+        if (codes[i + 1] === 5) { col = color256(codes[i + 2] ?? 0); i += 2; }
+        else if (codes[i + 1] === 2) { col = { rgb: `rgb(${codes[i + 2] ?? 0},${codes[i + 3] ?? 0},${codes[i + 4] ?? 0})` }; i += 4; }
+        if (c === 38) st.fg = col; else st.bg = col;
       }
-      if (newClasses.length) activeClasses=[...activeClasses.filter(c=>!c.startsWith('ansi-bg')||newClasses.some(n=>n.startsWith('ansi-bg'))),...newClasses.filter(n=>!activeClasses.includes(n))];
     }
-    return result;
+  }
+
+  function styled(st, text) {
+    if (!text) return '';
+    const safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const cls = [], css = [];
+    if (st.bold) cls.push('ansi-bold');
+    if (st.dim) cls.push('ansi-dim');
+    if (st.italic) cls.push('ansi-italic');
+    if (st.underline) cls.push('ansi-underline');
+    if (st.fg?.cls) cls.push('ansi-' + st.fg.cls); else if (st.fg?.rgb) css.push(`color:${st.fg.rgb}`);
+    if (st.bg?.cls) cls.push('ansi-bg-' + st.bg.cls); else if (st.bg?.rgb) css.push(`background:${st.bg.rgb}`);
+    if (!cls.length && !css.length) return safe;
+    return `<span${cls.length ? ` class="${cls.join(' ')}"` : ''}${css.length ? ` style="${css.join(';')}"` : ''}>${safe}</span>`;
+  }
+
+  // ansiToHtml(text) per un testo isolato; ansiToHtml(text, state) per un flusso a pezzi
+  function ansiToHtml(input, state = ansiState()) {
+    const text = state.pending + String(input ?? '');
+    state.pending = '';
+    // CSI (ESC [ … lettera), OSC (ESC ] … BEL/ST), altri ESC di due caratteri
+    const re = /\x1b(?:\[([0-9;?]*)([ -\/]*)([@-~])|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(text))) {
+      out += styled(state, text.slice(last, m.index));
+      if (m[3] === 'm' && !m[2]) applySgr(state, (m[1] || '').replace(/^\?/, ''));
+      last = re.lastIndex;
+    }
+    let rest = text.slice(last);
+    // sequenza incompleta alla fine: si completa con il prossimo pezzo
+    const cut = rest.lastIndexOf('\x1b');
+    if (cut !== -1 && /^\x1b(\[[0-9;?]*[ -\/]*|\][^\x07]*)?$/.test(rest.slice(cut))) { state.pending = rest.slice(cut); rest = rest.slice(0, cut); }
+    return out + styled(state, rest.replace(/\x1b/g, ''));
   }
 
   // ---- TOAST ----
@@ -151,5 +191,5 @@ window.UI = (() => {
   // click fuori dal modal lo chiude
   document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
-  return { t: I18n.t, fmt: I18n.fmt, errorText: I18n.errorText, esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
+  return { t: I18n.t, fmt: I18n.fmt, errorText: I18n.errorText, esc, js, cssColor, ansiToHtml, ansiState, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
 })();
