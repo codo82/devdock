@@ -180,14 +180,19 @@ export default {
     const installedCell = name => [...ctx.root.querySelectorAll('[data-pkg]')].find(el => el.dataset.pkg === name);
 
     // ---- log in streaming nel cassetto di output ----
+    // following: processo mostrato nel cassetto; resta anche a sezione nascosta, così al
+    // ritorno lo stream riparte (con lo storico) invece di restare fermo
+    let following = null;
     function stream(procId, title) {
       closeStream?.();
+      following = { procId, title };
       output.open(title);
       closeStream = ctx.api.events(`/processes/${encodeURIComponent(procId)}/stream`, ({ type, data }) => {
         if (type === 'exit') {
           const text = data?.removed ? t('stream.removed') : data?.ended ? t('stream.ended', { code: String(data.exitCode) }) : `[exit ${data?.exitCode}]`;
           output.append(`\n${text}`, 'sys');
           closeStream?.(); closeStream = null;
+          following = null; // processo finito: l'output resta com'è
         }
         else output.append(data, type === 'stderr' ? 'err' : 'out');
       }, () => output.append('\n' + t('stream.lost'), 'err'));
@@ -317,8 +322,11 @@ export default {
     await loadProcesses();
     setInterval(refreshAll, POLL_MS);
 
-    this.show = async () => { await loadProjects(); renderProjects(); renderTab(); };
-    this.hide = () => { closeStream?.(); closeStream = null; };
+    this.show = async () => {
+      if (following && !closeStream) stream(following.procId, following.title);
+      await loadProjects(); renderProjects(); renderTab();
+    };
+    this.hide = () => { closeStream?.(); closeStream = null; }; // following resta: si riprende in show
     this.refresh = async () => { await loadProjects(); await refreshAll(); };
     this.languageChanged = () => { renderProjects(); if (ctx.isActive()) renderTab(); };
   },

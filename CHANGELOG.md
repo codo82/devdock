@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-21
+
+### Added
+- Database: filter of the tables above the tree.
+- Database: results of a custom `SELECT` (also with aliases, `WHERE`, `ORDER BY`, `LIMIT`) can be edited with a double click when the columns come from a single table and include its primary key; computed columns stay read-only. Every change goes through the confirmation of the generated `UPDATE`.
+- Database: autocomplete in the SQL editor — SQL keywords and functions, tables of the active database, columns of the tables used in the statement, and columns of an alias after `alias.` (`FROM orders o` → `o.`). Opens while typing or with Ctrl+Space; ↑/↓, Enter or Tab, Esc.
+
+### Fixed
+- Database: the tree did not update after a schema change (table designer, statements run from the SQL editor, saved migrations): tables and open column lists are reloaded; `CREATE`/`DROP DATABASE` reload the list of databases.
+- Database: double click on a JSON value opened nothing outside the data browser; it now opens the JSON dialog in query results too (read-only when the row cannot be edited, and in tables without a primary key).
+- npm, PM2, SSH tunnels: after switching section and coming back, the output drawer stayed frozen until the page was reloaded; the stream of the followed process now resumes, with its history.
+
 ## [1.11.3] - 2026-10-21
 
 ### Fixed

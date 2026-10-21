@@ -66,14 +66,16 @@ export default {
       } catch (e) { toast(t('error', { error: e.message }), 'error'); }
     }
 
+    let following; // undefined = nessun log aperto; null = tutti; nome = un processo
     function logs(name) {
       closeLogs?.();
+      following = name ?? null;
       output.open(name ? `pm2 logs ${name}` : t('logsAll'));
       const q = name ? `?name=${encodeURIComponent(name)}&lines=100` : '?lines=100';
       closeLogs = ctx.api.events('/logs' + q, ({ type, data }) => {
         if (type === 'exit') output.append(`\n${t('streamEnded')}`, 'sys');
         else output.append(data, type === 'stderr' || type === 'error' ? 'err' : 'out');
-        if (type === 'exit') { closeLogs?.(); closeLogs = null; }
+        if (type === 'exit') { closeLogs?.(); closeLogs = null; following = undefined; }
       }, () => output.append('\n' + t('connectionLost'), 'err'));
     }
 
@@ -94,9 +96,11 @@ export default {
     ctx.expose({ action, logs, recheck });
     this.render = render;
     this.stopLogs = () => { closeLogs?.(); closeLogs = null; };
+    // al ritorno nella sezione i log seguiti ripartono
+    this.resumeLogs = () => { if (following !== undefined && !closeLogs) logs(following); };
   },
 
-  show() { this.render(); },
+  show() { this.render(); this.resumeLogs(); },
   languageChanged() { this.render(); },
   hide() { this.stopLogs(); },
 };

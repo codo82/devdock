@@ -288,6 +288,14 @@ export default {
 
     // ---- log del tunnel nel cassetto di output ----
     function stopLogs() { clearInterval(logTimer); logTimer = null; logTunnelId = null; }
+    // sezione nascosta: il polling dei log si ferma ma il tunnel seguito resta, e riparte in show
+    function pauseLogs() { clearInterval(logTimer); logTimer = null; }
+    function resumeLogs() {
+      if (!logTunnelId || logTimer) return;
+      if (!state.tunnels.some(tn => tn.id === logTunnelId)) { logTunnelId = null; return; }
+      pollLogs();
+      logTimer = setInterval(pollLogs, LOG_POLL_MS);
+    }
 
     async function pollLogs() {
       if (!logTunnelId) return;
@@ -415,10 +423,12 @@ export default {
     this.renderPills = renderPills;
     this.load = load;
     this.stopLogs = stopLogs;
+    this.pauseLogs = pauseLogs;
+    this.resumeLogs = resumeLogs;
   },
 
-  show() { this.render(); },
-  hide() { this.stopLogs(); },
+  show() { this.render(); this.resumeLogs(); },
+  hide() { this.pauseLogs(); },
   refresh() { this.load(); },
   languageChanged() { this.renderPills(); this.render(); },
 };
