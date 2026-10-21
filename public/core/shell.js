@@ -477,6 +477,55 @@ window.Shell = (() => {
     }
   });
 
+  // ---- larghezza della sidebar: trascinando la maniglia (o con ←/→), salvata nel browser ----
+  const SIDEBAR_KEY = 'devdock.sidebarWidth';
+  const SIDEBAR_DEFAULT = 220, SIDEBAR_MIN = 160;
+  const sidebarMax = () => Math.max(SIDEBAR_MIN, Math.min(640, Math.round(window.innerWidth * 0.6)));
+  function setSidebarWidth(w, save = true) {
+    const width = Math.round(Math.min(sidebarMax(), Math.max(SIDEBAR_MIN, w)));
+    document.querySelector('.app').style.setProperty('--sidebar-w', `${width}px`);
+    if (save) { try { localStorage.setItem(SIDEBAR_KEY, String(width)); } catch { /* storage non disponibile */ } }
+    return width;
+  }
+  (function initSidebarResize() {
+    const handle = document.getElementById('sidebarResizer');
+    const sidebar = document.getElementById('sidebar');
+    let saved = null;
+    try { saved = Number(localStorage.getItem(SIDEBAR_KEY)); } catch { /* storage non disponibile */ }
+    if (saved) setSidebarWidth(saved, false);
+    const current = () => sidebar.getBoundingClientRect().width;
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('dragging');
+      document.body.classList.add('resizing-sidebar');
+      const r = sidebar.getBoundingClientRect();
+      const rtl = document.documentElement.dir === 'rtl';
+      const move = ev => setSidebarWidth(rtl ? r.right - ev.clientX : ev.clientX - r.left, false);
+      const up = ev => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        handle.classList.remove('dragging');
+        document.body.classList.remove('resizing-sidebar');
+        setSidebarWidth(current());
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+    });
+    handle.addEventListener('dblclick', () => {
+      setSidebarWidth(SIDEBAR_DEFAULT, false);
+      try { localStorage.removeItem(SIDEBAR_KEY); } catch { /* storage non disponibile */ }
+    });
+    handle.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const grow = (e.key === 'ArrowRight') !== (document.documentElement.dir === 'rtl');
+      setSidebarWidth(current() + (grow ? 16 : -16));
+    });
+    // finestra rimpicciolita: la sidebar resta entro il massimo
+    window.addEventListener('resize', () => { if (current() > sidebarMax()) setSidebarWidth(sidebarMax(), false); });
+  })();
+
   // ---- aggiornamento manuale (pulsante ↻): estensioni montate + sezioni del core ----
   function refresh() {
     for (const e of exts.values()) {

@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-21
+
+### Added
+- Resizable sidebar: drag its edge, or use ←/→ on the focused edge; double click restores the initial width. The width is saved in the browser (`localStorage`).
+
+### Fixed
+- Output drawer: ANSI colours were not closed by the partial reset codes (`39`, `22`, `49`…), so a colour could run over the following lines; colours now continue correctly across chunks (also when an escape sequence is split between two chunks), non-colour sequences such as `ESC[2K` (npm progress) no longer swallow text, and 256-colour and true-colour codes are supported.
+
 ## [1.12.0] - 2026-10-21
 
 ### Added

@@ -83,5 +83,6 @@
   "core.mcp.copyFailed": "Copy failed",
   "core.mcp.confirmRegenerate": "Regenerate the token? Clients configured with the current one will stop working.",
   "core.mcp.regenerated": "Token regenerated: update the clients' configuration",
-  "core.mcp.buttonTitle": "MCP server: connect AI agents"
+  "core.mcp.buttonTitle": "MCP server: connect AI agents",
+  "core.sidebar.resize": "Drag to resize the sidebar (double click: initial width; with the keyboard ← →)"
 }

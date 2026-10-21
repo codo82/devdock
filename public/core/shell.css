@@ -51,12 +51,16 @@
   /* ================================================================
      LAYOUT
   ================================================================ */
-  .app{display:grid;grid-template-columns:220px 1fr;flex:1;overflow:hidden;min-height:0}
+  .app{display:grid;grid-template-columns:var(--sidebar-w,220px) 1fr;flex:1;overflow:hidden;min-height:0}
 
   /* ================================================================
      SIDEBAR — comune ma colorata in base alla sezione
   ================================================================ */
-  .sidebar{background:var(--surface);border-inline-end:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+  .sidebar{background:var(--surface);border-inline-end:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  /* maniglia per ridimensionare la sidebar (larghezza salvata nel browser) */
+  .sidebar-resizer{position:absolute;inset-block:0;inset-inline-end:0;width:5px;cursor:col-resize;z-index:5;background:transparent;transition:background .15s}
+  .sidebar-resizer:hover,.sidebar-resizer:focus-visible,.sidebar-resizer.dragging{background:var(--accent,#388bfd);outline:none}
+  body.resizing-sidebar{cursor:col-resize;user-select:none}
 
   /* Intestazione sidebar */
   .sidebar-head{padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:6px}
