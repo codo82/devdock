@@ -296,7 +296,9 @@ Goal: simulate an API that doesn't exist yet or isn't reachable: every call gets
 - [ ] **M14.2** Routes per mock: method (or any), path with parameters (`/users/:id`) and `*` wildcard; predefined response with status, headers, body (JSON or text) and optional delay. The first matching route in list order answers; a call without a match gets a `404` with a JSON body that says so. Routes are edited while the mock is running, without restarting it
 - [ ] **M14.3** CORS option per mock (on by default): `Access-Control-Allow-*` headers and automatic answer to preflight `OPTIONS`, so a frontend on another local port can call the mock
 - [ ] **M14.4** Log of incoming calls, live in the UI: time, method, path, query, headers, body (JSON formatted, text, or size only for binary content; size limit), matched route (or "no match") and response status. Kept in memory with a cap per mock (latest 500 calls), with a clear button
-- [ ] **M14.5** Tests (routes with parameters and wildcard, order of match, unmatched call, delay, CORS preflight, log with JSON and text bodies, port in use), README, CHANGELOG
+- [ ] **M14.5** "Create route from this call" on a logged call without a match: opens the route editor prefilled with its method and path, ready for the response to be filled in
+- [ ] **M14.6** MCP tool `mock_requests` (read-only): calls logged by a mock, with filters by method, path and "no match only", and a limit; header values that look like credentials (`Authorization`, `Cookie`, `X-Api-Key`…) redacted
+- [ ] **M14.7** Tests (routes with parameters and wildcard, order of match, unmatched call, delay, CORS preflight, log with JSON and text bodies, port in use, route created from a logged call, MCP tool with redaction), README, CHANGELOG
 
 ---
 
@@ -319,4 +321,4 @@ Goal: simulate an API that doesn't exist yet or isn't reachable: every call gets
 | M11 HTTP client | L | Express route discovery, authorization per user type (none, basic, manual token, login request, OAuth/OIDC with Firefox containers); secrets through the DB client vault (optional dependency) |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
 | M13 MongoDB client | L | same vault and confirmation rules as the MySQL client; read-only MCP tools |
-| M14 Mock server | M | one HTTP listener per mock on `127.0.0.1`; predefined responses, call log with payload |
+| M14 Mock server | M | one HTTP listener per mock on `127.0.0.1`; predefined responses, call log with payload, route from a logged call, read-only MCP tool |
