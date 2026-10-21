@@ -31,14 +31,17 @@
 .db-limit{min-width:0}
 .db-hint{font-size:11px;color:var(--muted);margin-inline-start:auto}
 .db-editor{position:relative;height:180px;min-height:80px;resize:vertical;overflow:hidden;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg)}
-.db-editor-highlight,.db-editor-input{position:absolute;inset:0;margin:0;padding:10px 14px;font-family:var(--font);font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-wrap:break-word;tab-size:2;border:none}
+/* il testo colorato (pre) sta sotto la textarea trasparente: stessi caratteri, stessi a capo,
+   stessa larghezza utile (scrollbar-gutter riserva in entrambi lo spazio della barra di scorrimento) */
+.db-editor-highlight,.db-editor-input{position:absolute;inset:0;margin:0;padding:10px 14px;font-family:var(--font);font-size:12.5px;font-weight:400;line-height:1.55;letter-spacing:normal;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:2;font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0;border:none;scrollbar-gutter:stable}
 .db-editor-highlight{overflow:hidden;pointer-events:none;color:var(--text)}
+.db-editor-highlight code{font:inherit;white-space:inherit}
 .db-editor-input{resize:none;background:transparent;color:transparent;caret-color:var(--text);outline:none;overflow:auto}
 .db-editor-input::selection{background:color-mix(in srgb,var(--ext-color) 30%,transparent);color:transparent}
-.sql-k{color:#ff7b72;font-weight:600}
+.sql-k{color:#ff7b72}
 .sql-s{color:#a5d6ff}
 .sql-n{color:#79c0ff}
-.sql-c{color:#8b949e;font-style:italic}
+.sql-c{color:#8b949e}
 .sql-i{color:#d2a8ff}
 
 /* risultati */

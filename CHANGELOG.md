@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.11.3] - 2026-10-21
+
+### Fixed
+- Database: in the SQL editor the cursor did not match the text being typed. The coloured text and the input field went to a new line at different points, because only the input field had a scrollbar; both now reserve the same scrollbar space, and they use the same weight, style and no ligatures.
+
 ## [1.11.2] - 2026-10-21
 
 ### Fixed
