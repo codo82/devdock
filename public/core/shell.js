@@ -477,22 +477,35 @@ window.Shell = (() => {
     }
   });
 
-  // ---- larghezza della sidebar: trascinando la maniglia (o con ←/→), salvata nel browser ----
-  const SIDEBAR_KEY = 'devdock.sidebarWidth';
+  // ---- larghezza della sidebar, una per sezione: trascinando la maniglia (o con ←/→),
+  // salvata nel browser come { <codice estensione>: larghezza } ----
+  const SIDEBAR_KEY = 'devdock.sidebarWidths';
   const SIDEBAR_DEFAULT = 220, SIDEBAR_MIN = 160;
-  const sidebarMax = () => Math.max(SIDEBAR_MIN, Math.min(640, Math.round(window.innerWidth * 0.6)));
+  // al massimo il 60% della finestra (non si limita se la finestra è minuscola o non visibile)
+  const sidebarMax = () => (window.innerWidth >= 400 ? Math.max(SIDEBAR_MIN, Math.min(640, Math.round(window.innerWidth * 0.6))) : 640);
+  function savedWidths() {
+    try { return JSON.parse(localStorage.getItem(SIDEBAR_KEY)) || {}; } catch { return {}; }
+  }
+  function storeWidth(code, width) {
+    if (!code) return;
+    const all = savedWidths();
+    if (width == null) delete all[code]; else all[code] = width;
+    try { localStorage.setItem(SIDEBAR_KEY, JSON.stringify(all)); } catch { /* storage non disponibile */ }
+  }
   function setSidebarWidth(w, save = true) {
     const width = Math.round(Math.min(sidebarMax(), Math.max(SIDEBAR_MIN, w)));
     document.querySelector('.app').style.setProperty('--sidebar-w', `${width}px`);
-    if (save) { try { localStorage.setItem(SIDEBAR_KEY, String(width)); } catch { /* storage non disponibile */ } }
+    if (save) storeWidth(active, width);
     return width;
+  }
+  // Larghezza della sezione che si apre (quella salvata o l'iniziale)
+  function applySidebarWidth(code) {
+    setSidebarWidth(savedWidths()[code] || SIDEBAR_DEFAULT, false);
   }
   (function initSidebarResize() {
     const handle = document.getElementById('sidebarResizer');
     const sidebar = document.getElementById('sidebar');
-    let saved = null;
-    try { saved = Number(localStorage.getItem(SIDEBAR_KEY)); } catch { /* storage non disponibile */ }
-    if (saved) setSidebarWidth(saved, false);
+    try { localStorage.removeItem('devdock.sidebarWidth'); } catch { /* chiave della 1.13.0, una sola larghezza */ }
     const current = () => sidebar.getBoundingClientRect().width;
     handle.addEventListener('pointerdown', e => {
       e.preventDefault();
@@ -514,7 +527,7 @@ window.Shell = (() => {
     });
     handle.addEventListener('dblclick', () => {
       setSidebarWidth(SIDEBAR_DEFAULT, false);
-      try { localStorage.removeItem(SIDEBAR_KEY); } catch { /* storage non disponibile */ }
+      storeWidth(active, null);
     });
     handle.addEventListener('keydown', e => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -523,7 +536,7 @@ window.Shell = (() => {
       setSidebarWidth(current() + (grow ? 16 : -16));
     });
     // finestra rimpicciolita: la sidebar resta entro il massimo
-    window.addEventListener('resize', () => { if (current() > sidebarMax()) setSidebarWidth(sidebarMax(), false); });
+    window.addEventListener('resize', () => { if (window.innerWidth >= 400 && current() > sidebarMax()) setSidebarWidth(sidebarMax(), false); });
   })();
 
   // ---- aggiornamento manuale (pulsante ↻): estensioni montate + sezioni del core ----
@@ -550,6 +563,7 @@ window.Shell = (() => {
     // Estensione senza sidebar.html: il pannello occupa tutta la larghezza
     document.querySelector('.app').classList.toggle('no-sidebar', !!code && !exts.get(code).meta.frontend.sidebar);
     if (!code) return;
+    applySidebarWidth(code);
 
     const entry = exts.get(code);
     entry.panel.style.display = 'flex';

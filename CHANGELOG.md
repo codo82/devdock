@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-10-21
+
+### Changed
+- The sidebar width is remembered per section (`localStorage` key `devdock.sidebarWidths`); a section never resized opens with the initial width. A very narrow or hidden window no longer shrinks the saved widths.
+
 ## [1.13.0] - 2026-10-21
 
 ### Added

@@ -43,7 +43,7 @@ Each section is an extension (see [Writing an extension](#writing-an-extension))
 - **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
 - **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ button in the header.
 
-The header also holds the language (🌐), desktop notifications (🔔), **Export**/**Import** of the configuration, the MCP server (🤖) and ↻ to refresh. The sidebar can be resized by dragging its edge (or with ←/→ when the edge is focused; double click restores the initial width); the width is remembered by the browser.
+The header also holds the language (🌐), desktop notifications (🔔), **Export**/**Import** of the configuration, the MCP server (🤖) and ↻ to refresh. The sidebar can be resized by dragging its edge (or with ←/→ when the edge is focused; double click restores the initial width); each section has its own width, remembered by the browser.
 
 ## Database client
 
