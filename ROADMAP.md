@@ -256,13 +256,15 @@ Goal: see at a glance which variables a project's `.env` is missing compared wit
 
 ## M11 — HTTP client — new extension `http-client`
 
-Goal: send requests to the local APIs of a project and keep the useful ones. Minimal version.
+Goal: send requests to the local APIs of a project and keep the useful ones, with the right token for each kind of user obtained automatically. Minimal version.
 
-- [ ] **M11.1** Requests (method, URL, headers, query, JSON or text body) saved in collections per npm project, in its own config section, with an Export/Import checkbox
+- [ ] **M11.1** Sections of requests (method, URL, headers, query, JSON or text body) in their own config section, with an Export/Import checkbox; a section can optionally be linked to an npm project. One base URL per section (`{{baseUrl}}`, proposed from `PORT` in the project's `.env`) plus section variables used in URL, headers and body
 - [ ] **M11.2** Sending through the DevDock backend (no CORS limits), with timeout and response size limit; response shown with status, time, size, headers and body (JSON formatted)
-- [ ] **M11.3** Variables per project (`{{baseUrl}}`, `{{token}}`) used in URL, headers and body; variables marked as secret are encrypted with the master password vault of the DB client (optional dependency: without it secrets can't be saved)
-- [ ] **M11.4** Import of the operations of an OpenAPI file (YAML/JSON) as requests of a collection
-- [ ] **M11.5** Tests (local test server: methods, headers, body, timeout, variables, secrets never in clear in `config.json`), README, CHANGELOG
+- [ ] **M11.3** Express route discovery for a linked section by static analysis: starting from `main` or the start script, it follows relative `require`/`import` (JS and TS) and composes the prefixes of `app.use`/`router.use` across files, constants included. Routes are listed and imported one at a time; prefixes that can't be resolved (env/config values, `readdirSync` auto-loaders) are shown as "to complete" and edited on import. NestJS, Fastify and Koa are not supported
+- [ ] **M11.4** User types per section (e.g. admin, customer, anonymous); every request is tagged with one (or none). On send, the token of that user type is used if present and not expired (JWT: `exp` claim; other token types entered by hand, with an optional expiry), otherwise the user type's acquisition procedure starts and the request continues afterwards. Header name and format configurable (default `Authorization: Bearer …`). Tokens kept only in memory (lost when DevDock restarts)
+- [ ] **M11.5** Acquisition procedures per user type: (a) login request (method, URL, body; the credentials are secret variables encrypted with the DB client vault, optional dependency) with the path of the token in the JSON response; (b) interactive browser: DevDock starts Firefox with the chosen Firefox profile on the login page (also SSO providers with redirects), controls it through WebDriver BiDi (built into Firefox, no add-on) and captures the token from a network response or from `localStorage`/`sessionStorage`, then closes the window (the profile must not be open in another Firefox window); (c) manual: the token is pasted
+- [ ] **M11.6** Import of the operations of an OpenAPI file (YAML/JSON) as requests of a section
+- [ ] **M11.7** Tests (local test server: methods, headers, body, timeout, variables, route discovery on fixtures split over several files, token reuse and expiry, login procedure, secrets never in clear in `config.json`), README, CHANGELOG
 
 
 ## M12 — Tab order — core
@@ -304,6 +306,6 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 | M8 MCP server | L | after M6 and M7; core server + contract first, then read-only tools per extension, write tools opt-in |
 | M9 Ports in use | S | `lib/ports.js` extended; Windows through `netstat` |
 | M10 Environment files | S | read and write, comments and order kept; values never stored in DevDock or sent to agents |
-| M11 HTTP client | M | secrets through the DB client vault (optional dependency) |
+| M11 HTTP client | L | Express route discovery, tokens per user type (login, Firefox through WebDriver BiDi, manual); secrets through the DB client vault (optional dependency) |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
 | M13 MongoDB client | L | same vault and confirmation rules as the MySQL client; read-only MCP tools |
