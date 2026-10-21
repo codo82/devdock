@@ -440,5 +440,10 @@
   "conn.dbMissing": "the database \"{db}\" does not exist",
   "form.tunnelDeleted": "⚠ {tunnel} — deleted: choose another link",
   "tree.expand": "Expand",
-  "tree.collapse": "Collapse"
+  "tree.collapse": "Collapse",
+  "json.title": "{column} (JSON)",
+  "json.format": "Format",
+  "json.setNull": "Set NULL",
+  "json.invalid": "Invalid JSON: {error}",
+  "json.invalidColumn": "{column}: invalid JSON ({error})"
 }

@@ -46,7 +46,10 @@ const csvField = v => {
   return str === '' || /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 };
 // Binari in esadecimale nei file (senza troncamento), il resto invariato
-const exportValue = v => Buffer.isBuffer(v) ? `0x${v.toString('hex')}` : v;
+// Le colonne JSON arrivano da mysql2 come oggetti: si passano come testo JSON
+const isJsonValue = v => v !== null && typeof v === 'object' && !Buffer.isBuffer(v) && !(v instanceof Date);
+
+const exportValue = v => Buffer.isBuffer(v) ? `0x${v.toString('hex')}` : isJsonValue(v) ? JSON.stringify(v) : v;
 const escapeLike = v => String(v).replace(/[\\%_]/g, m => '\\' + m);
 const quoteId = name => '`' + String(name).replace(/`/g, '``') + '`';
 
@@ -56,6 +59,7 @@ const TYPE_NAMES = Object.fromEntries(Object.entries(mysqlCb.Types).map(([name, 
 // Valori pronti per il JSON: i binari diventano esadecimale (troncato)
 function cell(v) {
   if (Buffer.isBuffer(v)) return v.length <= 64 ? `0x${v.toString('hex')}` : `0x${v.subarray(0, 64).toString('hex')}… (${v.length} byte)`;
+  if (isJsonValue(v)) return JSON.stringify(v);
   return v;
 }
 
@@ -377,7 +381,8 @@ module.exports = function createDbClient(ctx) {
           if (format === 'json') res.write('[');
         });
         stream.on('data', async row => {
-          const values = format === 'sql' ? row : row.map(exportValue); // in SQL i binari diventano X'..' con escape()
+          // in SQL i binari diventano X'..' con escape(); il JSON resta testo JSON (escape() di un oggetto darebbe `k` = v)
+          const values = format === 'sql' ? row.map(v => (isJsonValue(v) ? JSON.stringify(v) : v)) : row.map(exportValue);
           let wait = null;
           if (format === 'csv') wait = writeOut(res, values.map(v => v === null ? '' : csvField(v)).join(',') + '\r\n');
           else if (format === 'json') wait = writeOut(res, (count ? ',\n' : '\n') + JSON.stringify(Object.fromEntries(fields.map((f, i) => [f.name, values[i]]))));

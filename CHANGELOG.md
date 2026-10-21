@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-10-21
+
+### Fixed
+- Database: JSON columns were shown as `[object Object]` in the data browser, in query results and in the MCP tools, and editing such a cell inline saved that text. They are now shown as JSON text; CSV, JSON and SQL exports write them as JSON (SQL exports produced `` `key` = value `` pairs).
+
+### Changed
+- Database: double click on a JSON cell opens a dialog with the formatted JSON (Format, Set NULL), validated before saving; the row dialog shows JSON columns formatted too. Saving still goes through the confirmation of the generated SQL, and an unchanged JSON (only spacing or key order) is not saved.
+
 ## [1.11.1] - 2026-10-20
 
 ### Fixed

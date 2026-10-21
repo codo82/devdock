@@ -155,3 +155,8 @@
 .db-mg-warnings{margin-top:12px;padding:8px 10px;border:1px solid var(--danger);border-radius:var(--radius);color:var(--danger);font-size:13px}
 .db-mg-warnings ul{margin:4px 0 8px;padding-inline-start:18px}
 @media (max-width:800px){.db-mg{grid-template-columns:1fr}}
+
+/* colonne JSON */
+.db-json-editor{width:100%;min-height:340px;font-family:var(--font);font-size:12px;line-height:1.5;white-space:pre;tab-size:2}
+.db-json-field{font-family:var(--font);font-size:12px;white-space:pre}
+.db-json-error{color:var(--danger);font-size:12px;min-height:16px;margin-top:6px}

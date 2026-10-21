@@ -590,3 +590,45 @@ test('database predefinito inesistente: l\'elenco dei database arriva comunque',
     await mysqlDb.stop();
   }
 });
+
+test('colonne JSON: mostrate come testo JSON, modificabili, esportate correttamente', async t => {
+  const mysqlDb = await startMysql();
+  if (!mysqlDb) return t.skip('mysqld non installato');
+  const s = await startServer();
+  try {
+    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const confirmed = async (p, body) => {
+      const first = await api('POST', p, body);
+      return first.status === 428 ? api('POST', p, { ...body, confirm: first.json.token }) : first;
+    };
+    await api('POST', '/vault/init', { password: 'master-password-db' });
+    await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, database: 'app', user: 'devdock', password: 'devdock-pass' });
+    await confirmed('/connections/c/query', { sql: 'CREATE TABLE doc (id INT PRIMARY KEY, dati JSON)', database: 'app' });
+    await confirmed('/connections/c/query', { sql: `INSERT INTO doc VALUES (1, '{"a": 1, "b": [true, null], "c": {"d": "x"}}')`, database: 'app' });
+
+    let r = await api('POST', '/connections/c/databases/app/tables/doc/rows', {});
+    const cellValue = r.json.rows[0][1];
+    assert.equal(typeof cellValue, 'string');
+    assert.deepEqual(JSON.parse(cellValue), { a: 1, b: [true, null], c: { d: 'x' } });
+    assert.equal(r.json.columns[1].dataType, 'json');
+    r = await api('POST', '/connections/c/query', { sql: 'SELECT dati FROM doc', database: 'app' });
+    assert.deepEqual(JSON.parse(r.json.rows[0][0]), { a: 1, b: [true, null], c: { d: 'x' } });
+
+    // modifica con testo JSON (come dalla finestra di modifica)
+    r = await confirmed('/connections/c/databases/app/tables/doc/row', { op: 'update', key: { id: 1 }, values: { dati: '{"a":2}' } });
+    assert.equal(r.status, 200, r.text);
+    r = await api('POST', '/connections/c/databases/app/tables/doc/rows', {});
+    assert.deepEqual(JSON.parse(r.json.rows[0][1]), { a: 2 });
+
+    // export: niente "[object Object]" né `a` = 2
+    for (const format of ['csv', 'sql']) {
+      const job = (await api('POST', '/connections/c/exports', { format, source: { type: 'table', db: 'app', table: 'doc' } })).json;
+      const file = (await s.request('GET', `/api/ext/db-client/connections/c/exports/${job.id}`)).text;
+      assert.doesNotMatch(file, /object Object|`a` = 2/, format);
+      assert.match(file, format === 'csv' ? /"\{""a"":2\}"/ : /'\{\\"a\\":2\}'/, format);
+    }
+  } finally {
+    await s.stop();
+    await mysqlDb.stop();
+  }
+});

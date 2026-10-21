@@ -231,6 +231,11 @@ export default {
     const isAuto = col => /auto_increment/i.test(col.extra || '');
     // Valore cambiato? (i campi del form sono stringhe, i dati possono essere numeri o NULL)
     const changed = (next, prev) => next === null ? prev !== null : prev === null || next !== String(prev);
+    // Colonne JSON: testo formattato per la modifica, confronto sul contenuto (non sugli spazi)
+    const isJsonCol = col => /^json$/i.test(col?.dataType || '');
+    const prettyJson = v => { try { return JSON.stringify(JSON.parse(v), null, 2); } catch { return v ?? ''; } };
+    const sameJson = (a, b) => { try { return JSON.stringify(JSON.parse(a)) === JSON.stringify(JSON.parse(b)); } catch { return a === b; } };
+    const jsonChanged = (next, prev) => next === null || prev === null ? next !== prev : !sameJson(next, prev);
     const keyOf = row => Object.fromEntries(grid.data.primaryKey.map(k => [k, row[grid.data.columns.findIndex(c => c.name === k)]]));
 
     function renderGrid() {
@@ -645,6 +650,7 @@ export default {
       const r = Number(td.parentElement.dataset.r), c = Number(td.dataset.c);
       const col = grid.data.columns[c];
       const value = grid.data.rows[r][c];
+      if (isJsonCol(col)) return jsonDialog(r, c);
       td.innerHTML = `<div class="db-cell-edit"><input class="db-cell-input" value="${esc(value ?? '')}" placeholder="${value === null ? 'NULL' : ''}">
         ${col.nullable ? `<button title="${esc(t('grid.setNull'))}" data-null>NULL</button>` : ''}</div>`;
       const input = td.querySelector('input');
@@ -666,6 +672,30 @@ export default {
       td.querySelector('[data-null]')?.addEventListener('mousedown', e => { e.preventDefault(); finish(true, true); });
     }
 
+    // Modifica di una cella JSON: testo formattato, validato prima di salvare
+    let jsonEdit = null; // { r, c }
+    function jsonDialog(r, c) {
+      const col = grid.data.columns[c];
+      const value = grid.data.rows[r][c];
+      jsonEdit = { r, c };
+      openModal(t('json.title', { column: col.name }), `
+        <textarea class="form-input db-json-editor" id="f_json" spellcheck="false">${esc(value === null ? '' : prettyJson(value))}</textarea>
+        <div class="db-json-error" id="f_json_error"></div>`,
+        `${col.nullable ? `<button class="btn btn-ghost" style="margin-inline-end:auto" onclick="Ext['db-client'].saveJson(true)">${esc(t('json.setNull'))}</button>` : ''}
+         <button class="btn btn-ghost" onclick="Ext['db-client'].formatJson()">${esc(t('json.format'))}</button>
+         <button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" onclick="Ext['db-client'].saveJson(false)">${esc(t('core.action.save'))}</button>`);
+      document.getElementById('modal').classList.add('modal-wide');
+      setTimeout(() => document.getElementById('f_json')?.focus(), 0);
+    }
+
+    // Testo JSON valido in forma compatta, oppure l'errore mostrato nel dialog
+    function readJson(id, errorId) {
+      const text = document.getElementById(id).value;
+      try { return { value: JSON.stringify(JSON.parse(text)) }; }
+      catch (e) { const el = document.getElementById(errorId); if (el) el.textContent = t('json.invalid', { error: e.message }); return null; }
+    }
+
     // Dialog con un campo per colonna (inserimento o modifica)
     const LONG_TYPES = /text|blob|json|geometry/i;
     function rowDialog(r) {
@@ -674,7 +704,9 @@ export default {
       const fields = grid.data.columns.map((col, c) => {
         const v = editing ? row[c] : null;
         const id = `f_row_${c}`;
-        const input = LONG_TYPES.test(col.dataType)
+        const input = isJsonCol(col)
+          ? `<textarea class="form-input db-json-field" id="${id}" rows="6" spellcheck="false">${esc(v === null ? '' : prettyJson(v))}</textarea>`
+          : LONG_TYPES.test(col.dataType)
           ? `<textarea class="form-input" id="${id}" rows="3">${esc(v ?? '')}</textarea>`
           : `<input class="form-input" id="${id}" value="${esc(v ?? '')}" placeholder="${!editing && isAuto(col) ? esc(t('row.autoPlaceholder')) : esc(col.type)}">`;
         return `<div class="form-row">
@@ -1270,14 +1302,41 @@ export default {
         const editing = r != null;
         const row = editing ? grid.data.rows[r] : null;
         const values = {};
+        let invalid = null;
         grid.data.columns.forEach((col, c) => {
           const isNull = document.getElementById(`f_row_${c}_null`)?.checked;
-          const v = isNull ? null : document.getElementById(`f_row_${c}`).value;
-          if (editing ? changed(v, row[c]) : (v !== '' || isNull)) values[col.name] = v; // solo i campi cambiati / compilati
+          let v = isNull ? null : document.getElementById(`f_row_${c}`).value;
+          if (isJsonCol(col) && v !== null && v.trim() !== '') {
+            try { v = JSON.stringify(JSON.parse(v)); } catch (e) { invalid = invalid || t('json.invalidColumn', { column: col.name, error: e.message }); return; }
+          }
+          const differs = isJsonCol(col) ? jsonChanged(v === '' ? null : v, row?.[c] ?? null) : changed(v, row?.[c]);
+          if (editing ? differs : (v !== '' || isNull)) values[col.name] = v; // solo i campi cambiati / compilati
         });
+        if (invalid) { toast(invalid, 'error'); return; }
         if (editing && !Object.keys(values).length) { toast(t('row.noChanges')); return; }
         closeModal();
         saveRow(editing ? 'update' : 'insert', editing ? keyOf(row) : null, values);
+      },
+      formatJson() {
+        const el = document.getElementById('f_json');
+        const ok = readJson('f_json', 'f_json_error');
+        if (ok) { el.value = JSON.stringify(JSON.parse(ok.value), null, 2); document.getElementById('f_json_error').textContent = ''; }
+      },
+      saveJson(setNull) {
+        if (!jsonEdit || !grid) return;
+        const { r, c } = jsonEdit;
+        const col = grid.data.columns[c];
+        const prev = grid.data.rows[r][c];
+        let next = null;
+        if (!setNull) {
+          const ok = readJson('f_json', 'f_json_error');
+          if (!ok) return;
+          next = ok.value;
+        }
+        closeModal();
+        jsonEdit = null;
+        if (!jsonChanged(next, prev)) { toast(t('row.noChanges')); return; }
+        saveRow('update', keyOf(grid.data.rows[r]), { [col.name]: next });
       },
       applyFilter() {
         const op = document.getElementById('f_flt_op').value;
