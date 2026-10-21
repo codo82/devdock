@@ -21,6 +21,153 @@ function highlightSql(sql, esc) {
   return out + esc(sql.slice(last)) + '\n'; // la riga finale vuota mantiene allineata la textarea
 }
 
+// ---- autocompletamento dell'editor SQL ----
+
+const SQL_FUNCTIONS = `COUNT SUM AVG MIN MAX NOW CURDATE CURRENT_TIMESTAMP CONCAT CONCAT_WS COALESCE IFNULL NULLIF IF LOWER UPPER LENGTH
+SUBSTRING TRIM REPLACE ROUND FLOOR CEIL ABS DATE_FORMAT DATE_ADD DATE_SUB DATEDIFF YEAR MONTH DAY JSON_EXTRACT JSON_UNQUOTE
+JSON_OBJECT JSON_ARRAY JSON_CONTAINS GROUP_CONCAT CAST CONVERT UUID`.split(/\s+/);
+// parole che possono seguire il nome di una tabella e quindi non sono alias
+const NOT_ALIAS = new Set(['WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'ON', 'USING', 'SET', 'GROUP', 'ORDER',
+  'LIMIT', 'HAVING', 'VALUES', 'SELECT', 'UNION', 'NATURAL', 'STRAIGHT_JOIN', 'FOR', 'LOCK', 'WINDOW', 'PARTITION', 'AS']);
+const unq = id => String(id).replace(/^`|`$/g, '').replace(/``/g, '`');
+const quoteIfNeeded = name => (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(name) && !SQL_KEYWORDS.has(name.toUpperCase()) ? name : '`' + name.replace(/`/g, '``') + '`');
+
+// Tabelle citate nel testo (FROM/JOIN/UPDATE/INTO/TABLE, anche "a x, b y") e alias → tabella
+function sqlReferences(text) {
+  const tables = new Set(), aliases = new Map();
+  const ID = '(`(?:[^`]|``)+`|[A-Za-z0-9_$]+)';
+  const add = (name, alias) => {
+    const tbl = unq(name);
+    tables.add(tbl);
+    if (alias && !NOT_ALIAS.has(alias.toUpperCase())) aliases.set(unq(alias).toLowerCase(), tbl);
+  };
+  const re = new RegExp(`\\b(?:FROM|JOIN|UPDATE|INTO|TABLE)\\s+(?:${ID}\\s*\\.\\s*)?${ID}(?:\\s+(?:AS\\s+)?${ID})?((?:\\s*,\\s*(?:${ID}\\s*\\.\\s*)?${ID}(?:\\s+(?:AS\\s+)?${ID})?)*)`, 'gi');
+  for (const m of text.matchAll(re)) {
+    add(m[2], m[3]);
+    for (const x of (m[4] || '').matchAll(new RegExp(`,\\s*(?:${ID}\\s*\\.\\s*)?${ID}(?:\\s+(?:AS\\s+)?${ID})?`, 'gi'))) add(x[2], x[3]);
+  }
+  return { tables, aliases };
+}
+
+// Popup dei suggerimenti sotto il cursore della textarea. source: { tables(), columns(table) → Promise }
+function createAutocomplete({ input, container, esc, source }) {
+  const box = document.createElement('div');
+  box.className = 'db-ac';
+  box.hidden = true;
+  box.setAttribute('role', 'listbox');
+  document.body.appendChild(box);
+  let items = [], index = 0, range = null, seq = 0;
+
+  // Posizione del cursore: copia nascosta della textarea con un segnaposto al posto del cursore
+  function caretPoint() {
+    const mirror = document.createElement('div');
+    const cs = getComputedStyle(input);
+    for (const k of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'padding', 'border', 'boxSizing', 'whiteSpace', 'overflowWrap', 'wordBreak', 'tabSize', 'scrollbarGutter']) mirror.style[k] = cs[k];
+    Object.assign(mirror.style, { position: 'absolute', visibility: 'hidden', top: '0', left: '0', width: input.offsetWidth + 'px', overflow: 'hidden' });
+    mirror.textContent = input.value.slice(0, input.selectionStart);
+    const mark = document.createElement('span');
+    mark.textContent = '\u200b';
+    mirror.appendChild(mark);
+    container.appendChild(mirror);
+    const r = input.getBoundingClientRect();
+    const point = { x: r.left + mark.offsetLeft - input.scrollLeft, y: r.top + mark.offsetTop - input.scrollTop + mark.offsetHeight };
+    mirror.remove();
+    return point;
+  }
+
+  function close() { box.hidden = true; items = []; range = null; }
+
+  function render() {
+    if (!items.length) return close();
+    box.innerHTML = items.map((it, i) => `<div class="db-ac-item ${i === index ? 'active' : ''}" data-i="${i}" role="option">
+      <span class="db-ac-kind db-ac-${it.kind}">${esc(it.kind === 'column' ? 'col' : it.kind === 'table' ? 'tab' : it.kind === 'function' ? 'fn' : 'sql')}</span>
+      <span class="db-ac-label">${esc(it.label)}</span>${it.detail ? `<span class="db-ac-detail">${esc(it.detail)}</span>` : ''}</div>`).join('');
+    const p = caretPoint();
+    box.hidden = false;
+    const w = box.offsetWidth, h = box.offsetHeight;
+    box.style.left = Math.max(4, Math.min(p.x, window.innerWidth - w - 8)) + 'px';
+    box.style.top = (p.y + h + 4 > window.innerHeight ? p.y - h - 22 : p.y + 2) + 'px';
+    box.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  // Suggerimenti per il testo prima del cursore
+  async function update(force = false) {
+    const pos = input.selectionStart;
+    if (pos !== input.selectionEnd) return close();
+    const before = input.value.slice(0, pos);
+    const m = /(?:(`(?:[^`]|``)+`|[A-Za-z0-9_$]+)\.)?`?([A-Za-z0-9_$]*)$/.exec(before);
+    const qualifier = m[1] ? unq(m[1]) : null;
+    const prefix = m[2];
+    if (!force && !qualifier && !prefix) return close();
+    // niente suggerimenti dentro stringhe o commenti della riga
+    const line = before.slice(before.lastIndexOf('\n') + 1);
+    if (/--\s|#/.test(line) || (line.split("'").length - 1) % 2) return close();
+    const mine = ++seq;
+    const p = prefix.toLowerCase();
+    const start = pos - prefix.length - (before.slice(0, pos - prefix.length).endsWith('`') ? 1 : 0);
+    const refs = sqlReferences(input.value);
+    let list = [];
+    if (qualifier) {
+      const table = refs.aliases.get(qualifier.toLowerCase()) || qualifier;
+      list = (await source.columns(table)).filter(c => c.name.toLowerCase().startsWith(p))
+        .map(c => ({ kind: 'column', label: c.name, detail: c.type, insert: quoteIfNeeded(c.name) }));
+    } else {
+      const cols = [];
+      for (const table of refs.tables) for (const c of await source.columns(table)) cols.push({ ...c, table });
+      const seen = new Set();
+      const add = it => { const k = it.kind + it.label; if (!seen.has(k) && it.label.toLowerCase().startsWith(p)) { seen.add(k); list.push(it); } };
+      cols.forEach(c => add({ kind: 'column', label: c.name, detail: `${c.table} · ${c.type}`, insert: quoteIfNeeded(c.name) }));
+      for (const [alias, table] of refs.aliases) add({ kind: 'table', label: alias, detail: table, insert: alias });
+      (await source.tables()).forEach(name => add({ kind: 'table', label: name, detail: '', insert: quoteIfNeeded(name) }));
+      SQL_FUNCTIONS.forEach(f => add({ kind: 'function', label: f, detail: '', insert: f + '(' }));
+      [...SQL_KEYWORDS].sort().forEach(k => add({ kind: 'keyword', label: k, detail: '', insert: k }));
+    }
+    if (mine !== seq) return; // nel frattempo l'utente ha scritto altro
+    // la parola già scritta per intero non va riproposta da sola
+    if (list.length === 1 && list[0].label.toLowerCase() === p && !force) list = [];
+    items = list.slice(0, 40);
+    index = 0;
+    range = { start, end: pos };
+    render();
+  }
+
+  function accept(i = index) {
+    const it = items[i];
+    if (!it || !range) return;
+    input.setRangeText(it.insert, range.start, range.end, 'end');
+    close();
+    input.dispatchEvent(new Event('input'));
+    input.focus();
+  }
+
+  // true se il tasto è stato usato dal popup
+  function onKeyDown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === ' ') { e.preventDefault(); update(true); return true; }
+    if (box.hidden) return false;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      index = (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      render();
+      return true;
+    }
+    if ((e.key === 'Enter' && !(e.ctrlKey || e.metaKey)) || e.key === 'Tab') { e.preventDefault(); accept(); return true; }
+    if (e.key === 'Escape') { e.preventDefault(); close(); return true; }
+    return false;
+  }
+
+  box.addEventListener('mousedown', e => {
+    const el = e.target.closest('[data-i]');
+    if (!el) return;
+    e.preventDefault();
+    accept(Number(el.dataset.i));
+  });
+  input.addEventListener('blur', () => setTimeout(close, 120));
+  input.addEventListener('click', close);
+  input.addEventListener('scroll', () => { if (!box.hidden) render(); });
+
+  return { update, close, onKeyDown, element: box };
+}
+
 export default {
   async mount(ctx) {
     const { esc, js, toast, openModal, closeModal, fmt } = ctx.ui;
@@ -1099,7 +1246,38 @@ export default {
     }
     sqlInput.addEventListener('input', () => { if (activeId) editors.set(activeId, sqlInput.value); syncHighlight(); });
     sqlInput.addEventListener('scroll', syncHighlight);
+    // Autocompletamento: tabelle del database attivo e colonne (lette quando servono, in cache)
+    const acColumns = new Map(); // "conn|db|table" → Promise<[{ name, type }]>
+    const ac = createAutocomplete({
+      input: sqlInput, container: $(ctx.root, 'editor'), esc,
+      source: {
+        async tables() {
+          const c = active(), db = c && activeDb.get(c.id);
+          if (!c || !db) return [];
+          const k = nodeKey('d', c.id, db);
+          if (!Array.isArray(cache.get(k))) await loadTables(c, db).catch(() => {});
+          return Array.isArray(cache.get(k)) ? cache.get(k).map(tb => tb.name) : [];
+        },
+        columns(table) {
+          const c = active(), db = c && activeDb.get(c.id);
+          if (!c || !db || !table) return Promise.resolve([]);
+          const k = `${c.id}|${db}|${table}`;
+          if (!acColumns.has(k)) {
+            acColumns.set(k, ctx.api.get(tableUrl(c, db, table))
+              .then(r => r.columns.map(x => ({ name: x.name, type: x.type })))
+              .catch(() => { acColumns.delete(k); return []; }));
+          }
+          return acColumns.get(k);
+        },
+      },
+    });
+    sqlInput.addEventListener('input', e => {
+      // solo quando si scrive (non per gli inserimenti dal codice)
+      if (e.isTrusted && /^insert(Text|CompositionText)$/.test(e.inputType || '') && /[A-Za-z0-9_$.`]$/.test(e.data || '')) ac.update();
+      else if (e.isTrusted && e.inputType === 'deleteContentBackward') ac.update();
+    });
     sqlInput.addEventListener('keydown', e => {
+      if (ac.onKeyDown(e)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); }
       else if (e.key === 'Tab' && !e.shiftKey) {
         e.preventDefault();
