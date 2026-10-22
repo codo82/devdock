@@ -1,4 +1,5 @@
-// Database: connessioni MySQL/MariaDB (sezione "dbConnections"), password cifrate
+// Database: connessioni MySQL/MariaDB (sezione "dbConnections", raggruppate nelle
+// cartelle della sidebar della sezione "dbFolders"), password cifrate
 // con una master password (sezione "vault"), query con timeout e limite di righe.
 const crypto = require('crypto');
 const fs = require('fs');
@@ -14,7 +15,8 @@ const { introspect } = require('./introspect');
 
 const DEFAULT_LOCK_MINUTES = 30;
 
-const CONNECTION_FIELDS = ['id', 'label', 'type', 'host', 'port', 'database', 'user', 'password', 'projectId', 'tunnel', 'readOnly', 'migrations'];
+const CONNECTION_FIELDS = ['id', 'label', 'type', 'host', 'port', 'database', 'user', 'password', 'projectId', 'tunnel', 'readOnly', 'migrations', 'folder'];
+const FOLDER_FIELDS = ['id', 'label'];
 const HOST_RE = /^(\[[0-9a-f:.]+\]|[A-Za-z0-9._-]{1,253})$/i;  // nome host, IPv4 o [IPv6]
 const DB_NAME_RE = /^[^`\\/\x00]{1,64}$/;                       // nome database MySQL (niente backtick, slash, NUL)
 const CONNECT_TIMEOUT_MS = 8000;
@@ -73,6 +75,7 @@ module.exports = function createDbClient(ctx) {
   const vault = () => ctx.config.get('vault');
   let allowVaultSwitch = false; // vero solo durante il cambio della master password
   const connections = () => ctx.config.get('dbConnections');
+  const folders = () => ctx.config.get('dbFolders');
 
   // ---- sessione del vault: la chiave vive solo in memoria ----
 
@@ -128,6 +131,7 @@ module.exports = function createDbClient(ctx) {
     if (c.password != null && !vaultLib.isBox(c.password)) throw bad('password');
     if (c.projectId != null && !KEY_RE.test(c.projectId)) throw bad('project');
     if (c.readOnly != null && typeof c.readOnly !== 'boolean') throw bad('read_only');
+    if (c.folder != null && !KEY_RE.test(c.folder)) throw bad('folder');
     if (c.migrations != null) {
       const m = c.migrations;
       // "applied" veniva scritto dalla 1.8.0: accettato e ignorato
@@ -233,11 +237,13 @@ module.exports = function createDbClient(ctx) {
   // Dati dal form → connessione da salvare. password: stringa = nuova (cifrata subito),
   // '' o assente = invariata, null = rimossa
   function buildConnection(body, existing = {}) {
-    const c = { ...existing, ...pick(body || {}, ['label', 'host', 'port', 'database', 'user', 'projectId', 'tunnel', 'readOnly']) };
+    const c = { ...existing, ...pick(body || {}, ['label', 'host', 'port', 'database', 'user', 'projectId', 'tunnel', 'readOnly', 'folder']) };
     if (!existing.id) c.id = body.id;
     c.type = 'mysql';
     if (c.port !== undefined && c.port !== null && c.port !== '') c.port = Number(c.port);
     for (const k of ['database', 'projectId', 'tunnel']) if (c[k] === '') c[k] = null;
+    if (!c.folder) delete c.folder; // nella radice della sidebar
+    else if (!folders().some(f => f.id === c.folder)) throw ctx.error(400, 'folder_unknown', { folder: String(c.folder) });
     c.readOnly = !!c.readOnly;
     if (c.tunnel) {
       if (!tunnels) throw ctx.error(400, 'tunnels_unavailable');
@@ -483,6 +489,20 @@ module.exports = function createDbClient(ctx) {
         }
       },
     },
+    dbFolders: {
+      empty: [], idField: 'id',
+      normalize: v => (Array.isArray(v) ? v.map(f => pick(f || {}, FOLDER_FIELDS)) : v),
+      validate(list) {
+        if (!Array.isArray(list)) throw ctx.error.config('not_a_list', { section: 'dbFolders' });
+        const seen = new Set();
+        for (const f of list) {
+          if (!f || typeof f !== 'object' || !KEY_RE.test(f.id || '')) throw ctx.error.config('folder_id', { id: String(f?.id ?? '') });
+          if (!isText(f.label, 100)) throw ctx.error.config('folder_label', { id: f.id });
+          if (seen.has(f.id)) throw ctx.error.config('duplicate_folder', { id: f.id });
+          seen.add(f.id);
+        }
+      },
+    },
     dbConnections: {
       empty: [], idField: 'id',
       normalize: v => (Array.isArray(v) ? v.map(c => pick(c || {}, CONNECTION_FIELDS)) : v),
@@ -494,6 +514,7 @@ module.exports = function createDbClient(ctx) {
           if (seen.has(c.id)) throw ctx.error.config('duplicate_connection', { id: c.id });
           seen.add(c.id);
           if (c.password != null && !cfg.vault) throw ctx.error.config('password_without_vault', { id: c.id });
+          if (c.folder != null && !(cfg.dbFolders || []).some(f => f?.id === c.folder)) throw ctx.error.config('connection_folder_missing', { id: c.id, folder: c.folder });
         }
       },
     },
@@ -514,7 +535,38 @@ module.exports = function createDbClient(ctx) {
       // ---- connessioni ----
 
       listConnections(req, res) {
-        res.json({ connections: connections().map(publicConnection), tunnelsAvailable: !!tunnels });
+        res.json({ connections: connections().map(publicConnection), folders: folders(), tunnelsAvailable: !!tunnels });
+      },
+
+      // ---- cartelle della sidebar (un livello) ----
+
+      createFolder(req, res) {
+        const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
+        if (!isText(label, 100)) throw ctx.error(400, 'folder_label_required');
+        const f = { id: `f${crypto.randomBytes(4).toString('hex')}`, label };
+        ctx.config.set('dbFolders', [...folders(), f]);
+        res.json(f);
+      },
+
+      updateFolder(req, res) {
+        const list = folders();
+        const f = list.find(x => x.id === req.params.id);
+        if (!f) throw ctx.error(404, 'folder_unknown', { folder: req.params.id });
+        const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
+        if (!isText(label, 100)) throw ctx.error(400, 'folder_label_required');
+        f.label = label;
+        ctx.config.set('dbFolders', list);
+        res.json(f);
+      },
+
+      // Le connessioni della cartella tornano nella radice (stessa scrittura)
+      deleteFolder(req, res) {
+        const id = req.params.id;
+        ctx.config.update({
+          dbFolders: folders().filter(f => f.id !== id),
+          dbConnections: connections().map(c => { if (c.folder !== id) return c; const { folder, ...rest } = c; return rest; }),
+        });
+        res.json({ ok: true });
       },
 
       createConnection(req, res) {
@@ -1066,10 +1118,17 @@ module.exports = function createDbClient(ctx) {
             return conn;
           });
         } catch { throw ctx.error(400, 'file_passwords_unreadable'); }
+        const fileFolders = Array.isArray(file.dbFolders) ? file.dbFolders.map(f => pick(f || {}, FOLDER_FIELDS)) : [];
+        const currentFolders = folders();
+        const folderIds = new Set(currentFolders.map(f => f.id));
+        const nextFolders = mode === 'replace' ? fileFolders : [...currentFolders, ...fileFolders.filter(f => !folderIds.has(f.id))];
+        const known = new Set(nextFolders.map(f => f?.id));
+        for (const c of converted) if (c.folder != null && !known.has(c.folder)) delete c.folder; // cartella non nel file
         const current = connections();
         const ids = new Set(current.map(c => c.id));
-        const next = mode === 'replace' ? converted : [...current, ...converted.filter(c => !ids.has(c.id))];
-        ctx.config.set('dbConnections', next); // valida tutte le connessioni
+        let next = mode === 'replace' ? converted : [...current, ...converted.filter(c => !ids.has(c.id))];
+        next = next.map(c => (c.folder != null && !known.has(c.folder) ? (({ folder, ...rest }) => rest)(c) : c));
+        ctx.config.update({ dbFolders: nextFolders, dbConnections: next }); // valida tutte le connessioni
         closePools();
         res.json({ ok: true, imported: mode === 'replace' ? converted.length : next.length - current.length, skipped: mode === 'replace' ? 0 : converted.filter(c => ids.has(c.id)).length });
       },

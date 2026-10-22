@@ -10,7 +10,7 @@ Every feature that can be added or removed is an **extension**: a folder under `
 | `pm2` | header | 10 | — | — | `npm` (optional) | no |
 | `npm` | tab | 20 | — | — | — | yes |
 | `env` | tab | 22 | — | — | — | no |
-| `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `git` (optional) | no |
+| `db-client` | tab | 25 | `dbConnections`, `dbFolders`, `vault` | Connessioni database | `tunnels`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | — | no |
 | `ports` | tab | 35 | — | — | `npm`, `pm2`, `tunnels` (optional) | no |
 | `swagger` | tab | 40 | — | — | — | no |

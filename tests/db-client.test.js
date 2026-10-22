@@ -9,7 +9,7 @@ after(() => srv.stop());
 test('estensione db-client caricata con mysql2 dalla workspace', async () => {
   const ext = (await srv.request('GET', '/api/core/extensions')).json.find(e => e.code === 'db-client');
   assert.equal(ext.state, 'ok');
-  assert.deepEqual(ext.export.map(x => x.sections), [['dbConnections', 'vault']]);
+  assert.deepEqual(ext.export.map(x => x.sections), [['dbConnections', 'dbFolders', 'vault']]);
   const info = (await srv.request('GET', '/api/ext/db-client/info')).json;
   assert.equal(info.driver, 'mysql2');
   assert.equal(info.ready, true);
@@ -549,6 +549,48 @@ test('import di connessioni cifrate con un\'altra master password', async () => 
     // con il vault bloccato non si importa
     await apiB('POST', '/vault/lock');
     assert.equal((await apiB('POST', '/connections/import', { config: exported, password: 'master-di-A-123', mode: 'merge' })).status, 423);
+  } finally {
+    await a.stop();
+    await b.stop();
+  }
+});
+
+test('cartelle delle connessioni: creazione, spostamento, eliminazione, import', async () => {
+  const a = await startServer();
+  const b = await startServer();
+  try {
+    const apiA = (m, p, body) => a.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const apiB = (m, p, body) => b.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    await apiA('POST', '/vault/init', { password: 'master-di-A-123' });
+    assert.equal((await apiA('POST', '/folders', { label: ' ' })).json.code, 'db-client.folder_label_required');
+    const f = (await apiA('POST', '/folders', { label: ' Produzione ' })).json;
+    assert.equal(f.label, 'Produzione');
+    const conn = { id: 'prod', label: 'Prod', host: 'db.local', port: 3306, user: 'u', password: 'segreto-prod' };
+    assert.equal((await apiA('POST', '/connections', { ...conn, folder: 'nope' })).json.code, 'db-client.folder_unknown');
+    assert.equal((await apiA('POST', '/connections', { ...conn, folder: f.id })).json.connection.folder, f.id);
+    await apiA('POST', '/connections', { id: 'loc', label: 'Locale', host: '127.0.0.1', port: 3306, user: 'u' });
+    await apiA('PUT', `/folders/${f.id}`, { label: 'Prod remoti' });
+    let list = (await apiA('GET', '/connections')).json;
+    assert.deepEqual(list.folders, [{ id: f.id, label: 'Prod remoti' }]);
+    assert.deepEqual(list.connections.map(c => [c.id, c.folder]), [['prod', f.id], ['loc', undefined]]);
+
+    // import in un'altra installazione: arrivano anche le cartelle
+    const exported = (await a.request('GET', '/api/core/config/export?name=x&sections=dbConnections,dbFolders,vault')).json;
+    await apiB('POST', '/vault/init', { password: 'master-di-B-456' });
+    const r = await apiB('POST', '/connections/import', { config: exported, password: 'master-di-A-123', mode: 'merge' });
+    assert.equal(r.json.imported, 2);
+    const cfgB = b.readConfig();
+    assert.deepEqual(cfgB.dbFolders, [{ id: f.id, label: 'Prod remoti' }]);
+    assert.equal(cfgB.dbConnections.find(c => c.id === 'prod').folder, f.id);
+
+    // spostamento nella radice ed eliminazione della cartella
+    await apiA('PUT', '/connections/loc', { label: 'Locale', user: 'u', host: '127.0.0.1', port: 3306, folder: f.id });
+    await apiA('PUT', '/connections/loc', { label: 'Locale', user: 'u', host: '127.0.0.1', port: 3306, folder: '' });
+    assert.equal(a.readConfig().dbConnections.find(c => c.id === 'loc').folder, undefined);
+    await apiA('DELETE', `/folders/${f.id}`);
+    list = (await apiA('GET', '/connections')).json;
+    assert.deepEqual(list.folders, []);
+    assert.ok(list.connections.every(c => c.folder === undefined));
   } finally {
     await a.stop();
     await b.stop();

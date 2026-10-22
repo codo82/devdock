@@ -22,6 +22,7 @@
   ],
   "config": [
     "dbConnections",
+    "dbFolders",
     "vault"
   ],
   "export": [
@@ -37,6 +38,7 @@
       },
       "sections": [
         "dbConnections",
+        "dbFolders",
         "vault"
       ]
     }
@@ -68,6 +70,21 @@
         "method": "DELETE",
         "path": "/connections/:id",
         "handler": "deleteConnection"
+      },
+      {
+        "method": "POST",
+        "path": "/folders",
+        "handler": "createFolder"
+      },
+      {
+        "method": "PUT",
+        "path": "/folders/:id",
+        "handler": "updateFolder"
+      },
+      {
+        "method": "DELETE",
+        "path": "/folders/:id",
+        "handler": "deleteFolder"
       },
       {
         "method": "POST",

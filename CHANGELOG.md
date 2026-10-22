@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-22
+
+### Added
+- Database: connections can be grouped in sidebar folders of their own (one level, section `dbFolders`), independent of the project folders. Create a folder with 📁+, move a connection with the **Folder** field of its form, rename or delete a folder from its ⋯ menu or with a right click (its connections go back to the root). Folders are included in the *Connessioni database* export and in the import of connections; the open/closed state is remembered by the browser.
+
+### Changed
+- Database: the sidebar no longer groups connections by linked project (the project link stays in the connection form).
+- Sidebar titles are shortened with an ellipsis when the sidebar is narrow, so the header buttons always fit.
+
 ## [1.15.0] - 2026-10-22
 
 ### Added

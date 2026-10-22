@@ -179,6 +179,7 @@ export default {
     let tunnelsAvailable = false;
     let treeFilter = '';
     let activeId = null;
+    let folders = [];            // cartelle della sidebar (un livello)
 
     const active = () => connections.find(c => c.id === activeId) || null;
     const editors = new Map(); // testo dell'editor per connessione
@@ -202,6 +203,7 @@ export default {
       $(ctx.root, 'main').hidden = !unlocked;
       $(ctx.sidebar, 'vault-btn').hidden = !unlocked;
       $(ctx.sidebar, 'add-btn').hidden = !unlocked;
+      $(ctx.sidebar, 'folder-btn').hidden = !unlocked;
       $(ctx.sidebar, 'import-btn').hidden = !unlocked;
       $(ctx.sidebar, 'tree-search').hidden = !unlocked;
       if (!unlocked) {
@@ -215,7 +217,7 @@ export default {
     // ---- connessioni ----
     async function loadConnections() {
       try {
-        ({ connections, tunnelsAvailable } = await ctx.api.get('/connections'));
+        ({ connections, folders, tunnelsAvailable } = await ctx.api.get('/connections'));
       } catch (e) { toast(e.message, 'error'); return; }
       if (activeId && !active()) activeId = null;
       ctx.setBadge(connections.length || null);
@@ -223,27 +225,67 @@ export default {
       renderWorkspace();
     }
 
-    // Progetti del core: per raggruppare e scegliere il progetto
+    // Progetti del core: per scegliere il progetto collegato
     async function projects() {
       try { return (await ctx.core.get('/projects')).projects; } catch { return []; }
     }
 
-    async function renderConnections() {
+    // Cartelle chiuse, ricordate dal browser (localStorage può mancare o fallire)
+    const CLOSED_FOLDERS_KEY = 'devdock.dbFolders.collapsed';
+    function closedFolders() {
+      try { return new Set(JSON.parse(localStorage.getItem(CLOSED_FOLDERS_KEY) || '[]')); } catch { return new Set(); }
+    }
+    function toggleFolder(id) {
+      const closed = closedFolders();
+      if (closed.has(id)) closed.delete(id); else closed.add(id);
+      try { localStorage.setItem(CLOSED_FOLDERS_KEY, JSON.stringify([...closed])); } catch { /* solo per questa sessione */ }
+      renderConnections();
+    }
+
+    // Albero: prima le cartelle con le loro connessioni, poi le connessioni senza cartella
+    function renderConnections() {
       const el = $(ctx.sidebar, 'connections');
-      if (!connections.length) {
+      if (!connections.length && !folders.length) {
         el.innerHTML = `<p class="db-muted db-pad">${esc(t('sidebar.none'))}<br><br><button class="btn btn-ghost btn-sm" data-tree="add">${esc(t('sidebar.addButton'))}</button></p>`;
         return;
       }
-      const labels = new Map((await projects()).map(p => [p.id, p.label]));
-      const groups = new Map();
-      for (const c of connections) {
-        const g = c.projectId && labels.has(c.projectId) ? labels.get(c.projectId) : '';
-        groups.set(g, [...(groups.get(g) || []), c]);
-      }
-      const keys = [...groups.keys()].sort((a, b) => (a === '') - (b === '') || a.localeCompare(b));
-      el.innerHTML = `<div class="db-tree" role="tree">${keys.map(g => `
-        ${keys.length > 1 || g ? `<div class="db-group">${esc(g || t('sidebar.noProject'))}</div>` : ''}
-        ${groups.get(g).map(connNode).join('')}`).join('')}</div>`;
+      const closed = closedFolders();
+      const known = new Set(folders.map(f => f.id));
+      const folderNode = f => {
+        const list = connections.filter(c => c.folder === f.id);
+        const isOpen = !closed.has(f.id);
+        return `<div class="db-node">
+          <div class="db-row db-row-folder" data-tree="folder" data-folder="${esc(f.id)}" title="${esc(t('folders.hint'))}">
+            <span class="db-caret"><svg class="db-chevron ${isOpen ? 'open' : ''}" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1.5 7 5 3.5 8.5" /></svg></span>
+            <span class="db-row-icon">📁</span><span class="db-row-label">${esc(f.label)}</span>
+            <span class="db-folder-count">${esc(fmt.number(list.length))}</span>
+            <button class="db-folder-more" data-act="folder-menu" title="${esc(t('folders.actions'))}">⋯</button>
+          </div>
+          ${isOpen ? `<div class="db-children">${list.map(connNode).join('')}</div>` : ''}
+        </div>`;
+      };
+      el.innerHTML = `<div class="db-tree" role="tree">${folders.map(folderNode).join('')}${
+        connections.filter(c => !c.folder || !known.has(c.folder)).map(connNode).join('')}</div>`;
+    }
+
+    // ---- cartelle ----
+    function folderMenu(e, id) {
+      const r = e.target.closest('[data-act="folder-menu"]')?.getBoundingClientRect();
+      ctx.ui.contextMenu(e.clientX || r?.left || 0, e.clientY || r?.bottom || 0, [
+        { icon: '✎', label: t('folders.rename'), action: () => folderDialog(id) },
+        { icon: '🗑', label: t('folders.delete'), danger: true, action: () => actions.deleteFolder(id) },
+      ]);
+    }
+    // Nuova cartella (id assente) o rinomina
+    function folderDialog(id) {
+      const f = id ? folders.find(x => x.id === id) : null;
+      if (id && !f) return;
+      const save = `Ext['db-client'].saveFolder(${js(id || '')})`;
+      openModal(t(f ? 'folders.rename' : 'folders.new'), `
+        <div class="form-row"><label>${esc(t('folders.name'))}</label>
+          <input class="form-input" id="f_dbfolder_label" value="${esc(f?.label || '')}" placeholder="${esc(t('folders.placeholder'))}" onkeydown="if(event.key==='Enter')${esc(save)}"></div>`,
+        modalButtons(t(f ? 'core.action.save' : 'core.action.add'), save));
+      document.getElementById('f_dbfolder_label')?.focus();
     }
 
     // Freccia del nodo: punta a destra se chiuso, in basso se aperto
@@ -1218,6 +1260,8 @@ export default {
           ${projectList.length ? `<div class="form-row"><label>${esc(t('form.project'))}</label><select class="form-input" id="f_db_project">
             ${opt('', t('form.noProject'), !c.projectId)}${projectList.map(p => opt(p.id, p.label, c.projectId === p.id)).join('')}</select></div>` : ''}
         </div>
+        <div class="form-row"><label>${esc(t('form.folder'))}</label><select class="form-input" id="f_db_folder">
+          ${opt('', t('form.noFolder'), !c.folder)}${folders.map(f => opt(f.id, f.label, c.folder === f.id)).join('')}</select></div>
         <label class="db-check"><input type="checkbox" id="f_db_readonly" ${c.readOnly ? 'checked' : ''}> ${esc(t('form.readOnly'))}</label>
         ${c.hasPassword ? `<label class="db-check"><input type="checkbox" id="f_db_clear"> ${esc(t('form.clearPassword'))}</label>` : ''}`;
     }
@@ -1228,7 +1272,7 @@ export default {
       const password = document.getElementById('f_db_password')?.value || '';
       return {
         id: v('f_db_id'), label: v('f_db_label'), user: v('f_db_user'), database: v('f_db_database'),
-        projectId: v('f_db_project'), tunnel,
+        projectId: v('f_db_project'), folder: v('f_db_folder'), tunnel,
         ...(tunnel ? {} : { host: v('f_db_host'), port: v('f_db_port') }),
         readOnly: !!document.getElementById('f_db_readonly')?.checked,
         password: document.getElementById('f_db_clear')?.checked ? null : password,
@@ -1673,6 +1717,25 @@ export default {
         else toast(t('run.nothingDone'));
       },
       select(id) { activeId = id; renderConnections(); renderWorkspace(); },
+      addFolder: () => folderDialog(null),
+      async saveFolder(id) {
+        const label = (document.getElementById('f_dbfolder_label')?.value || '').trim();
+        if (!label) { toast(t('folders.nameRequired'), 'error'); return; }
+        try {
+          if (id) await ctx.api.put(`/folders/${encodeURIComponent(id)}`, { label });
+          else await ctx.api.post('/folders', { label });
+          closeModal();
+          await loadConnections();
+        } catch (e) { toast(e.message, 'error'); }
+      },
+      async deleteFolder(id) {
+        const f = folders.find(x => x.id === id);
+        if (!f || !confirm(t('folders.confirmDelete', { name: f.label }))) return;
+        try {
+          await ctx.api.del(`/folders/${encodeURIComponent(id)}`);
+          await loadConnections();
+        } catch (e) { toast(e.message, 'error'); }
+      },
       async addConnection() { openModal(t('connections.newTitle'), await connectionForm(), modalButtons(t('connections.create'), "Ext['db-client'].saveConnection()")); },
       async editConnection(id) {
         const c = connections.find(x => x.id === id);
@@ -1730,6 +1793,10 @@ export default {
       const row = e.target.closest('[data-tree]');
       if (!row) return;
       if (row.dataset.tree === 'add') return actions.addConnection();
+      if (row.dataset.tree === 'folder') {
+        if (contextual || e.target.closest('[data-act="folder-menu"]')) { e.preventDefault(); return folderMenu(e, row.dataset.folder); }
+        return toggleFolder(row.dataset.folder);
+      }
       const c = connections.find(x => x.id === row.dataset.conn);
       if (!c) return;
       const { db, table } = row.dataset;
@@ -1752,7 +1819,7 @@ export default {
     ctx.sidebar.addEventListener('click', e => onTree(e, false));
     $(ctx.sidebar, 'tree-filter').addEventListener('input', e => { treeFilter = e.target.value; renderConnections(); });
     ctx.sidebar.addEventListener('contextmenu', e => {
-      if (e.target.closest('[data-tree="table"]')) return onTree(e, true);
+      if (e.target.closest('[data-tree="table"], [data-tree="folder"]')) return onTree(e, true);
       const dbRow = e.target.closest('[data-tree="db"]');
       if (!dbRow) return;
       e.preventDefault();
@@ -1766,9 +1833,9 @@ export default {
     ctx.sidebar.addEventListener('click', e => {
       if (e.target.closest('[data-action="vault-menu"]')) vaultMenu();
       else if (e.target.closest('[data-action="add-connection"]')) actions.addConnection();
+      else if (e.target.closest('[data-action="add-folder"]')) actions.addFolder();
       else if (e.target.closest('[data-action="import-connections"]')) actions.importConnections();
     });
-    ctx.bus.on('core:projects-changed', () => { if (vault.state === 'unlocked') renderConnections(); });
     ctx.expose(actions);
 
     // ↻: lo schema può essere cambiato (anche da questa sessione): ricarica i nodi aperti

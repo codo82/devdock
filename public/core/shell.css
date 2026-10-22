@@ -65,7 +65,7 @@
   /* Intestazione sidebar */
   .sidebar-head{padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:6px}
   .sidebar-head-actions{display:flex;gap:4px;flex-shrink:0}
-  .sidebar-head-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+  .sidebar-head-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   /* Colorazione accent per sezione */
 
