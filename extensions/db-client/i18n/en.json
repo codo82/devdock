@@ -366,7 +366,7 @@
   "mig.noRepos": "No repositories available: add a project in the NPM section.",
   "mig.noReposExt": "The Git or NPM extension is needed to choose a repository.",
   "mig.repo": "Repository",
-  "mig.npmFallback": "Git extension not active: the npm project folders are used.",
+  "mig.projectsFallback": "Git extension not active: the project folders are used.",
   "mig.folder": "Migrations folder",
   "mig.noSubfolders": "No subfolders",
   "mig.newFolderPlaceholder": "new folder in this location",

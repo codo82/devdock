@@ -69,7 +69,6 @@ module.exports = function createDbClient(ctx) {
   const { KEY_RE, isPort, isText } = ctx.lib.validate;
   const tunnels = ctx.require('tunnels'); // opzionale: senza, niente connessioni via tunnel
   const git = ctx.require('git');         // opzionale: repository per le migration
-  const npm = ctx.require('npm');         // opzionale: progetti come repository se git manca
 
   const vault = () => ctx.config.get('vault');
   let allowVaultSwitch = false; // vero solo durante il cambio della master password
@@ -156,11 +155,10 @@ module.exports = function createDbClient(ctx) {
   }
   // ---- migration: repository, cartelle, numerazione ----
 
-  // Repository selezionabili: quelli dell'estensione Git, altrimenti le cartelle dei progetti npm
+  // Repository selezionabili: quelli dell'estensione Git, altrimenti le cartelle dei progetti
   function migrationRepos() {
     if (git) return { source: 'git', repos: git.repos() };
-    if (npm) return { source: 'npm', repos: npm.getProjects().map(p => ({ id: p.id, label: p.label, path: p.path })) };
-    return { source: null, repos: [] };
+    return { source: 'projects', repos: ctx.projects.list().map(p => ({ id: p.id, label: p.label, path: p.path })) };
   }
   const repoOr404 = id => {
     const repo = migrationRepos().repos.find(r => r.id === id);

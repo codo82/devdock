@@ -1,4 +1,4 @@
-// File .env dei progetti npm: confronto con il modello (.env.example), lettura dei
+// File .env dei progetti: confronto con il modello (.env.example), lettura dei
 // valori uno alla volta e modifica che conserva commenti e ordine. I valori non
 // passano mai dalla configurazione di DevDock né dagli strumenti MCP.
 const crypto = require('crypto');
@@ -11,10 +11,9 @@ const TEMPLATES = ['.env.example', '.env.sample', '.env.template', '.env.dist'];
 const MAX_SIZE = 256 * 1024;
 
 module.exports = function createEnv(ctx) {
-  const npm = ctx.require('npm');
 
   const projectOr404 = id => {
-    const p = npm.getProject(id);
+    const p = ctx.projects.get(id);
     if (!p) throw ctx.error(404, 'project_not_found', { id: String(id) });
     return p;
   };
@@ -85,9 +84,9 @@ module.exports = function createEnv(ctx) {
   return {
     handlers: {
       projects(req, res) {
-        res.json(npm.getProjects().map(p => {
+        res.json(ctx.projects.list().map(p => {
           const o = overview(p);
-          return { id: p.id, label: p.label, files: o.files.map(f => f.name), template: o.template, issues: o.issues };
+          return { id: p.id, label: p.label, ...(p.folder ? { folder: p.folder } : {}), files: o.files.map(f => f.name), template: o.template, issues: o.issues };
         }));
       },
 
@@ -139,7 +138,7 @@ module.exports = function createEnv(ctx) {
     mcp: {
       // Chiavi e differenze, mai i valori
       check({ project } = {}) {
-        const list = project ? [projectOr404(project)] : npm.getProjects();
+        const list = project ? [projectOr404(project)] : ctx.projects.list();
         return { projects: list.map(p => ({ id: p.id, label: p.label, ...overview(p) })) };
       },
     },

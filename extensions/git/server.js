@@ -1,11 +1,10 @@
 // Git: status, commit, grafo dei commit e operazioni remote per i repository
-// dei progetti npm (risalendo dalla cartella del progetto fino a .git)
+// dei progetti (risalendo dalla cartella del progetto fino a .git)
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
 module.exports = function createGit(ctx) {
-  const npm = ctx.require('npm');
   const { isValidBranchName, isValidCommitHash } = ctx.lib.validate;
 
   function gitExec(cwd, args, opts = {}) {
@@ -72,11 +71,11 @@ module.exports = function createGit(ctx) {
   function getGitRepos() {
     const seen = new Set();
     const repos = [];
-    for (const p of npm.getProjects()) {
+    for (const p of ctx.projects.list()) {
       const gitRoot = findGitRoot(p.path);
-      if (!gitRoot || seen.has(gitRoot)) continue; // più progetti npm nella stessa repo: una sola voce
+      if (!gitRoot || seen.has(gitRoot)) continue; // più progetti nella stessa repo: una sola voce
       seen.add(gitRoot);
-      repos.push({ id: p.id, label: p.label, path: gitRoot });
+      repos.push({ id: p.id, label: p.label, path: gitRoot, ...(p.folder ? { folder: p.folder } : {}) });
     }
     return repos;
   }

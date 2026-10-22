@@ -1,7 +1,7 @@
 {
   "sidebar.title": "Repository",
   "sidebar.none": "Nessun repo git trovato.",
-  "sidebar.noneHint": "Aggiungi un progetto nella sezione NPM: se è dentro un repository git apparirà qui.",
+  "sidebar.noneHint": "Aggiungi un progetto con + (qui o nella sezione NPM): se è dentro un repository git apparirà qui.",
   "empty": "Seleziona un repository dalla sidebar",
   "bar.reload": "↻ Ricarica",
   "files.title": "Modifiche",

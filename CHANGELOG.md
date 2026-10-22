@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-22
+
+### Added
+- Project folders: projects can be grouped in sidebar folders (one level), shown in the NPM, Git and Env sidebars. Create a folder with 📁+, move a project from its edit form (✎), rename or delete a folder from its ⋯ menu (its projects go back to the root). The open/closed state of the folders is remembered by the browser.
+- Projects can be added, edited and removed from the Git section too.
+
+### Changed
+- Projects belong to the core instead of the NPM extension (`projects` and the new `projectFolders` sections, API under `/api/core/projects` and `/api/core/folders`, `ctx.projects` for the extensions). Git and Env no longer require NPM; the Export/Import checkbox is now **Progetti e cartelle**. Existing `config.json` files and exports work unchanged.
+
 ## [1.14.0] - 2026-10-21
 
 ### Added

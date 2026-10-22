@@ -223,10 +223,9 @@ export default {
       renderWorkspace();
     }
 
-    // Progetti npm (solo se l'estensione è attiva): per raggruppare e scegliere il progetto
+    // Progetti del core: per raggruppare e scegliere il progetto
     async function projects() {
-      if (!ctx.hasExtension('npm')) return [];
-      try { return await ctx.apiFor('npm').get('/projects'); } catch { return []; }
+      try { return (await ctx.core.get('/projects')).projects; } catch { return []; }
     }
 
     async function renderConnections() {
@@ -1126,7 +1125,7 @@ export default {
         <div class="form-row"><label>${esc(t('mig.repo'))}</label>
           <select class="form-input" onchange="Ext['db-client'].migRepo(this.value)">${d.repos.repos.map(r =>
             `<option value="${esc(r.id)}" ${r.id === d.repo ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}</select>
-          ${d.repos.source === 'npm' ? `<p class="db-muted">${esc(t('mig.npmFallback'))}</p>` : ''}</div>
+          ${d.repos.source === 'projects' ? `<p class="db-muted">${esc(t('mig.projectsFallback'))}</p>` : ''}</div>
         <div class="form-row"><label>${esc(t('mig.folder'))}</label>
           <div class="db-mig-crumbs">${crumbs}</div>
           <div class="db-mig-folders">
@@ -1769,7 +1768,7 @@ export default {
       else if (e.target.closest('[data-action="add-connection"]')) actions.addConnection();
       else if (e.target.closest('[data-action="import-connections"]')) actions.importConnections();
     });
-    ctx.bus.on('npm:projects-changed', () => { if (vault.state === 'unlocked') renderConnections(); });
+    ctx.bus.on('core:projects-changed', () => { if (vault.state === 'unlocked') renderConnections(); });
     ctx.expose(actions);
 
     // ↻: lo schema può essere cambiato (anche da questa sessione): ricarica i nodi aperti

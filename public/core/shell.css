@@ -64,6 +64,7 @@
 
   /* Intestazione sidebar */
   .sidebar-head{padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .sidebar-head-actions{display:flex;gap:4px;flex-shrink:0}
   .sidebar-head-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
 
   /* Colorazione accent per sezione */
@@ -80,7 +81,27 @@
   .sb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
   .sb-count{margin-inline-start:auto;font-size:10px;font-family:var(--font);padding:1px 6px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted)}
 
-  /* NPM project list items */
+  /* Cartelle dei progetti nelle sidebar (public/core/projects.js) */
+  .pf-folder-head{display:flex;align-items:center;gap:6px;padding:6px 14px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:600;user-select:none}
+  .pf-folder-head:hover{background:var(--surface2);color:var(--text)}
+  .pf-folder-head:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+  .pf-folder-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .pf-folder-icon{font-size:12px}
+  .pf-folder-head .sb-count{margin-inline-start:auto}
+  .pf-folder-more{opacity:0;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 4px;border-radius:3px}
+  .pf-folder-head:hover .pf-folder-more,.pf-folder-more:focus-visible{opacity:1}
+  .pf-folder-more:hover{color:var(--text)}
+  .pf-chevron{width:10px;height:10px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+  .pf-chevron.open{transform:rotate(90deg)}
+  [dir=rtl] .pf-chevron{transform:scaleX(-1)}
+  [dir=rtl] .pf-chevron.open{transform:rotate(90deg)}
+  .pf-children{padding-inline-start:12px}
+  /* azioni di una voce della sidebar, visibili al passaggio del mouse */
+  .sb-item-act{opacity:0;background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:3px;flex-shrink:0;transition:color .15s,opacity .15s}
+  .sb-item:hover .sb-item-act,.sb-item-act:focus-visible{opacity:1}
+  .sb-item-act:hover{color:var(--text)}
+  .pf-folder.collapsed .pf-children{display:none}
+
 
   /* ================================================================
      MAIN CONTENT AREA

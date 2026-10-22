@@ -11,6 +11,7 @@ export default {
     const $ = (root, role) => root.querySelector(`[data-role="${role}"]`);
 
     let projects = [];
+    let folders = [];
     let processes = [];
     let activeProject = null;
     let tab = 'scripts';
@@ -22,7 +23,7 @@ export default {
 
     // ---- dati ----
     async function loadProjects() {
-      try { projects = await ctx.api.get('/projects'); } catch { projects = []; }
+      try { ({ projects, folders } = await ctx.projects.load()); } catch { projects = []; folders = []; }
     }
 
     async function loadProcesses() {
@@ -49,21 +50,22 @@ export default {
     // ---- sidebar ----
     function renderProjects() {
       const el = $(ctx.sidebar, 'projects');
-      if (!projects.length) {
+      if (!projects.length && !folders.length) {
         el.innerHTML = `<p class="npm-muted npm-pad">${esc(t('sidebar.none'))}<br><br><button class="btn btn-npm btn-sm" onclick="Ext.npm.addProject()">${esc(t('sidebar.add'))}</button></p>`;
         return;
       }
-      el.innerHTML = projects.map(p => {
+      el.innerHTML = ctx.projects.tree(folders, projects, p => {
         const n = running(p.id);
         return `<div class="sb-proj ${activeProject === p.id ? 'active' : ''}" onclick="Ext.npm.select(${js(p.id)})">
-          <span class="sb-proj-icon">${n ? '🟠' : '📁'}</span>
+          <span class="sb-proj-icon">${n ? '🟠' : '📦'}</span>
           <div class="sb-proj-info">
             <div class="sb-proj-label">${esc(p.label)}${n ? ` <span class="npm-run-count">▶${fmt.number(n)}</span>` : ''}</div>
             <div class="sb-proj-path">${esc(p.path)}</div>
           </div>
-          <button class="sb-proj-del" onclick="event.stopPropagation();Ext.npm.deleteProject(${js(p.id)})" title="${esc(t('sidebar.remove'))}">✕</button>
+          <button class="sb-proj-del" onclick="event.stopPropagation();Projects.form(${js(p.id)})" title="${esc(t('core.projects.edit'))}">✎</button>
+          <button class="sb-proj-del" onclick="event.stopPropagation();Ext.npm.deleteProject(${js(p.id)})" title="${esc(t('core.projects.remove'))}">✕</button>
         </div>`;
-      }).join('');
+      });
     }
 
     // ---- pannello ----
@@ -275,48 +277,23 @@ export default {
         } catch (e) { toast(t('toast.pm2Error', { error: e.message }), 'error'); }
       },
 
-      addProject() {
-        openModal(t('form.title'), `
-          <div class="form-row"><label>${esc(t('form.id'))}</label><input class="form-input" id="f_proj_id" placeholder="${esc(t('form.idPlaceholder'))}"></div>
-          <div class="form-row"><label>${esc(t('form.name'))}</label><input class="form-input" id="f_proj_label" placeholder="${esc(t('form.namePlaceholder'))}"></div>
-          <div class="form-row"><label>${esc(t('form.path'))}</label><input class="form-input" id="f_proj_path" placeholder="/Users/me/projects/my-app"></div>`,
-          `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
-           <button class="btn btn-npm" onclick="Ext.npm.saveProject()">${esc(t('core.action.add'))}</button>`);
-      },
-      async saveProject() {
-        const val = id => (document.getElementById(id)?.value || '').trim();
-        const body = { id: val('f_proj_id'), label: val('f_proj_label'), path: val('f_proj_path') };
-        if (!body.id || !body.label || !body.path) { toast(t('toast.allRequired'), 'error'); return; }
-        try {
-          await ctx.api.post('/projects', body);
-          closeModal();
-          toast(t('toast.projectAdded'), 'success');
-          await loadProjects();
-          renderProjects();
-          ctx.bus.emit('npm:projects-changed');
-        } catch (e) { toast(e.message, 'error'); }
-      },
+      addProject: () => ctx.projects.form(),
       async deleteProject(id) {
-        if (!confirm(t('confirm.removeProject'))) return;
-        try {
-          await ctx.api.del(`/projects/${encodeURIComponent(id)}`);
-          if (activeProject === id) activeProject = null;
-          toast(t('toast.projectRemoved'), 'success');
-          await loadProjects();
-          renderProjects(); renderTab();
-          ctx.bus.emit('npm:projects-changed');
-        } catch (e) { toast(e.message, 'error'); }
+        if (!(await ctx.projects.remove(id))) return;
+        if (activeProject === id) { activeProject = null; renderTab(); }
       },
     };
 
     ctx.sidebar.addEventListener('click', e => {
       if (e.target.closest('[data-action="add-project"]')) actions.addProject();
+      if (e.target.closest('[data-action="add-folder"]')) ctx.projects.newFolder();
     });
     ctx.root.addEventListener('click', e => {
       const next = e.target.closest('.npm-tab')?.dataset.tab;
       if (next && next !== tab) { tab = next; renderTab(); }
     });
 
+    ctx.bus.on('core:projects-changed', async () => { await loadProjects(); renderProjects(); });
     ctx.expose(actions);
     await loadProjects();
     await loadProcesses();

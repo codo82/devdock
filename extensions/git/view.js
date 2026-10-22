@@ -1,4 +1,4 @@
-// Git: repository dei progetti npm, status con selezione dei file, commit,
+// Git: repository dei progetti, status con selezione dei file, commit,
 // grafo dei commit con legenda dei branch e operazioni remote con output in streaming.
 
 const AUTO_REFRESH_MS = 30000;
@@ -171,6 +171,7 @@ export default {
     const $ = role => ctx.root.querySelector(`[data-role="${role}"]`);
 
     let repos = [];
+    let folders = [];
     let activeRepo = null;
     let status = null;
     let selected = new Set();
@@ -184,6 +185,7 @@ export default {
     // ---- repository ----
     async function loadRepos() {
       try { repos = await ctx.api.get('/repos'); } catch { repos = []; }
+      try { folders = (await ctx.projects.load()).folders; } catch { folders = []; }
       ctx.setBadge(repos.length);
       if (activeRepo && !repo()) activeRepo = null;
       renderRepos();
@@ -191,13 +193,16 @@ export default {
 
     function renderRepos() {
       const el = ctx.sidebar.querySelector('[data-role="repos"]');
-      el.innerHTML = !repos.length
+      el.innerHTML = !repos.length && !folders.length
         ? `<p class="git-muted git-pad">${esc(t('sidebar.none'))}<br><br>${esc(t('sidebar.noneHint'))}</p>`
-        : repos.map(r => `
-          <button class="sb-item ${activeRepo === r.id ? 'active' : ''}" onclick="Ext.git.select(${js(r.id)})">
+        : ctx.projects.tree(folders, repos, r => `
+          <div class="sb-item ${activeRepo === r.id ? 'active' : ''}" role="button" tabindex="0" onclick="Ext.git.select(${js(r.id)})"
+               onkeydown="if(event.key==='Enter')Ext.git.select(${js(r.id)})">
             <span class="sb-icon">🌿</span>
             <span class="git-repo-name">${esc(r.label)}</span>
-          </button>`).join('');
+            <button class="sb-item-act" onclick="event.stopPropagation();Projects.form(${js(r.id)})" title="${esc(t('core.projects.edit'))}">✎</button>
+            <button class="sb-item-act" onclick="event.stopPropagation();Ext.git.removeProject(${js(r.id)})" title="${esc(t('core.projects.remove'))}">✕</button>
+          </div>`);
     }
 
     function renderRepo() {
@@ -542,6 +547,10 @@ export default {
 
     // ---- collegamenti ----
     const actions = {
+      async removeProject(id) {
+        if (!(await ctx.projects.remove(id))) return;
+        if (activeRepo === id) { activeRepo = null; renderRepo(); }
+      },
       async select(id) {
         activeRepo = id;
         status = null;
@@ -602,9 +611,11 @@ export default {
     $('limit').addEventListener('change', loadLog);
     ctx.sidebar.addEventListener('click', e => {
       if (e.target.closest('[data-action="reload-repos"]')) this.refresh();
+      if (e.target.closest('[data-action="add-project"]')) ctx.projects.form();
+      if (e.target.closest('[data-action="add-folder"]')) ctx.projects.newFolder();
     });
-    // nuovi progetti npm possono aggiungere repository
-    ctx.bus.on('npm:projects-changed', loadRepos);
+    // progetti e cartelle cambiati (da qui o da un'altra sezione)
+    ctx.bus.on('core:projects-changed', loadRepos);
 
     ctx.expose(actions);
     await loadRepos();

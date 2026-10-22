@@ -1,6 +1,6 @@
 {
   "sidebar.title": "File .env",
-  "sidebar.none": "Nessun progetto: aggiungine uno nella sezione NPM.",
+  "sidebar.none": "Nessun progetto: aggiungine uno nella sezione NPM o Git.",
   "issues": {
     "one": "{count} mancante",
     "other": "{count} mancanti"

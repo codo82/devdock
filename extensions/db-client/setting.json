@@ -16,10 +16,6 @@
       "required": false
     },
     {
-      "code": "npm",
-      "required": false
-    },
-    {
       "code": "git",
       "required": false
     }

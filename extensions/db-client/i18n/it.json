@@ -366,7 +366,7 @@
   "mig.noRepos": "Nessun repository disponibile: aggiungi un progetto nella sezione NPM.",
   "mig.noReposExt": "Servono l'estensione Git o NPM per scegliere un repository.",
   "mig.repo": "Repository",
-  "mig.npmFallback": "Estensione Git non attiva: si usano le cartelle dei progetti npm.",
+  "mig.projectsFallback": "Estensione Git non attiva: si usano le cartelle dei progetti.",
   "mig.folder": "Cartella delle migration",
   "mig.noSubfolders": "Nessuna sottocartella",
   "mig.newFolderPlaceholder": "nuova cartella in questa posizione",

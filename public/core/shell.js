@@ -15,6 +15,7 @@ window.Shell = (() => {
 
   // ---- avvio: crea tab/pulsanti per le estensioni con frontend ----
   async function init() {
+    window.Projects.setOnChange(() => bus.dispatchEvent(new CustomEvent('core:projects-changed')));
     let list = [];
     let failure = null;
     try { list = await apiClient('/api/core').get('/extensions'); }
@@ -247,6 +248,8 @@ window.Shell = (() => {
         emit(name, detail) { bus.dispatchEvent(new CustomEvent(name, { detail })); },
       },
       expose(obj) { window.Ext[meta.code] = obj; },
+      // progetti e cartelle del core (public/core/projects.js)
+      projects: window.Projects,
       setBadge(value) {
         const badge = entry.tab?.querySelector('.section-tab-badge');
         if (!badge) return;
@@ -290,9 +293,14 @@ window.Shell = (() => {
   // ---- export / import: caselle dichiarate dalle estensioni (setting.json → export) ----
 
   // [{ ext, item }] nell'ordine delle estensioni; item = { id, label, description, sections }
-  const exportItems = () => extList
-    .filter(e => e.state !== 'disabled')
-    .flatMap(e => (e.export || []).map(item => ({ ext: e, item })));
+  // Prima la casella del core: progetti e cartelle (condivisi dalle estensioni)
+  const exportItems = () => [
+    { ext: { icon: '🗂', name: t('core.projects.owner') },
+      item: { id: 'projects', label: t('core.projects.exportLabel'), description: t('core.projects.exportDescription'), sections: ['projects', 'projectFolders'] } },
+    ...extList
+      .filter(e => e.state !== 'disabled')
+      .flatMap(e => (e.export || []).map(item => ({ ext: e, item }))),
+  ];
 
   const checkboxList = (entries, detail) => entries.map(({ ext, item }) => `
     <label class="export-item">

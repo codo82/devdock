@@ -89,7 +89,7 @@ module.exports = function createPm2(ctx) {
         let args;
         if (action === 'start' && projectId) {
           if (!npm) throw ctx.error(400, 'npm_unavailable');
-          const p = npm.getProject(projectId);
+          const p = ctx.projects.get(projectId);
           if (!p) throw ctx.error(404, 'project_not_found', { id: String(projectId) });
           const scripts = npm.readPackage(p)?.scripts || {};
           if (typeof script !== 'string' || !Object.hasOwn(scripts, script)) {

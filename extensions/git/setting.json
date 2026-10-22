@@ -3,19 +3,13 @@
   "code": "git",
   "version": "1.0.0",
   "description": {
-    "it": "Status, commit, grafo dei commit e operazioni remote per i repository dei progetti npm",
-    "en": "Status, commits, commit graph and remote operations for the repositories of the npm projects"
+    "it": "Status, commit, grafo dei commit e operazioni remote per i repository dei progetti",
+    "en": "Status, commits, commit graph and remote operations for the repositories of the projects"
   },
   "color": "#3fb950",
   "icon": "🌿",
   "position": "tab",
   "order": 30,
-  "dependencies": [
-    {
-      "code": "npm",
-      "required": true
-    }
-  ],
   "backend": {
     "module": "server.js",
     "routes": [

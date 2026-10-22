@@ -35,10 +35,10 @@ When the server stops (Ctrl+C, `kill` or closing the terminal), the tunnels and 
 Each section is an extension (see [Writing an extension](#writing-an-extension)):
 
 - **🔗 SSH tunnels** (`tunnels`) — servers grouped by colour; one click opens `ssh -N -L 127.0.0.1:<port>:<remote> <alias>`. Automatic reconnection with backoff (5s → 60s), per-tunnel logs, header pills with "Stop all", desktop notifications. Groups and servers are managed from the ≡ button in the sidebar.
-- **📦 NPM** (`npm`) — local projects: run the `package.json` scripts with live logs, restart/stop (the whole process group), listening ports, dependencies with installed version, `npm outdated` and updates.
-- **🌿 Git** (`git`) — repositories derived from the NPM projects (walking up to the `.git` folder). Status, file selection and commit, commit graph with branch legend, pull/push/merge/checkout/stash/fetch. Branch panel on the branch badge: search, local and remote branches, switch (with "stash and switch" when there are uncommitted changes, `--track` for remote branches), new branch from any start point, merge with a preview of incoming commits and files (fast-forward, `--no-ff`, `--squash`) and conflict handling (abort / conclude), deletion of local branches (unmerged ones only after confirmation). Only one git operation at a time runs on each repository.
+- **📦 NPM** (`npm`) — the projects' `package.json` scripts: run the `package.json` scripts with live logs, restart/stop (the whole process group), listening ports, dependencies with installed version, `npm outdated` and updates. Projects are shared by NPM, Git and Env and can be grouped in **folders** (one level; ✎ on a project to move it, 📁+ to create a folder, ⋯ on a folder to rename or delete it); projects without a folder stay at the root of the sidebar.
+- **🌿 Git** (`git`) — repositories derived from the projects (walking up to the `.git` folder); projects can be added here too. Status, file selection and commit, commit graph with branch legend, pull/push/merge/checkout/stash/fetch. Branch panel on the branch badge: search, local and remote branches, switch (with "stash and switch" when there are uncommitted changes, `--track` for remote branches), new branch from any start point, merge with a preview of incoming commits and files (fast-forward, `--no-ff`, `--squash`) and conflict handling (abort / conclude), deletion of local branches (unmerged ones only after confirmation). Only one git operation at a time runs on each repository.
 - **🗄️ Database** (`db-client`) — MySQL/MariaDB client. Connections (direct or through an SSH tunnel of the Tunnels section) with passwords encrypted by a **master password** asked once per session; sidebar tree connection ▸ database ▸ tables ▸ columns with a context menu on tables; SQL editor with highlighting; data browser with pagination, search, filters and sorting; row insert/edit/delete inline or through a dialog, multiple deletion; table designer; export of tables and queries as CSV, JSON or SQL; session query history. **Every statement that changes data or schema is shown and must be confirmed before it runs**; read-only connections refuse them.
-- **🔑 Env** (`env`) — the `.env*` files of each npm project compared with the template (`.env.example`, `.env.sample`…): keys missing, extra or empty. Values are hidden and shown one at a time; edit, add, rename or delete keys, add the missing keys from the template, create a `.env` from the template. Files are rewritten keeping comments, blank lines and order; a file changed outside DevDock in the meantime is not overwritten. Values never go into the DevDock configuration, its exports or the MCP tools.
+- **🔑 Env** (`env`) — the `.env*` files of each project compared with the template (`.env.example`, `.env.sample`…): keys missing, extra or empty. Values are hidden and shown one at a time; edit, add, rename or delete keys, add the missing keys from the template, create a `.env` from the template. Files are rewritten keeping comments, blank lines and order; a file changed outside DevDock in the meantime is not overwritten. Values never go into the DevDock configuration, its exports or the MCP tools.
 - **🔌 Ports** (`ports`) — listening TCP ports of the machine with process, PID, user and command line, linked to what DevDock started (npm script, PM2 process, SSH tunnel); search, "only my processes" filter, and stop of the process that holds a port after a confirmation: **Stop** (SIGTERM) or **Force stop** (SIGKILL, `taskkill /F` on Windows); processes started by DevDock are stopped through their section, also when forced, and if the port is still in use after a normal stop DevDock offers to force it. Only processes of the current user can be stopped. macOS/Linux (`lsof` or `ss`) and Windows (`netstat`).
 - **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
 - **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ button in the header.
@@ -55,7 +55,7 @@ The header also holds the language (🌐), desktop notifications (🔔), **Expor
 
 ## DB migrations
 
-A connection can be linked to a **migrations folder in a repository** (📁 Migrations in the connection header): choose the repository (the Git extension's repositories, or the npm projects when Git is not active) and browse to the folder, or create it. From then on every structural change made through DevDock is written as a migration in that folder before it is applied to the database.
+A connection can be linked to a **migrations folder in a repository** (📁 Migrations in the connection header): choose the repository (the Git extension's repositories, or the projects when Git is not active) and browse to the folder, or create it. From then on every structural change made through DevDock is written as a migration in that folder before it is applied to the database.
 
 - **File format**: one SQL file per migration, `NNN_<table>_<operation>.sql` — for example `003_orders_add_status.sql` or `004_orders_alter.sql`. `NNN` is an incremental number with at least 3 digits (more when the folder already uses more); an empty folder starts at `001`. The file contains a short header comment (file, connection, database, date) and the statements, exactly as they run on the database.
 - **Numbering**: the next number follows the highest one among the files in the folder. It is computed again right before writing and a file is never overwritten.
@@ -87,8 +87,11 @@ Everything is stored in `config.json` in the project folder. The file is created
   "servers": [
     { "key": "staging_db", "label": "Staging DB", "port": 33060, "remote": "10.0.0.5:3306", "alias": "bastion-staging", "type": "MySQL" }
   ],
+  "projectFolders": [
+    { "id": "f1a2b3c4", "label": "Customers" }
+  ],
   "projects": [
-    { "id": "my_app", "label": "My App", "path": "/Users/me/www/my-app" }
+    { "id": "my_app", "label": "My App", "path": "/Users/me/www/my-app", "folder": "f1a2b3c4" }
   ]
 }
 ```
@@ -96,9 +99,10 @@ Everything is stored in `config.json` in the project folder. The file is created
 - `servers[].port` — local port on `127.0.0.1`
 - `servers[].remote` — `host:port` reached from the SSH server
 - `servers[].alias` — host or alias from `~/.ssh/config` (authentication is ssh's own: keys, agent)
-- `projects[].path` — absolute path of the folder containing `package.json`
+- `projects[].path` — absolute path of the project folder
+- `projects[].folder` — optional sidebar folder (`projectFolders[].id`); without it the project is at the root of the sidebars
 
-Each key belongs to an extension (`groups` and `servers` to tunnels, `projects` to npm, `dbConnections` and `vault` to db-client), which validates it on every save. **Export** offers the checkboxes declared by the extensions (Tunnel SSH, Progetti NPM, Connessioni database) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
+Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env) or to an extension (`groups` and `servers` to tunnels, `dbConnections` and `vault` to db-client), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle) and of the extensions (Tunnel SSH, Connessioni database) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
 
 ## Languages
 

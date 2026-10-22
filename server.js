@@ -6,6 +6,7 @@ const { applySecurity } = require('./lib/security');
 const { ConfigError } = require('./lib/config');
 const { ApiError, coreError, errorBody } = require('./lib/errors');
 const { loadExtensions, frontendRouter } = require('./lib/extensions');
+const projects = require('./lib/projects'); // registra le sezioni dei progetti prima delle estensioni
 
 const app = express();
 
@@ -22,6 +23,7 @@ const extensions = loadExtensions(EXTENSIONS_DIR, {
     ports:    require('./lib/ports'),
     errors:   require('./lib/errors'),
   },
+  projects,
 });
 app.use('/api/ext', extensions.router);
 app.use('/ext', frontendRouter(extensions));

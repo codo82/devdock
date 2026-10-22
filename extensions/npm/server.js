@@ -1,54 +1,26 @@
-// NPM: progetti (sezione "projects" di config.json), script di package.json
-// eseguiti come processi tracciati in un process group dedicato, dipendenze.
+// NPM: script di package.json dei progetti (del core, ctx.projects) eseguiti come
+// processi tracciati in un process group dedicato, dipendenze.
 const { spawn, execFileSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const PROJECT_FIELDS = ['id', 'label', 'path'];
 const MAX_LOG_LINES = 500;
 
 module.exports = function createNpm(ctx) {
-  const { pick } = ctx.lib.config;
-  const { KEY_RE, NPM_NAME_RE, isText } = ctx.lib.validate;
+  const { NPM_NAME_RE } = ctx.lib.validate;
   const { getPortsForPgid } = ctx.lib.ports;
 
   const processes = new Map(); // id → { id, projectId, projectLabel, script, args, pid, process, startedAt, logs[], running, exitCode }
 
   // ---- progetti ----
 
-  const getProjects = () => ctx.config.get('projects');
-  const getProject = id => getProjects().find(p => p.id === id) || null;
-  const saveProjects = list => ctx.config.set('projects', list);
+  const getProject = id => ctx.projects.get(id);
 
   // package.json del progetto (null se assente o non valido)
   function readPackage(p) {
     try { return JSON.parse(fs.readFileSync(path.join(p.path, 'package.json'), 'utf8')); } catch { return null; }
   }
-
-  function validateProject(p) {
-    if (!p || typeof p !== 'object') throw ctx.error.config('project_invalid');
-    const bad = name => ctx.error.config(name, { id: String(p.id ?? '') });
-    if (!KEY_RE.test(p.id || '')) throw bad('project_id');
-    if (!isText(p.label)) throw bad('project_label');
-    if (!isText(p.path, 1024) || !path.isAbsolute(p.path)) throw bad('project_path');
-  }
-
-  const config = {
-    projects: {
-      empty: [], idField: 'id',
-      normalize: v => (Array.isArray(v) ? v.map(p => pick(p || {}, PROJECT_FIELDS)) : v),
-      validate(list) {
-        if (!Array.isArray(list)) throw ctx.error.config('not_a_list', { section: 'projects' });
-        list.forEach(validateProject);
-        const seen = new Set();
-        for (const p of list) {
-          if (seen.has(p.id)) throw ctx.error.config('duplicate_project', { id: p.id });
-          seen.add(p.id);
-        }
-      },
-    },
-  };
 
   // ---- processi tracciati ----
 
@@ -117,9 +89,8 @@ module.exports = function createNpm(ctx) {
   };
 
   return {
-    config,
     services: {
-      getProjects, getProject, readPackage,
+      readPackage,
       // per l'estensione ports: processi avviati da DevDock (pid = process group) e arresto
       processes: () => [...processes.values()].filter(pd => pd.running).map(pd => ({ id: pd.id, pid: pd.pid, project: pd.projectLabel, script: pd.script })),
       stopProcess(id, { force = false } = {}) {
@@ -136,7 +107,7 @@ module.exports = function createNpm(ctx) {
     mcp: {
       projects() {
         return {
-          projects: getProjects().map(p => {
+          projects: ctx.projects.list().map(p => {
             const pkg = readPackage(p);
             return { id: p.id, label: p.label, path: p.path, name: pkg?.name || null, scripts: pkg?.scripts || {} };
           }),
@@ -176,36 +147,6 @@ module.exports = function createNpm(ctx) {
     },
 
     handlers: {
-      listProjects(req, res) {
-        res.json(getProjects());
-      },
-
-      createProject(req, res) {
-        const { id, label, path: projectPath } = req.body;
-        if (!id || !label || !projectPath) throw ctx.error(400, 'fields_required');
-        const list = getProjects();
-        if (list.some(p => p.id === id)) throw ctx.error(409, 'id_exists', { id: String(id) });
-        if (!fs.existsSync(projectPath)) throw ctx.error(400, 'folder_not_found', { path: String(projectPath) });
-        saveProjects([...list, { id, label, path: projectPath }]);
-        res.json({ ok: true });
-      },
-
-      updateProject(req, res) {
-        const list = getProjects();
-        const idx = list.findIndex(p => p.id === req.params.id);
-        if (idx === -1) throw ctx.error(404, 'project_not_found', { id: req.params.id });
-        const { path: projectPath } = req.body;
-        if (projectPath && !fs.existsSync(projectPath)) throw ctx.error(400, 'folder_not_found', { path: String(projectPath) });
-        list[idx] = { ...list[idx], ...pick(req.body, ['label', 'path']) };
-        saveProjects(list);
-        res.json({ ok: true });
-      },
-
-      deleteProject(req, res) {
-        saveProjects(getProjects().filter(p => p.id !== req.params.id));
-        res.json({ ok: true });
-      },
-
       packageInfo(req, res) {
         const p = projectOr404(req);
         if (!fs.existsSync(path.join(p.path, 'package.json'))) {

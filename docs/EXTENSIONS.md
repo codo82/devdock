@@ -1,6 +1,6 @@
 # DevDock extensions
 
-Every feature that can be added or removed is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, a few shared services and the UI shell (navigation, header, dialogs).
+Every feature that can be added or removed is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, the projects shared by the extensions, a few shared services and the UI shell (navigation, header, dialogs).
 
 ## Existing extensions
 
@@ -8,14 +8,16 @@ Every feature that can be added or removed is an **extension**: a folder under `
 |---|---|---|---|---|---|---|
 | `tunnels` | tab | 10 | `groups`, `servers` | Tunnel SSH | — | yes |
 | `pm2` | header | 10 | — | — | `npm` (optional) | no |
-| `npm` | tab | 20 | `projects` | Progetti NPM | — | yes |
-| `env` | tab | 22 | — | — | `npm` (required) | no |
-| `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `npm`, `git` (optional) | no |
-| `git` | tab | 30 | — | — | `npm` (required) | no |
+| `npm` | tab | 20 | — | — | — | yes |
+| `env` | tab | 22 | — | — | — | no |
+| `db-client` | tab | 25 | `dbConnections`, `vault` | Connessioni database | `tunnels`, `git` (optional) | no |
+| `git` | tab | 30 | — | — | — | no |
 | `ports` | tab | 35 | — | — | `npm`, `pm2`, `tunnels` (optional) | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
-Services offered to other extensions (`ctx.require(code)`): `npm` → `getProjects()`, `getProject(id)`, `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
+The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox.
+
+Services offered to other extensions (`ctx.require(code)`): `npm` → `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
 
 ## Folder layout
 
@@ -41,13 +43,13 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
   "name": "Git",
   "code": "git",
   "version": "1.0.0",
-  "description": "Status, commit, grafo dei commit e operazioni remote per i repository dei progetti npm",
+  "description": "Status, commit, grafo dei commit e operazioni remote per i repository dei progetti",
   "color": "#3fb950",
   "icon": "🌿",
   "position": "tab",
   "order": 30,
   "dependencies": [
-    { "code": "npm", "required": true }
+    { "code": "tunnels", "required": false }
   ],
   "backend": {
     "module": "server.js",
@@ -113,7 +115,7 @@ Every route goes through the core security middleware (Host and Origin checks, J
 ```js
 // extensions/git/server.js
 module.exports = function createGit(ctx) {
-  const npm = ctx.require('npm');                 // services of a dependency
+  const tunnels = ctx.require('tunnels');         // services of a dependency (null if missing)
 
   return {
     handlers: {                                    // named in setting.json → backend.routes
@@ -131,7 +133,7 @@ module.exports = function createGit(ctx) {
     shutdown() { /* stop timers and child processes */ },
   };
 
-  function repos() { /* uses npm.getProjects() */ }
+  function repos() { /* uses ctx.projects.list() */ }
 };
 ```
 
@@ -153,6 +155,7 @@ Only `handlers` is needed when the manifest declares routes (and `mcp` when it d
 | `ctx.lib.system` | `hasCommand(cmd)`, `getTools()` (installed external tools) |
 | `ctx.lib.ports` | `getPortsForPgid(pid)`: TCP ports listened on by a process group; `listListeningPorts()`: every listening TCP port of the machine with pid, process name, user and command line |
 | `ctx.log.info/warn/error(...)` | Console log prefixed with `[ext:<code>]` |
+| `ctx.projects` | Projects of the core, read-only: `list()` (`{ id, label, path, folder? }`), `get(id)`, `folders()` (`{ id, label }`) |
 
 ### MCP tools
 
@@ -215,9 +218,35 @@ Error responses have one shape for the core and every extension:
 
 Manifest and loader errors (`GET /api/core/extensions` → `error`, `warnings`) are developer diagnostics and stay in the source language.
 
+## Projects and folders
+
+Projects (folders on disk) are shared by several extensions (npm scripts, Git repositories, `.env` files, migrations…), so they belong to the core, not to an extension. They live in two sections of `config.json`:
+
+```json
+"projectFolders": [{ "id": "f1a2b3c4", "label": "Customers" }],
+"projects": [
+  { "id": "my_app", "label": "My App", "path": "/Users/me/www/my-app", "folder": "f1a2b3c4" },
+  { "id": "tools", "label": "Tools", "path": "/Users/me/www/tools" }
+]
+```
+
+Folders group projects in the sidebars, one level only; a project without `folder` stays at the root. Deleting a folder moves its projects back to the root. Core API: `GET /api/core/projects` (`{ folders, projects }`), `POST /api/core/projects`, `PUT`/`DELETE /api/core/projects/:id` (label, path and folder; the id never changes), `POST /api/core/folders`, `PUT`/`DELETE /api/core/folders/:id`.
+
+In the backend extensions read them with `ctx.projects`. In the frontend `ctx.projects` (`public/core/projects.js`) gives the shared pieces, so every sidebar looks and behaves the same:
+
+| Member | Purpose |
+|---|---|
+| `load()` | `{ folders, projects }` from the core |
+| `tree(folders, items, item)` | HTML of the sidebar tree: each folder (collapsible, with rename/delete menu) with its items, then the items without a folder. `items` are objects with an optional `folder` field (projects, repositories…), `item(x)` returns the HTML of one entry |
+| `form(id?)` | Dialog to add a project (no id) or edit name, path and folder |
+| `remove(id)` | Confirms and removes a project; resolves `true` when removed |
+| `newFolder()` | Dialog to create a folder |
+
+After every change the core emits `core:projects-changed` on the bus; extensions that show projects reload them on it.
+
 ## Configuration
 
-`config.json` keeps its top-level keys (`groups`, `servers`, `projects`, …). Each key is a **section** owned by exactly one extension, the one that lists it in `setting.json → config`; two extensions cannot claim the same key. The backend describes each of its sections in `instance.config[key]`:
+`config.json` keeps its top-level keys (`groups`, `servers`, `projects`, …). Each key is a **section** owned by the core (`projects`, `projectFolders`) or by exactly one extension, the one that lists it in `setting.json → config`; two extensions cannot claim the same key. The backend describes each of its sections in `instance.config[key]`:
 
 | Field | Purpose |
 |---|---|
@@ -298,7 +327,8 @@ export default {
 | `ctx.t(key, params)` | Translation of a key of the extension's catalogs (keys are relative: `t('branches.title')` reads `git.branches.title`; keys starting with `core.` are the core's). See *Translations* |
 | `ctx.i18n` | `lang` (active tag), `pick(value)` (text of a string-or-map manifest field), `apply(element)` (translates `data-i18n…` attributes in markup the extension creates) |
 | `ctx.ui` | `t` (global keys), `fmt` (locale-aware formatting, see *Translations*), `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `contextMenu(x, y, items)` (items: `{ label, icon, action, danger, disabled }` or `'separator'`), `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`) |
-| `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions (e.g. `npm:projects-changed`) |
+| `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions; the core emits `core:projects-changed` after any change to projects or folders |
+| `ctx.projects` | Projects and folders of the core, see *Projects and folders* |
 | `ctx.expose(obj)` | Publishes functions as `window.Ext.<code>` for inline handlers |
 | `ctx.setBadge(value)` | Number or text on the tab or header button (`null` hides it) |
 | `ctx.setPills(html)` | The extension's pills in the header bar (`''` removes them) |

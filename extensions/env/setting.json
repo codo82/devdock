@@ -10,9 +10,6 @@
   "icon": "🔑",
   "position": "tab",
   "order": 22,
-  "dependencies": [
-    { "code": "npm", "required": true }
-  ],
   "backend": {
     "module": "server.js",
     "routes": [
@@ -27,7 +24,7 @@
   "mcp": {
     "tools": [
       { "name": "check", "handler": "check", "readOnly": true,
-        "description": "For each npm project (or one), its .env files with their keys, the keys missing compared with the template (.env.example) and the extra and empty ones. Values are never returned.",
+        "description": "For each project (or one), its .env files with their keys, the keys missing compared with the template (.env.example) and the extra and empty ones. Values are never returned.",
         "inputSchema": { "type": "object", "properties": { "project": { "type": "string", "description": "Project id (default: all)" } } } }
     ]
   },

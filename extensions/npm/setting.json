@@ -3,55 +3,16 @@
   "code": "npm",
   "version": "1.0.0",
   "description": {
-    "it": "Progetti locali: script di package.json come processi tracciati, porte in ascolto, dipendenze e aggiornamenti",
-    "en": "Local projects: package.json scripts as tracked processes, listening ports, dependencies and updates"
+    "it": "Script di package.json dei progetti come processi tracciati, porte in ascolto, dipendenze e aggiornamenti",
+    "en": "package.json scripts of the projects as tracked processes, listening ports, dependencies and updates"
   },
   "color": "#f0883e",
   "icon": "📦",
   "position": "tab",
   "order": 20,
-  "config": [
-    "projects"
-  ],
-  "export": [
-    {
-      "id": "projects",
-      "label": {
-        "it": "Progetti NPM",
-        "en": "NPM projects"
-      },
-      "description": {
-        "it": "Cartelle dei progetti (usate anche da Git)",
-        "en": "Project folders (also used by Git)"
-      },
-      "sections": [
-        "projects"
-      ]
-    }
-  ],
   "backend": {
     "module": "server.js",
     "routes": [
-      {
-        "method": "GET",
-        "path": "/projects",
-        "handler": "listProjects"
-      },
-      {
-        "method": "POST",
-        "path": "/projects",
-        "handler": "createProject"
-      },
-      {
-        "method": "PUT",
-        "path": "/projects/:id",
-        "handler": "updateProject"
-      },
-      {
-        "method": "DELETE",
-        "path": "/projects/:id",
-        "handler": "deleteProject"
-      },
       {
         "method": "GET",
         "path": "/projects/:id/package",
