@@ -280,7 +280,8 @@ export default {
     function folderDialog(id) {
       const f = id ? folders.find(x => x.id === id) : null;
       if (id && !f) return;
-      const save = `Ext['db-client'].saveFolder(${js(id || '')})`;
+      // testo JS non ancora escapato: l'escape per l'attributo lo fanno modalButtons ed esc()
+      const save = `Ext['db-client'].saveFolder(${JSON.stringify(id || '')})`;
       openModal(t(f ? 'folders.rename' : 'folders.new'), `
         <div class="form-row"><label>${esc(t('folders.name'))}</label>
           <input class="form-input" id="f_dbfolder_label" value="${esc(f?.label || '')}" placeholder="${esc(t('folders.placeholder'))}" onkeydown="if(event.key==='Enter')${esc(save)}"></div>`,
