@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-22
+
+### Added
+- Database migrations: **💾 Save migration only** in the schema change dialog writes the migration file in the linked folder without running the statements, so the project's migration tool applies it. Warnings about destructive changes do not need to be acknowledged in that case, since the database is not touched (API: `migration.run: false`).
+
+### Fixed
+- Migrations: the "no repository" hint now points to the NPM or Git section.
+
 ## [1.16.1] - 2026-10-22
 
 ### Fixed

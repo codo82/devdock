@@ -362,7 +362,7 @@
   "mig.title": "Migrations of {name}",
   "mig.unlink": "Unlink",
   "mig.link": "Link this folder",
-  "mig.noRepos": "No repositories available: add a project in the NPM section.",
+  "mig.noRepos": "No repository available: add a project in the NPM or Git section.",
   "mig.noReposExt": "The Git or NPM extension is needed to choose a repository.",
   "mig.repo": "Repository",
   "mig.projectsFallback": "Git extension not active: the project folders are used.",
@@ -467,5 +467,9 @@
   "errors.folder_label": "folder \"{id}\": name required (at most 100 characters)",
   "errors.duplicate_folder": "Duplicate folder: {id}",
   "errors.folder_unknown": "Folder not found: {folder}",
-  "errors.folder_label_required": "The folder name is required (at most 100 characters)"
+  "errors.folder_label_required": "The folder name is required (at most 100 characters)",
+  "migrate.saveOnly": "💾 Save migration only",
+  "migrate.saveOnlyTitle": "Writes the migration file without running the statements on the database: the project's migration tool will run them",
+  "migrate.savedOnly": "Migration {file} saved, not run on the database",
+  "errors.migration_nothing_to_do": "Nothing to do: saving the migration only needs \"Save as migration\" checked"
 }

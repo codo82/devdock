@@ -126,6 +126,18 @@ test('migration: file nel repository, DDL, errori e schema letto di nuovo', asyn
     r = await api('POST', '/connections/c/query', { sql: 'DELETE FROM ordini', database: 'app' });
     assert.equal(r.json.migration, null);
 
+    // 6d. solo il file: il DB non cambia (anche con avvisi non confermati), lo eseguirà il gestore delle migration
+    const later = [{ op: 'drop_column', table: 'ordini', name: 'stato' }];
+    r = await migrate({ operations: later });
+    assert.equal(r.json.migration.file, '008_ordini_drop_stato.sql');
+    assert.equal((await migrate({ operations: later, confirm: r.json.token, migration: { save: false, run: false } })).json.code, 'db-client.migration_nothing_to_do');
+    r = await migrate({ operations: later, confirm: r.json.token, migration: { run: false } });
+    assert.equal(r.status, 200, r.text);
+    assert.deepEqual([r.json.ran, r.json.executed, r.json.file], [false, [], '008_ordini_drop_stato.sql']);
+    assert.match(fs.readFileSync(path.join(dir, '008_ordini_drop_stato.sql'), 'utf8'), /DROP COLUMN `stato`/);
+    current = (await api('GET', '/connections/c/databases/app/tables/ordini/definition')).json.definition;
+    assert.ok(current.columns.some(c => c.name === 'stato'), 'colonna ancora presente');
+
     // 7. senza repository collegato: solo DDL, nessun file
     await api('DELETE', '/connections/c/migrations');
     const plain = [{ op: 'drop_index', table: 'ordini', name: 'ix_stato' }];
@@ -133,7 +145,7 @@ test('migration: file nel repository, DDL, errori e schema letto di nuovo', asyn
     assert.equal(r.json.migration, null);
     r = await migrate({ operations: plain, confirm: r.json.token });
     assert.deepEqual([r.status, r.json.file], [200, null]);
-    assert.equal(fs.readdirSync(dir).filter(f => f.endsWith('.sql')).length, 7);
+    assert.equal(fs.readdirSync(dir).filter(f => f.endsWith('.sql')).length, 8);
   } finally {
     await s.stop();
     await mysqlDb.stop();

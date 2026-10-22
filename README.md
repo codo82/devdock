@@ -55,7 +55,7 @@ The header also holds the language (🌐), desktop notifications (🔔), **Expor
 
 ## DB migrations
 
-A connection can be linked to a **migrations folder in a repository** (📁 Migrations in the connection header): choose the repository (the Git extension's repositories, or the projects when Git is not active) and browse to the folder, or create it. From then on every structural change made through DevDock is written as a migration in that folder before it is applied to the database.
+A connection can be linked to a **migrations folder in a repository** (📁 Migrations in the connection header): choose the repository (the Git extension's repositories, or the projects when Git is not active) and browse to the folder, or create it. From then on every structural change made through DevDock is written as a migration in that folder before it is applied to the database. With **💾 Save migration only** in the confirmation dialog the file is written but nothing runs on the database, so the project's own migration tool can apply it.
 
 - **File format**: one SQL file per migration, `NNN_<table>_<operation>.sql` — for example `003_orders_add_status.sql` or `004_orders_alter.sql`. `NNN` is an incremental number with at least 3 digits (more when the folder already uses more); an empty folder starts at `001`. The file contains a short header comment (file, connection, database, date) and the statements, exactly as they run on the database.
 - **Numbering**: the next number follows the highest one among the files in the folder. It is computed again right before writing and a file is never overwritten.

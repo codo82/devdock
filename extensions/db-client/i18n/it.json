@@ -362,7 +362,7 @@
   "mig.title": "Migration di {name}",
   "mig.unlink": "Scollega",
   "mig.link": "Collega questa cartella",
-  "mig.noRepos": "Nessun repository disponibile: aggiungi un progetto nella sezione NPM.",
+  "mig.noRepos": "Nessun repository disponibile: aggiungi un progetto nella sezione NPM o Git.",
   "mig.noReposExt": "Servono l'estensione Git o NPM per scegliere un repository.",
   "mig.repo": "Repository",
   "mig.projectsFallback": "Estensione Git non attiva: si usano le cartelle dei progetti.",
@@ -467,5 +467,9 @@
   "errors.folder_label": "cartella \"{id}\": nome obbligatorio (al massimo 100 caratteri)",
   "errors.duplicate_folder": "Cartella duplicata: {id}",
   "errors.folder_unknown": "Cartella non trovata: {folder}",
-  "errors.folder_label_required": "Il nome della cartella è obbligatorio (al massimo 100 caratteri)"
+  "errors.folder_label_required": "Il nome della cartella è obbligatorio (al massimo 100 caratteri)",
+  "migrate.saveOnly": "💾 Salva solo la migration",
+  "migrate.saveOnlyTitle": "Scrive il file di migration senza eseguire le istruzioni sul database: le eseguirà il gestore delle migration del progetto",
+  "migrate.savedOnly": "Migration {file} salvata, non eseguita sul database",
+  "errors.migration_nothing_to_do": "Niente da fare: per salvare solo la migration serve la casella \"Salva come migration\""
 }

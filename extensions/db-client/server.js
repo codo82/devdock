@@ -887,6 +887,8 @@ module.exports = function createDbClient(ctx) {
       // Senza conferma: 428 con l'SQL, gli avvisi e l'anteprima del file di migration.
       // Con la conferma (token dello stesso SQL): file nel repository (se collegato e richiesto),
       // poi le istruzioni sul DB; se nessuna istruzione riesce il file viene tolto.
+      // migration.run === false: solo il file, il DB non viene toccato (la eseguirà il
+      // gestore delle migration del progetto).
       async migrate(req, res) {
         const conn = connectionOr404(req.params.id);
         const { db } = req.params;
@@ -895,6 +897,7 @@ module.exports = function createDbClient(ctx) {
         const { migration = {}, confirm, acknowledgeWarnings, design } = req.body;
         const folder = linkedFolder(conn);
         const save = !!folder && migration.save !== false;
+        const run = migration.run !== false;
 
         try {
           const q = (await poolFor(conn, db)).promise();
@@ -937,7 +940,8 @@ module.exports = function createDbClient(ctx) {
               },
             });
           }
-          if (warnings.length && acknowledgeWarnings !== true) throw ctx.error(409, 'warnings_not_acknowledged', { count: warnings.length });
+          if (!run && !save) throw ctx.error(400, 'migration_nothing_to_do');
+          if (run && warnings.length && acknowledgeWarnings !== true) throw ctx.error(409, 'warnings_not_acknowledged', { count: warnings.length });
 
           // 1. file nel repository (numero ricalcolato ora, mai sovrascritto)
           let file = null, abs = null;
@@ -946,6 +950,7 @@ module.exports = function createDbClient(ctx) {
             file = (await fileFor()).name;
             abs = migCall(() => mig.writeExclusive(folder.abs, file, content(file)));
           }
+          if (!run) return res.json({ ok: true, ran: false, executed: [], file, dir: folder.dir, sql });
           // 2. istruzioni sul DB, una alla volta
           const executed = [];
           for (const statement of statements) {
@@ -960,7 +965,7 @@ module.exports = function createDbClient(ctx) {
               return sendFailure(res, e, 400, { executed, failed: statement, file: executed.length ? file : null });
             }
           }
-          res.json({ ok: true, executed, file, dir: save ? folder.dir : null, sql });
+          res.json({ ok: true, ran: true, executed, file, dir: save ? folder.dir : null, sql });
         } catch (e) { sendFailure(res, e); }
       },
 

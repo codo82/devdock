@@ -709,6 +709,9 @@ export default {
     let pendingMigrate = null;
     const fileSlug = v => String(v ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
+    const migrateDoneText = r => r.ran === false ? t('migrate.savedOnly', { file: r.file })
+      : r.file ? t('migrate.doneFile', { file: r.file }) : t('migrate.done');
+
     async function migrateFlow(c, db, body, onDone) {
       const url = `/connections/${encodeURIComponent(c.id)}/databases/${encodeURIComponent(db)}/migrate`;
       try {
@@ -763,6 +766,7 @@ export default {
           <label class="db-check"><input type="checkbox" id="f_mg_ack" onchange="Ext['db-client'].migRefresh()"> ${esc(t('migrate.acknowledge'))}</label>
         </div>` : ''}`,
         `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].migCancel()">${esc(t('core.action.cancel'))}</button>
+         ${m ? `<button class="btn btn-ghost" data-role="mg-save-only" onclick="Ext['db-client'].migApply(false)" title="${esc(t('migrate.saveOnlyTitle'))}">${esc(t('migrate.saveOnly'))}</button>` : ''}
          <button class="btn ${warnings.length ? 'btn-danger' : 'btn-primary'}" data-role="mg-apply" onclick="Ext['db-client'].migApply()" ${warnings.length ? 'disabled' : ''}>${esc(t('migrate.apply'))}</button>`);
       document.getElementById('modal')?.classList.add('modal-wide');
     }
@@ -778,14 +782,18 @@ export default {
       const ack = document.getElementById('f_mg_ack');
       const btn = document.querySelector('[data-role="mg-apply"]');
       if (btn) btn.disabled = !!ack && !ack.checked;
+      // solo il file: serve la casella "Salva come migration"; gli avvisi non contano (il DB non cambia)
+      const saveOnly = document.querySelector('[data-role="mg-save-only"]');
+      if (saveOnly) saveOnly.disabled = !!save && !save.checked;
     }
 
-    async function migApply() {
+    // run false: scrive solo il file di migration, senza eseguire le istruzioni sul DB
+    async function migApply(run = true) {
       const p = pendingMigrate;
       if (!p) return;
       const save = document.getElementById('f_mg_save');
       const migration = p.data.migration ? {
-        save: !!save?.checked,
+        save: !!save?.checked, run,
         table: fileSlug(document.getElementById('f_mg_table')?.value),
         operation: fileSlug(document.getElementById('f_mg_op')?.value),
       } : { save: false };
@@ -806,7 +814,7 @@ export default {
           return;
         }
         pendingMigrate = null;
-        toast(data.file ? t('migrate.doneFile', { file: data.file }) : t('migrate.done'), 'success');
+        toast(migrateDoneText(data), 'success');
         loadMigStatus(p.c);
         await p.onDone?.(data);
       } catch (e) { toast(e.message, 'error'); }
@@ -1194,7 +1202,7 @@ export default {
     const migActions = {
       migrationsDialog,
       migRefresh: () => migRefresh(),
-      migApply: () => migApply(),
+      migApply: run => migApply(run !== false),
       migCancel() { pendingMigrate = null; },
       migRepo(id) { migDlg.repo = id; migDlg.dir = ''; migLoad(); },
       migNav(dir) { migDlg.dir = dir; migLoad(); },
@@ -1705,9 +1713,9 @@ export default {
         const { sql, database, migration } = p.data;
         const { table, operation } = migration.proposal;
         migrateFlow(c, database, { operations: [{ op: 'raw', sql, table, operation }], migration: { table: fileSlug(table) || undefined, operation } }, result => {
-          addHistory({ sql, connId: c.id, db: database, at: Date.now(), ok: true, summary: { affected: 0 } });
-          $(ctx.root, 'results').innerHTML = `<div class="db-ok">✓ ${esc(result.file ? t('migrate.doneFile', { file: result.file }) : t('migrate.done'))}</div>`;
-          refreshDatabase(c, database);
+          if (result.ran !== false) addHistory({ sql, connId: c.id, db: database, at: Date.now(), ok: true, summary: { affected: 0 } });
+          $(ctx.root, 'results').innerHTML = `<div class="db-ok">✓ ${esc(migrateDoneText(result))}</div>`;
+          if (result.ran !== false) refreshDatabase(c, database);
         });
         if (!p.keepResults) $(ctx.root, 'results').innerHTML = '';
       },
