@@ -449,7 +449,7 @@
   "tree.noMatch": "Nessuna tabella corrisponde al filtro",
   "json.viewTitle": "{column} (JSON, sola lettura)",
   "result.editable": "modificabile: {table}",
-  "result.editableHint": "Doppio clic su una cella per modificarla: i valori vengono salvati sulla riga della tabella, identificata dalla chiave primaria, dopo la conferma dell'SQL",
+  "result.editableHint": "Doppio clic su una cella per modificarla; si possono modificare più celle, anche di righe diverse (Tab passa alla cella successiva). Invio salva tutte le modifiche sulle righe della tabella, identificate dalla chiave primaria, dopo la conferma dell'SQL",
   "folders.new": "Nuova cartella",
   "folders.rename": "Rinomina cartella",
   "folders.delete": "Elimina cartella",
@@ -471,5 +471,22 @@
   "migrate.saveOnly": "💾 Salva solo la migration",
   "migrate.saveOnlyTitle": "Scrive il file di migration senza eseguire le istruzioni sul database: le eseguirà il gestore delle migration del progetto",
   "migrate.savedOnly": "Migration {file} salvata, non eseguita sul database",
-  "errors.migration_nothing_to_do": "Niente da fare: per salvare solo la migration serve la casella \"Salva come migration\""
+  "errors.migration_nothing_to_do": "Niente da fare: per salvare solo la migration serve la casella \"Salva come migration\"",
+  "edits.count": {
+    "one": "{count} modifica non salvata",
+    "other": "{count} modifiche non salvate"
+  },
+  "edits.save": "Salva",
+  "edits.saveTitle": "Salva tutte le modifiche (anche con Invio in una cella), dopo la conferma dell'SQL",
+  "edits.discard": "Annulla modifiche",
+  "edits.confirmDiscard": {
+    "one": "C'è {count} modifica non salvata: scartarla?",
+    "other": "Ci sono {count} modifiche non salvate: scartarle?"
+  },
+  "edits.was": "Modificato, prima: {value}",
+  "json.apply": "Applica",
+  "row.updatedMany": {
+    "one": "{count} riga aggiornata",
+    "other": "{count} righe aggiornate"
+  }
 }

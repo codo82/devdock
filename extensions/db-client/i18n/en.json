@@ -449,7 +449,7 @@
   "tree.noMatch": "No table matches the filter",
   "json.viewTitle": "{column} (JSON, read-only)",
   "result.editable": "editable: {table}",
-  "result.editableHint": "Double click a cell to edit it: the value is saved on the table row, identified by the primary key, after the SQL is confirmed",
+  "result.editableHint": "Double click a cell to edit it; several cells can be edited, also in different rows (Tab moves to the next cell). Enter saves all the changes to the table rows, identified by the primary key, after the SQL is confirmed",
   "folders.new": "New folder",
   "folders.rename": "Rename folder",
   "folders.delete": "Delete folder",
@@ -471,5 +471,22 @@
   "migrate.saveOnly": "💾 Save migration only",
   "migrate.saveOnlyTitle": "Writes the migration file without running the statements on the database: the project's migration tool will run them",
   "migrate.savedOnly": "Migration {file} saved, not run on the database",
-  "errors.migration_nothing_to_do": "Nothing to do: saving the migration only needs \"Save as migration\" checked"
+  "errors.migration_nothing_to_do": "Nothing to do: saving the migration only needs \"Save as migration\" checked",
+  "edits.count": {
+    "one": "{count} unsaved change",
+    "other": "{count} unsaved changes"
+  },
+  "edits.save": "Save",
+  "edits.saveTitle": "Save all the changes (also with Enter in a cell), after the SQL is confirmed",
+  "edits.discard": "Discard changes",
+  "edits.confirmDiscard": {
+    "one": "There is {count} unsaved change: discard it?",
+    "other": "There are {count} unsaved changes: discard them?"
+  },
+  "edits.was": "Changed, before: {value}",
+  "json.apply": "Apply",
+  "row.updatedMany": {
+    "one": "{count} row updated",
+    "other": "{count} rows updated"
+  }
 }

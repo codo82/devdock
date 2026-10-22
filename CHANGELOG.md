@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-22
+
+### Added
+- Database: editing of several cells, also of different rows, before saving, in the table data view and in the editable results of a SELECT. Changed cells stay highlighted (the tooltip shows the previous value) and a bar shows how many there are, with **Save** and **Discard changes**; Tab / Shift+Tab move to the next / previous cell, Esc cancels the cell being edited, Enter saves everything. The server generates one `UPDATE` per row (`op: "update-many"`), shown in a single confirmation and run in one transaction: if one fails, nothing is changed. Changing page, filter or sort with unsaved changes asks first.
+
+### Changed
+- Database: leaving a cell (click elsewhere) keeps the change pending instead of discarding it; the NULL button and the JSON dialog (**Apply**) add the value to the pending changes.
+
 ## [1.17.0] - 2026-10-22
 
 ### Added

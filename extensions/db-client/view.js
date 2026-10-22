@@ -436,14 +436,43 @@ export default {
       loadGrid();
     }
 
+    // Modifiche in sospeso di più celle (anche di righe diverse), salvate tutte insieme con
+    // Invio o "Salva": valgono per i dati mostrati (griglia o risultato) a cui appartengono
+    let edits = null; // { data, cells: Map("r|c" → valore) }
+    const pendingOf = data => (edits && edits.data === data ? edits.cells : new Map());
+    const pendingCount = data => pendingOf(data).size;
+    function setPending(data, r, c, value, original) {
+      if (!edits || edits.data !== data) edits = { data, cells: new Map() };
+      const k = `${r}|${c}`;
+      if (value === original || (value !== null && original !== null && String(value) === String(original))) edits.cells.delete(k);
+      else edits.cells.set(k, value);
+    }
+    const clearEdits = data => { if (edits?.data === data) edits = null; };
+    // Valore mostrato in una cella: quello modificato se c'è
+    const shown = (data, r, c) => { const p = pendingOf(data); const k = `${r}|${c}`; return p.has(k) ? p.get(k) : data.rows[r][c]; };
+    const editsBar = data => {
+      const n = pendingCount(data);
+      return n ? `<span class="db-edits-bar">${esc(t('edits.count', { count: n }))}
+        <button class="btn btn-primary btn-sm" data-edits="save" title="${esc(t('edits.saveTitle'))}">${esc(t('edits.save'))}</button>
+        <button class="btn btn-ghost btn-sm" data-edits="discard">${esc(t('edits.discard'))}</button></span>` : '';
+    };
+
     async function loadGrid() {
       if (!grid) return;
+      // cambio di pagina, filtro, ordinamento… con modifiche non salvate: si chiede prima
+      if (grid.data && pendingCount(grid.data) && !confirm(t('edits.confirmDiscard', { count: pendingCount(grid.data) }))) {
+        Object.assign(grid, grid.loaded || {});
+        renderGrid();
+        return;
+      }
+      if (grid.data) clearEdits(grid.data);
       const g = grid;
       g.selected = new Set(); // la selezione vale per la pagina mostrata
       const c = connections.find(x => x.id === g.connId);
       try {
         g.data = await ctx.api.post(tableUrl(c, g.db, g.table) + '/rows',
           { page: g.page, pageSize: g.pageSize, search: g.search, filters: g.filters, sort: g.sort });
+        g.loaded = { page: g.page, pageSize: g.pageSize, search: g.search, filters: [...g.filters], sort: g.sort };
         if (grid === g) renderGrid();
       } catch (e) { if (grid === g) renderError(e.message); }
     }
@@ -475,6 +504,7 @@ export default {
           ${canInsert ? `<button class="btn btn-ghost btn-sm" data-grid="insert-dialog">${esc(t('grid.addRow'))}</button>` : ''}
           <button class="btn btn-ghost btn-sm" data-grid="export">${esc(t('grid.export'))}</button>
           ${editable ? `<button class="btn btn-danger btn-sm" data-grid="delete-selected" ${grid.selected.size ? '' : 'hidden'}>${esc(t('grid.deleteSelected', { count: grid.selected.size }))}</button>` : ''}
+          ${editsBar(data)}
           ${!data.primaryKey.length ? `<span class="db-badge db-badge-warn" title="${esc(t('grid.noPkTitle'))}">${esc(t('grid.noPk'))}</span>` : ''}
           ${grid.filters.map((f, i) => `<span class="db-chip">${esc(f.column)} ${esc(filterLabel(f.op))}${f.op === 'null' || f.op === 'notnull' ? '' : ` <b>${esc(f.value)}</b>`}<button data-grid="remove-filter" data-i="${i}" title="${esc(t('grid.removeFilter'))}">✕</button></span>`).join('')}
           <div class="db-pager">
@@ -489,8 +519,10 @@ export default {
         <div class="db-table-wrap"><table class="data-table db-table">
           <thead><tr>${editable ? `<th class="db-row-actions"><input type="checkbox" data-grid="select-all" title="${esc(t('grid.selectAll'))}" ${data.rows.length && grid.selected.size === data.rows.length ? 'checked' : ''}></th>` : ''}${data.columns.map(col => `<th data-grid="sort" data-col="${esc(col.name)}" title="${esc(col.type)}${col.key === 'PRI' ? ` · ${esc(t('grid.primaryKey'))}` : ''}">${col.key === 'PRI' ? '🔑 ' : ''}${esc(col.name)}${sort?.column === col.name ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
           <tbody>${data.rows.map((row, r) => `<tr data-r="${r}" class="${grid.selected.has(r) ? 'db-selected' : ''}">${editable ? `<td class="db-row-actions">
-              <input type="checkbox" data-grid="select" data-r="${r}" ${grid.selected.has(r) ? 'checked' : ''}><button data-grid="edit-dialog" data-r="${r}" title="${esc(t('grid.edit'))}">✏️</button><button data-grid="delete-row" data-r="${r}" title="${esc(t('grid.delete'))}">🗑</button></td>` : ''}${row.map((v, c) =>
-              `<td data-c="${c}" class="${v === null ? 'db-null' : ''}${editable ? ' db-editable' : ''}" title="${esc(v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`).join('')}</tr>`).join('')
+              <input type="checkbox" data-grid="select" data-r="${r}" ${grid.selected.has(r) ? 'checked' : ''}><button data-grid="edit-dialog" data-r="${r}" title="${esc(t('grid.edit'))}">✏️</button><button data-grid="delete-row" data-r="${r}" title="${esc(t('grid.delete'))}">🗑</button></td>` : ''}${row.map((_, c) => {
+              const v = shown(data, r, c), dirty = pendingOf(data).has(`${r}|${c}`);
+              return `<td data-c="${c}" class="${v === null ? 'db-null' : ''}${editable ? ' db-editable' : ''}${dirty ? ' db-dirty' : ''}" title="${esc(dirty ? t('edits.was', { value: data.rows[r][c] ?? 'NULL' }) : v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`;
+            }).join('')}</tr>`).join('')
             || `<tr><td class="db-muted" colspan="${data.columns.length + (editable ? 1 : 0)}">${esc(t('grid.noRows'))}</td></tr>`}
             ${canInsert ? `<tr class="db-new-row">${editable ? `<td class="db-row-actions"><button data-grid="insert-inline" title="${esc(t('grid.insertTitle'))}">＋</button></td>` : ''}${data.columns.map(col =>
               `<td><input class="db-cell-input" data-new="${esc(col.name)}" placeholder="${isAuto(col) ? esc(t('grid.auto')) : esc(col.default ?? (col.nullable ? 'NULL' : ''))}"></td>`).join('')}
@@ -856,50 +888,112 @@ export default {
     // ---- scrittura delle righe: sempre tramite conferma dell'SQL generato ----
     // target: { c, db, table, onSaved } — di default la tabella aperta nell'anteprima dati
     async function saveRow(op, key, values, keys, target = null) {
-      const { c, db, table, onSaved } = target || { c: connections.find(x => x.id === grid.connId), db: grid.db, table: grid.table, onSaved: loadGrid };
+      const { c, db, table, onSaved, changes } = target || { c: connections.find(x => x.id === grid.connId), db: grid.db, table: grid.table, onSaved: loadGrid };
       const url = tableUrl(c, db, table) + '/row';
+      const payload = { op, key, values, keys, changes };
       const send = async confirm => {
         try {
-          const r = await ctx.api.post(url, { op, key, values, keys, ...(confirm ? { confirm } : {}) });
-          const label = op === 'delete-many' ? t('row.deletedMany', { count: r.affectedRows }) : t({ insert: 'row.inserted', update: 'row.updated', delete: 'row.deleted' }[op]);
+          const r = await ctx.api.post(url, { ...payload, ...(confirm ? { confirm } : {}) });
+          const label = op === 'delete-many' ? t('row.deletedMany', { count: r.affectedRows })
+            : op === 'update-many' ? t('row.updatedMany', { count: r.affectedRows })
+            : t({ insert: 'row.inserted', update: 'row.updated', delete: 'row.deleted' }[op]);
           toast(r.affectedRows ? `${label}${r.insertId ? ` ${t('row.insertId', { id: String(r.insertId) })}` : ''}` : t('row.unchanged'), r.affectedRows ? 'success' : 'info');
           onSaved?.(r);
         } catch (e) { toast(e.message, 'error'); }
       };
       try {
-        const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, key, values, keys }) });
+        const res = await fetch(ctx.api.url(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await res.json().catch(() => ({}));
         if (res.status === 428 && data.needsConfirmation) askConfirmation(data, send, true);
         else toast(ctx.ui.errorText(data, `HTTP ${res.status}`), 'error'); // le scritture chiedono sempre conferma
       } catch (e) { toast(e.message, 'error'); }
     }
 
-    // Modifica in linea: doppio clic sulla cella
-    function editCell(td) {
-      if (!gridEditable() || td.querySelector('input')) return;
-      const r = Number(td.parentElement.dataset.r), c = Number(td.dataset.c);
-      const col = grid.data.columns[c];
-      const value = grid.data.rows[r][c];
-      if (isJsonCol(col)) return jsonDialog(r, c);
+    // Campo di modifica in una cella. onDone(mode, value): mode 'keep' (resta in sospeso),
+    // 'save' (Invio: salva tutte le modifiche), 'next'/'prev' (Tab), 'cancel' (Esc)
+    function cellInput(td, value, nullable, onDone) {
       td.innerHTML = `<div class="db-cell-edit"><input class="db-cell-input" value="${esc(value ?? '')}" placeholder="${value === null ? 'NULL' : ''}">
-        ${col.nullable ? `<button title="${esc(t('grid.setNull'))}" data-null>NULL</button>` : ''}</div>`;
+        ${nullable ? `<button title="${esc(t('grid.setNull'))}" data-null>NULL</button>` : ''}</div>`;
       const input = td.querySelector('input');
       input.focus();
       input.select();
       let done = false;
-      const finish = (save, setNull) => {
+      const finish = (mode, setNull) => {
         if (done) return;
         done = true;
-        const next = setNull ? null : input.value;
-        if (!save || !changed(next, value) || (next === '' && value === null)) { renderGrid(); return; }
-        saveRow('update', keyOf(grid.data.rows[r]), { [col.name]: next });
+        // '' su un valore NULL resta NULL (campo lasciato vuoto)
+        const next = setNull ? null : input.value === '' && value === null ? null : input.value;
+        onDone(mode, next);
       };
       input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
-        else if (e.key === 'Escape') finish(false);
+        if (e.key === 'Enter') { e.preventDefault(); finish('save'); }
+        else if (e.key === 'Escape') finish('cancel');
+        else if (e.key === 'Tab') { e.preventDefault(); finish(e.shiftKey ? 'prev' : 'next'); }
       });
-      input.addEventListener('blur', () => setTimeout(() => finish(false), 150));
-      td.querySelector('[data-null]')?.addEventListener('mousedown', e => { e.preventDefault(); finish(true, true); });
+      input.addEventListener('blur', () => setTimeout(() => finish('keep'), 150));
+      td.querySelector('[data-null]')?.addEventListener('mousedown', e => { e.preventDefault(); finish('keep', true); });
+    }
+
+    // Cella modificabile accanto (Tab / Maiusc+Tab) nella stessa tabella, anche su altre righe
+    function neighbourCell(table, r, c, dir) {
+      const cells = [...table.querySelectorAll('td.db-editable')];
+      const i = cells.findIndex(td => Number(td.parentElement.dataset.r) === r && Number(td.dataset.c) === c);
+      return i === -1 ? null : cells[i + dir] || null;
+    }
+
+    // Modifica in linea: doppio clic sulla cella
+    function editCell(td) {
+      if (!gridEditable() || td.querySelector('input')) return;
+      const data = grid.data;
+      const r = Number(td.parentElement.dataset.r), c = Number(td.dataset.c);
+      const col = data.columns[c];
+      if (isJsonCol(col)) return jsonDialog(r, c);
+      cellInput(td, shown(data, r, c), col.nullable, (mode, next) => {
+        if (grid?.data !== data) return;
+        if (mode !== 'cancel') setPending(data, r, c, next, data.rows[r][c]);
+        renderGrid();
+        if (mode === 'save') return saveEdits(data);
+        if (mode === 'next' || mode === 'prev') {
+          const near = neighbourCell($(ctx.root, 'results').querySelector('.db-table'), r, c, mode === 'next' ? 1 : -1);
+          if (near) editCell(near);
+        }
+      });
+    }
+
+    // Salvataggio di tutte le modifiche in sospeso: un UPDATE per riga, una sola conferma,
+    // eseguiti dal server in un'unica transazione
+    function saveEdits(data) {
+      const cells = pendingOf(data);
+      if (!cells.size) return;
+      const byRow = new Map();
+      for (const [k, v] of cells) {
+        const [r, c] = k.split('|').map(Number);
+        if (!byRow.has(r)) byRow.set(r, {});
+        byRow.get(r)[c] = v;
+      }
+      const inGrid = grid?.data === data;
+      const target = inGrid ? null : resultTarget(data);
+      if (!inGrid && !target) return;
+      const changes = [...byRow].map(([r, vals]) => ({
+        key: inGrid ? keyOf(data.rows[r]) : Object.fromEntries(target.info.pk.map((pk, i) => [pk, data.rows[r][target.pkIdx[i]]])),
+        values: Object.fromEntries(Object.entries(vals).map(([c, v]) => [inGrid ? data.columns[c].name : target.colOf[c], v])),
+      }));
+      const c = inGrid ? connections.find(x => x.id === grid.connId) : target.c;
+      const db = inGrid ? grid.db : target.db, table = inGrid ? grid.table : target.table;
+      saveRow('update-many', null, null, null, {
+        c, db, table, changes,
+        onSaved: () => {
+          if (inGrid) { clearEdits(data); loadGrid(); return; }
+          for (const [k, v] of cells) { const [r, ci] = k.split('|').map(Number); data.rows[r][ci] = v; }
+          clearEdits(data);
+          if (lastResult === data) renderResult(data, true);
+        },
+      });
+    }
+
+    function discardEdits(data) {
+      clearEdits(data);
+      if (grid?.data === data) renderGrid(); else if (lastResult === data) renderResult(data, true);
     }
 
     // Finestra di un valore JSON: testo formattato, validato prima di salvare.
@@ -907,10 +1001,12 @@ export default {
     let jsonEdit = null; // { value, onSave }
     function jsonDialog(r, c) {
       const col = grid.data.columns[c];
-      openJsonEditor({ title: col.name, value: grid.data.rows[r][c], nullable: col.nullable,
-        onSave: next => saveRow('update', keyOf(grid.data.rows[r]), { [col.name]: next }) });
+      const data = grid.data;
+      openJsonEditor({ title: col.name, value: shown(data, r, c), nullable: col.nullable, apply: true,
+        onSave: next => { const orig = data.rows[r][c]; setPending(data, r, c, jsonChanged(next, orig) ? next : orig, orig); if (grid?.data === data) renderGrid(); } });
     }
-    function openJsonEditor({ title, value, nullable = false, readOnly = false, onSave }) {
+    // apply: il valore resta tra le modifiche in sospeso (pulsante "Applica" invece di "Salva")
+    function openJsonEditor({ title, value, nullable = false, readOnly = false, apply = false, onSave }) {
       jsonEdit = readOnly ? null : { value, onSave };
       openModal(t(readOnly ? 'json.viewTitle' : 'json.title', { column: title }), `
         <textarea class="form-input db-json-editor" id="f_json" spellcheck="false" ${readOnly ? 'readonly' : ''}>${esc(value === null ? '' : prettyJson(value))}</textarea>
@@ -920,7 +1016,7 @@ export default {
           : `${nullable ? `<button class="btn btn-ghost" style="margin-inline-end:auto" onclick="Ext['db-client'].saveJson(true)">${esc(t('json.setNull'))}</button>` : ''}
          <button class="btn btn-ghost" onclick="Ext['db-client'].formatJson()">${esc(t('json.format'))}</button>
          <button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
-         <button class="btn btn-primary" onclick="Ext['db-client'].saveJson(false)">${esc(t('core.action.save'))}</button>`);
+         <button class="btn btn-primary" onclick="Ext['db-client'].saveJson(false)">${esc(t(apply ? 'json.apply' : 'core.action.save'))}</button>`);
       document.getElementById('modal').classList.add('modal-wide');
       setTimeout(() => document.getElementById('f_json')?.focus(), 0);
     }
@@ -975,6 +1071,12 @@ export default {
       searchTimer = setTimeout(() => { grid.search = e.target.value; grid.page = 1; loadGrid(); }, 300);
     });
     $(ctx.root, 'results').addEventListener('click', e => {
+      const ed = e.target.closest('[data-edits]')?.dataset.edits;
+      if (ed) {
+        const data = grid ? grid.data : lastResult;
+        if (data) { if (ed === 'save') saveEdits(data); else discardEdits(data); }
+        return;
+      }
       const th = e.target.closest('[data-result-sort]');
       if (!th || !lastResult || grid || designer) return;
       const col = Number(th.dataset.resultSort);
@@ -1476,37 +1578,26 @@ export default {
       const target = data && resultTarget(data);
       const r = Number(td.parentElement.dataset.r), ci = Number(td.dataset.c);
       const col = data?.columns[ci];
-      const value = data?.rows[r]?.[ci];
+      const value = data ? shown(data, r, ci) : undefined;
       const isJson = /^json$/i.test(col?.type || '');
       const name = target?.colOf[ci];
       if (!target || !name) { if (isJson && value !== null) openJsonEditor({ title: col.name, value, readOnly: true }); return; }
       const meta = target.info.columns.get(name) || {};
-      const key = Object.fromEntries(target.info.pk.map((pk, i) => [pk, data.rows[r][target.pkIdx[i]]]));
-      const save = next => saveRow('update', key, { [name]: next }, null, {
-        c: target.c, db: target.db, table: target.table,
-        onSaved: res => { if (res.affectedRows) data.rows[r][ci] = next; if (lastResult === data) renderResult(data, true); },
-      });
-      if (isJson) return openJsonEditor({ title: col.name, value, nullable: meta.nullable, onSave: save });
+      if (isJson) {
+        return openJsonEditor({ title: col.name, value, nullable: meta.nullable, apply: true,
+          onSave: next => { const orig = data.rows[r][ci]; setPending(data, r, ci, jsonChanged(next, orig) ? next : orig, orig); if (lastResult === data) renderResult(data, true); } });
+      }
       if (td.querySelector('input')) return;
-      td.innerHTML = `<div class="db-cell-edit"><input class="db-cell-input" value="${esc(value ?? '')}" placeholder="${value === null ? 'NULL' : ''}">
-        ${meta.nullable ? `<button title="${esc(t('grid.setNull'))}" data-null>NULL</button>` : ''}</div>`;
-      const input = td.querySelector('input');
-      input.focus();
-      input.select();
-      let done = false;
-      const finish = (ok, setNull) => {
-        if (done) return;
-        done = true;
-        const next = setNull ? null : input.value;
-        if (!ok || !changed(next, value) || (next === '' && value === null)) { renderResult(data, true); return; }
-        save(next);
-      };
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
-        else if (e.key === 'Escape') finish(false);
+      cellInput(td, value, meta.nullable, (mode, next) => {
+        if (lastResult !== data) return;
+        if (mode !== 'cancel') setPending(data, r, ci, next, data.rows[r][ci]);
+        renderResult(data, true);
+        if (mode === 'save') return saveEdits(data);
+        if (mode === 'next' || mode === 'prev') {
+          const near = neighbourCell($(ctx.root, 'results').querySelector('.db-result-table'), r, ci, mode === 'next' ? 1 : -1);
+          if (near) editResultCell(near);
+        }
       });
-      input.addEventListener('blur', () => setTimeout(() => finish(false), 150));
-      td.querySelector('[data-null]')?.addEventListener('mousedown', e => { e.preventDefault(); finish(true, true); });
     }
 
     function renderResult(data, keepSort) {
@@ -1521,12 +1612,14 @@ export default {
       const editable = i => !!target?.colOf[i];
       el.innerHTML = `
         <div class="db-result-meta">${esc(t('result.rows', { count: data.rowCount }))}${data.truncated ? ` ${esc(t('result.truncated', { limit: data.limit }))}` : ''} · ${esc(t('result.ms', { ms: data.ms }))}
-          ${target ? `<span class="db-badge" title="${esc(t('result.editableHint'))}">✎ ${esc(t('result.editable', { table: target.table }))}</span>` : ''}</div>
+          ${target ? `<span class="db-badge" title="${esc(t('result.editableHint'))}">✎ ${esc(t('result.editable', { table: target.table }))}</span>` : ''}
+          ${target ? editsBar(data) : ''}</div>
         <div class="db-table-wrap"><table class="data-table db-table db-result-table">
           <thead><tr>${data.columns.map((col, i) => `<th data-result-sort="${i}" title="${esc(t('result.sortTitle', { type: col.type }))}">${esc(col.name)}${resultSort?.col === i ? (resultSort.dir === 'desc' ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead>
-          <tbody>${sortedIndexes(data).map(r => `<tr data-r="${r}">${data.rows[r].map((v, i) => {
-            const cls = [v === null ? 'db-null' : '', editable(i) ? 'db-editable' : '', /^json$/i.test(data.columns[i].type) ? 'db-json-cell' : ''].filter(Boolean).join(' ');
-            return `<td data-c="${i}" class="${cls}" title="${esc(v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`;
+          <tbody>${sortedIndexes(data).map(r => `<tr data-r="${r}">${data.rows[r].map((_, i) => {
+            const v = shown(data, r, i), dirty = pendingOf(data).has(`${r}|${i}`);
+            const cls = [v === null ? 'db-null' : '', editable(i) ? 'db-editable' : '', /^json$/i.test(data.columns[i].type) ? 'db-json-cell' : '', dirty ? 'db-dirty' : ''].filter(Boolean).join(' ');
+            return `<td data-c="${i}" class="${cls}" title="${esc(dirty ? t('edits.was', { value: data.rows[r][i] ?? 'NULL' }) : v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`;
           }).join('')}</tr>`).join('')}</tbody>
         </table></div>`;
     }

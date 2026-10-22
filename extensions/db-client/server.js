@@ -742,12 +742,14 @@ module.exports = function createDbClient(ctx) {
       // Inserimento, modifica o eliminazione di una riga. L'istruzione è generata qui
       // (valori escapati da mysql2) e, come ogni modifica, eseguita solo dopo la conferma
       // del testo esatto: la prima risposta è 428 con l'SQL e il token.
+      // update-many: più righe modificate insieme ({ changes: [{ key, values }] }), un UPDATE
+      // per riga eseguiti in un'unica transazione (tutti o nessuno).
       async row(req, res) {
         const conn = connectionOr404(req.params.id);
         const { db, table } = req.params;
         if (!DB_NAME_RE.test(db) || !DB_NAME_RE.test(table)) throw ctx.error(400, 'name_invalid');
-        const { op, key, keys, values, confirm } = req.body;
-        if (!['insert', 'update', 'delete', 'delete-many'].includes(op)) throw ctx.error(400, 'operation_invalid');
+        const { op, key, keys, values, confirm, changes } = req.body;
+        if (!['insert', 'update', 'update-many', 'delete', 'delete-many'].includes(op)) throw ctx.error(400, 'operation_invalid');
         if (conn.readOnly) throw ctx.error(403, 'read_only');
         try {
           const q = (await poolFor(conn, db)).promise();
@@ -759,11 +761,53 @@ module.exports = function createDbClient(ctx) {
           const pk = columns.filter(c => c.key === 'PRI').map(c => c.name);
           const from = `${quoteId(db)}.${quoteId(table)}`;
 
-          const vals = values && typeof values === 'object' ? values : {};
-          const unknown = Object.keys(vals).filter(k => !names.has(k));
-          if (unknown.length) throw ctx.error(400, 'column_unknown', { columns: unknown.join(', ') });
           const scalar = v => v === null || ['string', 'number', 'boolean'].includes(typeof v);
-          if (!Object.values(vals).every(scalar)) throw ctx.error(400, 'values_invalid');
+          const checkValues = v => {
+            const vals = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+            const unknown = Object.keys(vals).filter(k => !names.has(k));
+            if (unknown.length) throw ctx.error(400, 'column_unknown', { columns: unknown.join(', ') });
+            if (!Object.values(vals).every(scalar)) throw ctx.error(400, 'values_invalid');
+            return vals;
+          };
+          const checkKey = k => {
+            if (!pk.length) throw ctx.error(400, 'no_primary_key');
+            if (!k || typeof k !== 'object' || pk.some(c => !(c in k) || !scalar(k[c]) || k[c] === null)) {
+              throw ctx.error(400, 'primary_key_missing', { columns: pk.join(', ') });
+            }
+          };
+          const updateSql = (k, vals) => {
+            const cols = Object.keys(vals);
+            if (!cols.length) throw ctx.error(400, 'nothing_to_update');
+            return mysqlCb.format(`UPDATE ${from} SET ${cols.map(c => `${quoteId(c)} = ?`).join(', ')} WHERE ${pk.map(c => `${quoteId(c)} = ?`).join(' AND ')} LIMIT 1`,
+              [...cols.map(c => vals[c]), ...pk.map(c => k[c])]);
+          };
+          const askOrCheck = (sql, verb) => {
+            const token = confirmToken(conn, db, sql);
+            const given = typeof confirm === 'string' ? Buffer.from(confirm) : Buffer.alloc(0);
+            if (given.length === token.length && crypto.timingSafeEqual(given, Buffer.from(token))) return true;
+            res.status(428).json({ needsConfirmation: true, token, verb, database: db, sql });
+            return false;
+          };
+
+          if (op === 'update-many') {
+            if (!Array.isArray(changes) || !changes.length || changes.length > 1000) throw ctx.error(400, 'rows_range');
+            const statements = changes.map(ch => { checkKey(ch?.key); return updateSql(ch.key, checkValues(ch.values)); });
+            const sql = statements.join(';\n');
+            if (!askOrCheck(sql, 'UPDATE')) return;
+            const cx = await (await poolFor(conn, db)).promise().getConnection();
+            let affectedRows = 0;
+            try {
+              await cx.beginTransaction();
+              for (const statement of statements) affectedRows += (await cx.query({ sql: statement, timeout: QUERY_TIMEOUT_MS }))[0].affectedRows;
+              await cx.commit();
+            } catch (e) {
+              await cx.rollback().catch(() => {});
+              throw e;
+            } finally { cx.release(); }
+            return res.json({ kind: 'write', affectedRows, statements: statements.length, sql });
+          }
+
+          const vals = checkValues(values);
 
           // WHERE sulla chiave primaria completa (niente modifiche senza)
           let whereSql = '', whereParams = [];
@@ -777,10 +821,7 @@ module.exports = function createDbClient(ctx) {
             whereSql = `${tuple} IN (${keys.map(() => one).join(', ')})`;
             whereParams = keys.flatMap(k => pk.map(c => k[c]));
           } else if (op !== 'insert') {
-            if (!pk.length) throw ctx.error(400, 'no_primary_key');
-            if (!key || typeof key !== 'object' || pk.some(k => !(k in key) || !scalar(key[k]) || key[k] === null)) {
-              throw ctx.error(400, 'primary_key_missing', { columns: pk.join(', ') });
-            }
+            checkKey(key);
             whereSql = pk.map(k => `${quoteId(k)} = ?`).join(' AND ');
             whereParams = pk.map(k => key[k]);
           }

@@ -1,6 +1,6 @@
 {
   "name": "devdock",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "description": "Dashboard locale per sviluppatori: tunnel SSH, script npm, PM2, Git e anteprima Swagger",
   "private": true,
   "workspaces": [

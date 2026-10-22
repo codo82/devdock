@@ -380,6 +380,26 @@ test('righe: insert, update e delete generati dal server e solo dopo conferma', 
     assert.equal((await row({ op: 'delete-many', keys: [] })).status, 400);
     assert.equal((await row({ op: 'delete-many', keys: [{ nome: 'x' }] })).status, 400);
 
+    // più righe modificate insieme: un UPDATE per riga, una conferma, un'unica transazione
+    const sel = async () => (await api('POST', '/connections/c/query', { sql: 'SELECT id, nome, note FROM app.clienti ORDER BY id' })).json.rows;
+    const multi = { op: 'update-many', changes: [{ key: { id: 1 }, values: { note: 'uno' } }, { key: { id: 3 }, values: { nome: 'Verdini', note: null } }] };
+    r = await row(multi);
+    assert.equal(r.status, 428);
+    assert.equal(r.json.sql, "UPDATE `app`.`clienti` SET `note` = 'uno' WHERE `id` = 1 LIMIT 1;\nUPDATE `app`.`clienti` SET `nome` = 'Verdini', `note` = NULL WHERE `id` = 3 LIMIT 1");
+    r = await row({ ...multi, confirm: r.json.token });
+    assert.equal(r.status, 200, r.text);
+    assert.deepEqual([r.json.affectedRows, r.json.statements], [2, 2]);
+    assert.deepEqual((await sel()).map(x => [x[1], x[2]]), [['Rossi', 'uno'], ['Bianchi', "l'aggiornata"], ['Verdini', null]]);
+    // se un'istruzione fallisce non resta nessuna modifica (rollback)
+    const failing = { op: 'update-many', changes: [{ key: { id: 1 }, values: { note: 'mai' } }, { key: { id: 2 }, values: { nome: null } }] };
+    r = await row(failing);
+    r = await row({ ...failing, confirm: r.json.token });
+    assert.equal(r.status, 400);
+    assert.equal((await sel())[0][2], 'uno');
+    assert.equal((await row({ op: 'update-many', changes: [] })).status, 400);
+    assert.equal((await row({ op: 'update-many', changes: [{ key: { nome: 'x' }, values: { note: 'x' } }] })).status, 400);
+    assert.equal((await row({ op: 'update-many', changes: [{ key: { id: 1 }, values: {} }] })).status, 400);
+
     // controlli
     assert.equal((await row({ op: 'update', values: { nome: 'x' } })).status, 400);                       // senza chiave
     assert.equal((await row({ op: 'update', key: { id: 1 }, values: { 'nome`=1;--': 'x' } })).status, 400); // colonna sconosciuta
