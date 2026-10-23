@@ -12,11 +12,15 @@
     "./testkit": "./lib/testkit.js",
     "./package.json": "./package.json"
   },
+  "bin": {
+    "devdock": "bin/devdock.js"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test",
-    "i18n:report": "node scripts/i18n-report.js"
+    "i18n:report": "node scripts/i18n-report.js",
+    "ext": "node bin/devdock.js ext"
   },
   "engines": {
     "node": ">=18"

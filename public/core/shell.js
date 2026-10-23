@@ -29,15 +29,65 @@ window.Shell = (() => {
 
     for (const meta of list) {
       if (meta.state === 'disabled') { console.warn(`[ext:${meta.code}] disattivata: ${meta.error}`); continue; }
-      if (!meta.frontend?.js) continue;
-      const entry = { meta, panel: createPanel(meta), sidebar: createSidebar(meta), tab: null, module: null, ctx: null, loading: null };
-      entry.tab = meta.position === 'header' ? createHeaderButton(meta) : createTab(meta);
-      exts.set(meta.code, entry);
+      if (usable(meta) && meta.frontend?.js) addEntry(meta);
     }
     await setupTabOrder();
+    window.Extensions?.init();
 
     // preload: modulo montato subito (nascosto), per pill, badge e notifiche in background
     await Promise.all([...exts.values()].filter(e => e.meta.frontend.preload).map(e => load(e).catch(() => {})));
+  }
+
+  const usable = meta => meta.state === 'ok' || meta.state === 'warning';
+
+  function addEntry(meta) {
+    const entry = { meta, panel: createPanel(meta), sidebar: createSidebar(meta), tab: null, module: null, ctx: null, loading: null, css: null };
+    entry.tab = meta.position === 'header' ? createHeaderButton(meta) : createTab(meta);
+    exts.set(meta.code, entry);
+    return entry;
+  }
+
+  // Toglie dalla pagina un'estensione scaricata o da ricaricare: modulo smontato, tab,
+  // pannello, sidebar, stile, pill e funzioni esposte
+  function removeEntry(code) {
+    const entry = exts.get(code);
+    if (!entry) return;
+    if (active === code) { try { entry.module?.hide?.(entry.ctx); } catch (e) { console.error(e); } active = null; }
+    try { entry.module?.unmount?.(entry.ctx); } catch (e) { console.error(e); }
+    entry.tab?.remove();
+    entry.panel.remove();
+    entry.sidebar.remove();
+    entry.css?.remove();
+    document.querySelector(`#activePills [data-ext="${code}"]`)?.remove();
+    delete window.Ext[code];
+    exts.delete(code);
+  }
+
+  // Allinea la pagina alle estensioni del server dopo un'installazione, un aggiornamento, una
+  // rimozione o un cambio di stato, senza ricaricare la pagina né toccare le altre estensioni
+  async function syncExtensions() {
+    let list;
+    try { list = await apiClient('/api/core').get('/extensions'); } catch (e) { toast(e.message, 'error'); return; }
+    const wanted = new Map(list.filter(m => usable(m) && m.frontend?.js).map(m => [m.code, m]));
+    const changed = [];
+    const wasActive = active;
+    for (const [code, entry] of [...exts]) {
+      const meta = wanted.get(code);
+      if (!meta || meta.loadId !== entry.meta.loadId || meta.dir !== entry.meta.dir) { removeEntry(code); changed.push(code); }
+    }
+    extList = list;
+    await window.I18n.setExtensions(list.filter(usable), [...changed, ...[...wanted.keys()].filter(c => !exts.has(c))]);
+    for (const meta of wanted.values()) {
+      if (exts.has(meta.code)) continue;
+      const entry = addEntry(meta);
+      if (entry.tab?.classList.contains('section-tab')) makeTabDraggable(entry.tab);
+      if (meta.frontend.preload) load(entry).catch(() => {});
+    }
+    applyTabOrder(savedTabOrder);
+    const next = wasActive && exts.has(wasActive) ? wasActive : active || firstSection();
+    active = null;
+    if (next) activate(next);
+    else document.querySelector('.app').classList.remove('no-sidebar');
   }
 
   // Prima estensione in ordine di tab: quella aperta all'avvio
@@ -72,21 +122,26 @@ window.Shell = (() => {
 
   // ---- ordine delle tab: trascinamento (o Alt+←/→), salvato in config.json (layout.tabs) ----
   const coreApi = apiClient('/api/core');
-  let defaultTabOrder = []; // codici nell'ordine dei manifest
   let customTabOrder = false;
+  let savedTabOrder = [];
   const navEl = () => document.querySelector('.section-nav');
   const tabButtons = () => [...navEl().querySelectorAll('.section-tab')];
   const tabCode = el => el.id.replace(/^ext-tab-/, '');
 
   // Prima le tab nell'ordine salvato, poi le altre (estensioni nuove) nell'ordine dei manifest
   function applyTabOrder(saved) {
-    const rank = code => { const i = saved.indexOf(code); return i < 0 ? saved.length + defaultTabOrder.indexOf(code) : i; };
-    tabButtons().sort((a, b) => rank(tabCode(a)) - rank(tabCode(b))).forEach(el => navEl().appendChild(el));
+    const key = el => {
+      const code = tabCode(el);
+      const i = saved.indexOf(code);
+      return [i < 0 ? Infinity : i, exts.get(code)?.meta.order ?? 100, code];
+    };
+    const cmp = (a, b) => { const x = key(a), y = key(b); return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2]); };
+    tabButtons().sort(cmp).forEach(el => navEl().appendChild(el));
   }
 
   async function saveTabOrder() {
     try {
-      await coreApi.put('/layout/tabs', { tabs: tabButtons().map(tabCode) });
+      savedTabOrder = (await coreApi.put('/layout/tabs', { tabs: tabButtons().map(tabCode) })).tabs;
       customTabOrder = true;
     } catch (e) { toast(e.message, 'error'); }
   }
@@ -95,45 +150,47 @@ window.Shell = (() => {
     try {
       await coreApi.del('/layout/tabs');
       customTabOrder = false;
+      savedTabOrder = [];
       applyTabOrder([]);
     } catch (e) { toast(e.message, 'error'); }
   }
 
+  let dragged = null, orderBefore = '';
+
+  // Trascinamento e Alt+←/→ su una tab (anche aggiunta dopo l'avvio)
+  function makeTabDraggable(tab) {
+    tab.draggable = true;
+    tab.addEventListener('dragstart', e => {
+      dragged = tab;
+      orderBefore = tabButtons().map(tabCode).join();
+      tab.classList.add('tab-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tabCode(tab));
+    });
+    tab.addEventListener('dragend', () => {
+      tab.classList.remove('tab-dragging');
+      dragged = null;
+      if (tabButtons().map(tabCode).join() !== orderBefore) saveTabOrder();
+    });
+    // Alt+←/→ sposta la tab che ha il focus (in una lingua da destra a sinistra le frecce si invertono)
+    tab.addEventListener('keydown', e => {
+      if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+      e.preventDefault();
+      const forward = (e.key === 'ArrowRight') !== (document.documentElement.dir === 'rtl');
+      const sibling = forward ? tab.nextElementSibling : tab.previousElementSibling;
+      if (!sibling?.classList.contains('section-tab')) return;
+      navEl().insertBefore(tab, forward ? sibling.nextElementSibling : sibling);
+      tab.focus();
+      saveTabOrder();
+    });
+  }
+
   async function setupTabOrder() {
     const nav = navEl();
-    defaultTabOrder = tabButtons().map(tabCode);
-    let saved = [];
-    try { saved = (await coreApi.get('/layout')).tabs; } catch { /* ordine dei manifest */ }
-    customTabOrder = saved.length > 0;
-    applyTabOrder(saved);
-
-    let dragged = null, before = '';
-    for (const tab of tabButtons()) {
-      tab.draggable = true;
-      tab.addEventListener('dragstart', e => {
-        dragged = tab;
-        before = tabButtons().map(tabCode).join();
-        tab.classList.add('tab-dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', tabCode(tab));
-      });
-      tab.addEventListener('dragend', () => {
-        tab.classList.remove('tab-dragging');
-        dragged = null;
-        if (tabButtons().map(tabCode).join() !== before) saveTabOrder();
-      });
-      // Alt+←/→ sposta la tab che ha il focus (in una lingua da destra a sinistra le frecce si invertono)
-      tab.addEventListener('keydown', e => {
-        if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
-        e.preventDefault();
-        const forward = (e.key === 'ArrowRight') !== (document.documentElement.dir === 'rtl');
-        const sibling = forward ? tab.nextElementSibling : tab.previousElementSibling;
-        if (!sibling?.classList.contains('section-tab')) return;
-        nav.insertBefore(tab, forward ? sibling.nextElementSibling : sibling);
-        tab.focus();
-        saveTabOrder();
-      });
-    }
+    try { savedTabOrder = (await coreApi.get('/layout')).tabs; } catch { /* ordine dei manifest */ }
+    customTabOrder = savedTabOrder.length > 0;
+    applyTabOrder(savedTabOrder);
+    tabButtons().forEach(makeTabDraggable);
     nav.addEventListener('dragover', e => {
       if (!dragged) return;
       e.preventDefault();
@@ -217,20 +274,22 @@ window.Shell = (() => {
     if (entry.loading) return entry.loading;
     const { meta } = entry;
     const base = `/ext/${meta.code}/`;
+    const v = `?v=${encodeURIComponent(meta.loadId ?? 0)}`; // un'estensione ricaricata non riusa i file in cache
     entry.loading = (async () => {
       if (meta.frontend.css) {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = base + meta.frontend.css;
+        link.href = base + meta.frontend.css + v;
         document.head.appendChild(link);
+        entry.css = link;
       }
       const root = entry.panel.querySelector('.ext-root');
       const [html, sidebar] = await Promise.all([meta.frontend.html, meta.frontend.sidebar]
-        .map(f => f ? fetch(base + f).then(r => r.ok ? r.text() : Promise.reject(new Error(`${f}: HTTP ${r.status}`))) : null));
+        .map(f => f ? fetch(base + f + v).then(r => r.ok ? r.text() : Promise.reject(new Error(`${f}: HTTP ${r.status}`))) : null));
       // markup statico tradotto con le chiavi dell'estensione (data-i18n…)
       if (html !== null) { root.innerHTML = html; window.I18n.apply(root, meta.code); }
       if (sidebar !== null) { entry.sidebar.innerHTML = sidebar; window.I18n.apply(entry.sidebar, meta.code); }
-      const mod = await import(base + meta.frontend.js);
+      const mod = await import(base + meta.frontend.js + v);
       entry.module = mod.default || mod;
       entry.ctx = makeContext(entry);
       await entry.module.mount?.(entry.ctx);
@@ -347,7 +406,7 @@ window.Shell = (() => {
       open,
       isActive: () => active === meta.code,
       // Un'altra estensione è caricata e attiva? (per funzioni che si appoggiano a lei)
-      hasExtension: code => extList.some(e => e.code === code && e.state !== 'disabled'),
+      hasExtension: code => extList.some(e => e.code === code && (e.state === 'ok' || e.state === 'warning')),
       // Client per le API di un'altra estensione (/api/ext/<code>)
       apiFor: code => apiClient(`/api/ext/${code}`),
     };
@@ -382,6 +441,8 @@ window.Shell = (() => {
   const exportItems = () => [
     { ext: { icon: '🗂', name: t('core.projects.owner') },
       item: { id: 'projects', label: t('core.projects.exportLabel'), description: t('core.projects.exportDescription'), sections: ['projects', 'projectFolders'] } },
+    { ext: { icon: '🧩', name: t('core.ext.owner') },
+      item: { id: 'extensions', label: t('core.ext.exportLabel'), description: t('core.ext.exportDescription'), sections: ['extensions'] } },
     ...extList
       .filter(e => e.state !== 'disabled')
       .flatMap(e => (e.export || []).map(item => ({ ext: e, item }))),
@@ -683,7 +744,7 @@ window.Shell = (() => {
   })();
 
   return {
-    has, activate, open, refresh, toggleNotifications, exportConfig, doExport, importConfig, doImport, chooseLanguage,
+    has, activate, open, refresh, syncExtensions, toggleNotifications, exportConfig, doExport, importConfig, doImport, chooseLanguage,
     openMcp, mcpCopy, mcpRegenerate, mcpToggle() { mcpShowToken = !mcpShowToken; renderMcp(); },
   };
 })();

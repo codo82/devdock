@@ -98,6 +98,21 @@ claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Auth
 - **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.devdock-mcp-token` next to `config.json` (not exported, regenerable from the 🤖 dialog). Requests coming from a browser are rejected.
 - Tool names are prefixed with the extension (`git_status`, `npm_run`, `db_client_query`); errors carry the same codes as the API.
 
+## Extensions
+
+Every section of DevDock is an extension. Some are **built in** (they come with DevDock and are updated with it); others are **installed** from git repositories into `~/.devdock/extensions`. The 🧩 button in the header opens the Extensions panel:
+
+- **Installed**: every extension with version, source and state; the switch turns one off or on (also the built-in ones; those that require it are switched off too), and installed ones can be **updated**, taken back to the **previous version** (kept after every update) or **removed**. The badge on 🧩 counts the available updates and the extensions to install.
+- **Catalog**: the extensions listed by the configured catalogs (the official `devdock-extensions` catalog by default), with a search.
+- **From URL**: any git repository (GitHub, GitLab, a company server, a local folder), with an optional folder for repositories that hold several extensions (`…/tools.git#path=my-extension`). Private repositories work with your own git credentials (SSH keys, credential helper).
+- **Catalogs**: the list of catalog URLs.
+
+Versions are the semver tags of the repository (`v1.2.0` for an extension at the root, `<code>@1.2.0` for one in a folder); the latest one compatible with this DevDock is proposed. Before anything is installed a **preview** shows name, version, compatible DevDock versions, dependencies (missing ones can be installed first), what's new (the repository's CHANGELOG) and a reminder that an extension runs with all your rights. The install downloads only the extension's folder, installs its npm dependencies without running scripts, and loads it **without restarting DevDock** (the other sections, tunnels and npm processes keep running); progress is shown live and a failure leaves nothing behind. Updates are checked at start-up, once a day and on demand; a tag that now points to another commit is reported. The configuration of an extension stays in `config.json` across updates and removals.
+
+The **Installed extensions** export checkbox exports the list (source and tag, no code): on another machine the imported list appears in the panel as *To install*, each with its preview.
+
+From the command line (`npm run ext -- <command>` or `devdock ext <command>` when DevDock is installed globally): `list`, `install <url|code> [--path folder] [--tag tag] [--yes]`, `update <code>`, `remove <code>`, `check`. With DevDock running the change is loaded at once; otherwise it applies at the next start.
+
 ## Configuration
 
 Everything is stored in `config.json` in the project folder. The file is created empty on first start and is excluded from git because it contains personal hosts and paths.
@@ -125,7 +140,7 @@ Everything is stored in `config.json` in the project folder. The file is created
 - `projects[].path` — absolute path of the project folder
 - `projects[].folder` — optional sidebar folder (`projectFolders[].id`); without it the project is at the root of the sidebars
 
-Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env; `layout`, the order of the tabs; `vault`, the master password) or to an extension (`groups` and `servers` to tunnels, `dbConnections` and `dbFolders` to db-client, `httpSections` to http-client, `mockServers` to mock-server), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle) and of the extensions (Tunnel SSH, Connessioni database, Richieste HTTP, Mock server) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
+Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env; `layout`, the order of the tabs; `vault`, the master password; `extensions`, switched-off extensions, catalogs and the list of installed ones) or to an extension (`groups` and `servers` to tunnels, `dbConnections` and `dbFolders` to db-client, `httpSections` to http-client, `mockServers` to mock-server), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle, Estensioni installate) and of the extensions (Tunnel SSH, Connessioni database, Richieste HTTP, Mock server) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
 
 ## Languages
 
@@ -147,7 +162,8 @@ Active protections:
 - the API only accepts requests from its own UI (`Origin`/`Referer` and `Host` checks), so other pages open in the browser cannot use it;
 - every parameter that ends up in a command (branch, remote, file, script, package, SSH alias) is validated;
 - `config.json` is validated on every save and import;
-- external libraries (Swagger UI) are loaded with Subresource Integrity.
+- external libraries (Swagger UI) are loaded with Subresource Integrity;
+- installed extensions run with your rights: the panel shows a preview of what is installed and warns about it, git runs without terminal prompts and with the `ext::` protocol off, npm dependencies are installed with `--ignore-scripts`.
 
 Local command-line clients (curl, scripts) that send no `Origin` header are allowed, like any other local program.
 

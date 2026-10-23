@@ -93,6 +93,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
 | `backend.routes` | no | Routes mounted under `/api/ext/<code>`; each one names a handler of the backend |
 | `frontend.html` / `sidebar` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served (never `server.js` or `setting.json`) |
 | `mcp.tools` | no | Tools the extension exposes to AI agents through the MCP server (see *MCP tools*); requires a backend |
+| `reloadable` | no | `false` for an extension that can't be stopped and started again while DevDock runs: installing an update or removing it then asks for a restart (default `true`) |
 | `frontend.preload` | no | `true`: the module is mounted at startup (hidden) instead of on first open — for extensions that keep header pills, badges or notifications up to date in the background |
 
 ### Loading and states
@@ -347,6 +348,7 @@ export default {
   hide(ctx) {},    // panel hidden (stop work that only matters while visible)
   refresh(ctx) {}, // the user pressed ↻ in the header
   languageChanged(ctx) {}, // the user picked another language (default: refresh)
+  unmount(ctx) {},  // the extension is being switched off, updated or removed: stop timers and streams
 };
 ```
 
@@ -427,11 +429,38 @@ Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i1
 | `/mcp` | MCP server (Streamable HTTP, bearer token, no browser requests) |
 | `GET /api/core/i18n/languages` | Source language and available languages: `{ source, languages: [{ tag, name, nativeName, dir, core, completeness }] }` (`core: false` = only some extension ships it; `completeness` = % of the source keys translated, core and extensions together) |
 | `GET /api/core/vault` · `POST /api/core/vault/init`, `/unlock`, `/lock`, `/change`, `/reset`, `/settings` | Master password vault: state (`uninitialized`, `locked`, `unlocked`), lock timeout, minimum length · create, unlock (increasing wait after repeated errors, `429` with `Retry-After`), lock, change the password (every extension's secrets re-encrypted in the same write), reset (`{ confirm: "RESET" }`: vault and secrets deleted), lock timeout in minutes |
+| `GET /api/core/extensions-admin` | Extensions panel: every extension with source, lock data (repository, tag, commit), backup and update state; extensions of the imported list not installed (`pending`); catalogs; core version |
+| `POST /api/core/extensions-admin/:code/enabled` · `/:code/reload` | Switch an extension off or on (`{ enabled }`) · reload it from disk; both restart the extensions that depend on it and answer `{ restartRequired }` |
+| `GET /api/core/extensions-admin/catalog` · `PUT /api/core/extensions-admin/catalogs` | Extensions of the configured catalogs (`?refresh=1`), with the installed ones marked · catalog URLs |
+| `POST /api/core/extensions-admin/preview` | `{ source, folder?, tag? }` or `{ code }` of a catalog: shallow, sparse clone in a staging folder; versions, chosen tag, manifest data, compatibility, dependencies, changelog; `id` for the install |
+| `POST /api/core/extensions-admin/install` | `{ id }` of a preview; Server-Sent Events `step`, `log`, `done` (`{ code, version, previous, restartRequired, state }`) or `error` |
+| `POST /api/core/extensions-admin/:code/update` · `/:code/restore` · `DELETE /api/core/extensions-admin/:code` · `POST /api/core/extensions-admin/updates` | Preview of the newest (or `{ tag }`) version · back to the previous version · remove an installed extension · check the updates now |
 | `GET /api/core/layout` · `PUT /api/core/layout/tabs` · `DELETE /api/core/layout/tabs` | Tab order chosen by the user (`{ tabs: [codes] }`; unknown codes and codes of header extensions are dropped, duplicates removed) · save it · back to the manifest order |
 | `GET /api/core/system` | Platform and external tools (`?refresh=1` checks again) |
 | `GET /api/core/config/sections` | Config sections and their owner |
 | `GET /api/core/config/export?sections=a,b&name=x` | Export (download), optionally limited to some sections |
 | `POST /api/core/config/import` | Import `{ config, mode }`, per section (keys without an owner are ignored and reported) |
+
+## Publishing an extension
+
+An extension can live in its own git repository, or in a folder of a repository that holds several (like the official `devdock-extensions`). Users install it from the Extensions panel (catalog or URL) or with `devdock ext install`:
+
+- **Versions are git tags** in SemVer: `v1.2.0` (or `1.2.0`) for an extension at the root of its repository, `<code>@1.2.0` for an extension in a folder, so every extension of a shared repository has its own versions. The `version` in `setting.json` should match the tag. Without tags the default branch is installed and updates follow its commits.
+- **Compatibility**: `devdock` in the manifest; the panel proposes the latest tag whose range includes the running core.
+- **What's new**: a `CHANGELOG.md` in the extension folder with `## [x.y.z]` sections; the preview of an update shows the sections newer than the installed version.
+- **Dependencies**: npm packages in the extension's own `package.json` (`dependencies` only; they are installed with `--omit=dev --ignore-scripts`); other extensions in `dependencies` of the manifest (missing required ones are offered for install when a catalog lists them).
+- **Config sections** survive updates and removal: reinstalling an extension finds its data again.
+
+A **catalog** is a JSON file served over http(s):
+
+```json
+{ "extensions": [
+  { "code": "pm2", "name": { "it": "PM2", "en": "PM2" }, "description": "Processi PM2", "repo": "https://github.com/codo82/devdock-extensions.git", "path": "pm2" },
+  { "code": "hello", "name": "Hello", "repo": "git@github.com:someone/devdock-hello.git" }
+] }
+```
+
+`path` is the folder of the extension in the repository (the root when omitted), so a catalog can point to any repository. Installed extensions are recorded in `~/.devdock/extensions.lock.json` (repository, folder, tag, version, commit, previous version) and, without the code, in the `extensions.installed` section of `config.json` for the export.
 
 ## Dependencies and npm workspaces
 

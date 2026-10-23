@@ -84,7 +84,7 @@ module.exports = function coreRoutes(extensions) {
   const settings = () => loadConfig().extensions || {};
   const catalogUrls = () => settings().catalogs ?? [installer.OFFICIAL_CATALOG];
   // estensioni presenti (non i doppioni): codice → { version, source }
-  const known = () => Object.fromEntries(extensions.list().filter(e => !(e.state === 'disabled' && /già usato/.test(e.error || '')))
+  const known = () => Object.fromEntries(extensions.list().filter(e => !e.duplicate)
     .map(e => [e.code, { version: e.version, source: e.source }]));
   // elenco delle installate (sorgente e tag, niente codice) in config.json, per l'export
   function syncInstalledList() {

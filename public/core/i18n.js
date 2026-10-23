@@ -39,7 +39,7 @@ window.I18n = (() => {
   }
 
   async function fetchCatalog(url) {
-    const r = await fetch(url);
+    const r = await fetch(url, { cache: 'no-cache' });
     if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
     return r.json();
   }
@@ -88,6 +88,17 @@ window.I18n = (() => {
     chain = chainFor(lang);
     await loadChain();
     applyDocumentLang();
+  }
+
+  // Estensioni cambiate a runtime (installate, ricaricate, tolte): i loro cataloghi si
+  // scaricano di nuovo; changed: codici da rileggere anche se già caricati
+  async function setExtensions(exts = [], changed = []) {
+    extTags = new Map(exts.filter(e => e.i18n?.length).map(e => [e.code, e.i18n]));
+    for (const code of changed) {
+      for (const key of [...loaded]) if (key.startsWith(`${code}:`)) loaded.delete(key);
+      for (const map of catalogs.values()) for (const k of [...map.keys()]) if (k.startsWith(`${code}.`)) map.delete(k);
+    }
+    await loadChain();
   }
 
   // Cambio di lingua scelto dall'utente: salvato, cataloghi caricati, UI avvisata
@@ -238,7 +249,7 @@ window.I18n = (() => {
   };
 
   return {
-    init, setLanguage, onChange, t, has, errorText, scoped, qualify, pick, apply, fmt,
+    init, setExtensions, setLanguage, onChange, t, has, errorText, scoped, qualify, pick, apply, fmt,
     get lang() { return lang; },
     get source() { return source; },
     get languages() { return languages.slice(); },

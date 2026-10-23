@@ -201,3 +201,33 @@ test('elenco delle installate nell\'export; importato altrove compare come da in
     assert.equal(pending.find(x => x.code === 'hello').repo, repoA);
   } finally { await other.stop(); }
 });
+
+test('estensione che non si ricarica a caldo: l\'aggiornamento chiede il riavvio', async () => {
+  const repo = rootRepo(path.join(tmpDir('devdock-fixed-'), 'fixed'));
+  release(repo, null, 'fixed', '1.0.0', { extra: { reloadable: false } });
+  let p = (await call('POST', '/extensions-admin/preview', { source: repo })).json;
+  assert.equal(p.reloadable, false);
+  assert.equal(done(await install(p.id)).restartRequired, false, 'la prima installazione si carica');
+  release(repo, null, 'fixed', '1.1.0', { extra: { reloadable: false } });
+  p = (await call('POST', '/extensions-admin/fixed/update')).json;
+  const d = done(await install(p.id));
+  assert.deepEqual([d.version, d.restartRequired], ['1.1.0', true]);
+  assert.equal((await srv.request('GET', '/api/ext/fixed/hi')).json.version, '1.0.0', 'resta in uso la versione caricata');
+  assert.equal((await call('DELETE', '/extensions-admin/fixed')).json.code, 'core.ext_restart_required');
+});
+
+test('riga di comando senza DevDock in esecuzione: installazione sui file, elenco, rimozione', async () => {
+  const { execFileSync } = require('child_process');
+  const { ROOT } = require('../lib/testkit');
+  const home = tmpDir('devdock-cli-home-');
+  const env = { ...process.env, DEVDOCK_HOME: home, DEVDOCK_PORT: '1', DEVDOCK_CONFIG: path.join(home, 'config.json') };
+  fs.writeFileSync(env.DEVDOCK_CONFIG, '{"projects":[]}');
+  const cli = (...args) => execFileSync(process.execPath, [path.join(ROOT, 'bin/devdock.js'), 'ext', ...args], { env, encoding: 'utf8' });
+  let out = cli('install', repoB, '--path', 'tools/greet', '--yes');
+  assert.match(out, /greet 1\.2\.0 installata: vale dal prossimo avvio di DevDock/);
+  assert.ok(fs.existsSync(path.join(home, 'extensions', 'greet', 'setting.json')));
+  assert.match(cli('list'), /greet\s+1\.2\.0\s+installed/);
+  assert.match(cli('check'), /greet\s+1\.2\.0 aggiornata/);
+  assert.match(cli('remove', 'greet', '--yes'), /greet rimossa/);
+  assert.equal(fs.existsSync(path.join(home, 'extensions', 'greet')), false);
+});
