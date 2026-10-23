@@ -1,5 +1,6 @@
 # DevDock — notes for Claude Code
 
+
 Local developer dashboard (Express backend + vanilla JS frontend, no build step). Every feature is an extension.
 
 Read before changing code:
