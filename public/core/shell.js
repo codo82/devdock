@@ -334,6 +334,7 @@ window.Shell = (() => {
       expose(obj) { window.Ext[meta.code] = obj; },
       // progetti e cartelle del core (public/core/projects.js)
       projects: window.Projects,
+      vault: window.Vault,
       setBadge(value) {
         const badge = entry.tab?.querySelector('.section-tab-badge');
         if (!badge) return;

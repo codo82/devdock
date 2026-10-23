@@ -193,7 +193,7 @@ export default {
 
     // ---- vault ----
     async function loadVault() {
-      try { vault = await ctx.api.get('/vault'); } catch (e) { toast(e.message, 'error'); }
+      try { vault = await ctx.core.get('/vault'); } catch (e) { toast(e.message, 'error'); }
       render();
     }
 
@@ -1764,7 +1764,7 @@ export default {
       const submit = $(ctx.root, 'gate-submit');
       submit.disabled = true;
       try {
-        await ctx.api.post(vault.state === 'uninitialized' ? '/vault/init' : '/vault/unlock', { password: pwd });
+        await ctx.core.post(vault.state === 'uninitialized' ? '/vault/init' : '/vault/unlock', { password: pwd });
         $(ctx.root, 'gate-password').value = '';
         $(ctx.root, 'gate-confirm').value = '';
         await loadVault();
@@ -1791,10 +1791,10 @@ export default {
       const val = id => document.getElementById(id)?.value || '';
       try {
         const minutes = Number(val('f_vault_minutes'));
-        if (minutes !== vault.lockAfterMinutes) await ctx.api.post('/vault/settings', { lockAfterMinutes: minutes });
+        if (minutes !== vault.lockAfterMinutes) await ctx.core.post('/vault/settings', { lockAfterMinutes: minutes });
         if (val('f_vault_new')) {
           if (val('f_vault_new') !== val('f_vault_new2')) { toast(t('vault.mismatch'), 'error'); return; }
-          const r = await ctx.api.post('/vault/change', { oldPassword: val('f_vault_old'), newPassword: val('f_vault_new') });
+          const r = await ctx.core.post('/vault/change', { oldPassword: val('f_vault_old'), newPassword: val('f_vault_new') });
           toast(t('vault.changed', { count: r.reencrypted }), 'success');
         } else {
           toast(t('vault.saved'), 'success');
@@ -1806,14 +1806,14 @@ export default {
 
     async function lock() {
       closeModal();
-      await ctx.api.post('/vault/lock').catch(() => {});
+      await ctx.core.post('/vault/lock').catch(() => {});
       await loadVault();
     }
 
     async function resetVault() {
       if (prompt(t('vault.resetPrompt')) !== 'RESET') return;
       try {
-        await ctx.api.post('/vault/reset', { confirm: 'RESET' });
+        await ctx.core.post('/vault/reset', { confirm: 'RESET' });
         toast(t('vault.resetDone'), 'success');
         await loadVault();
       } catch (e) { toast(e.message, 'error'); }

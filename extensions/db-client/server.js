@@ -6,14 +6,11 @@ const fs = require('fs');
 const path = require('path');
 const mysqlCb = require('mysql2');
 const mysql = require('mysql2/promise');
-const vaultLib = require('./vault');
 const { classify, schemaChange, describeParams, bindParams } = require('./sql');
 const ddl = require('./ddl');
 const mig = require('./migrations');
 const schemaOps = require('./ops');
 const { introspect } = require('./introspect');
-
-const DEFAULT_LOCK_MINUTES = 30;
 
 const CONNECTION_FIELDS = ['id', 'label', 'type', 'host', 'port', 'database', 'user', 'password', 'projectId', 'tunnel', 'readOnly', 'migrations', 'folder'];
 const FOLDER_FIELDS = ['id', 'label'];
@@ -72,66 +69,26 @@ module.exports = function createDbClient(ctx) {
   const tunnels = ctx.require('tunnels'); // opzionale: senza, niente connessioni via tunnel
   const git = ctx.require('git');         // opzionale: repository per le migration
 
-  const vault = () => ctx.config.get('vault');
-  let allowVaultSwitch = false; // vero solo durante il cambio della master password
+  const vault = ctx.vault; // vault della master password del core
   const connections = () => ctx.config.get('dbConnections');
   const folders = () => ctx.config.get('dbFolders');
-
-  // ---- sessione del vault: la chiave vive solo in memoria ----
-
-  const session = { key: null, lastUse: 0 };
-  const lockAfterMs = () => (vault()?.lockAfterMinutes ?? DEFAULT_LOCK_MINUTES) * 60000;
-
-  function lock() { session.key = null; closePools(); } // senza vault niente connessioni aperte
-
-  // Chiave di cifratura se il vault è sbloccato e non scaduto per inattività
-  function currentKey() {
-    if (session.key && Date.now() - session.lastUse > lockAfterMs()) lock();
-    if (session.key) session.lastUse = Date.now();
-    return session.key;
-  }
-
-  function vaultState() {
-    if (!vault()) return 'uninitialized';
-    return currentKey() ? 'unlocked' : 'locked';
-  }
-
-  // Protezione dai tentativi ripetuti: dal terzo errore attesa doppia ogni volta (max 30s)
-  const throttle = { failures: 0, retryAt: 0 };
-  function registerFailure() {
-    throttle.failures++;
-    const delay = throttle.failures < 3 ? 0 : Math.min(1000 * 2 ** (throttle.failures - 3), 30000);
-    throttle.retryAt = Date.now() + delay;
-  }
 
   // Password in chiaro di una connessione (solo lato server, al momento di connettersi)
   function decryptPassword(conn) {
     if (!conn.password) return '';
-    const key = currentKey();
-    if (!key) throw ctx.error(423, 'vault_locked');
-    return vaultLib.decrypt(key, conn.password);
+    return vault.decrypt(conn.password);
   }
 
-  // ---- vault per le altre estensioni (es. http-client): stessi segreti, stessa sessione ----
-  // Ogni estensione registra { rekey(reencrypt), reset() }: al cambio della master password
-  // rekey riceve la funzione che ri-cifra un valore e restituisce la funzione che salva
-  // (chiamata dopo il salvataggio del nuovo vault); al reset i segreti vanno cancellati.
-  const vaultConsumers = [];
-  const sharedVault = {
-    state: () => vaultState(),
-    isBox: vaultLib.isBox,
-    encrypt(plaintext) {
-      const key = currentKey();
-      if (!key) throw ctx.error(423, vault() ? 'vault_locked' : 'vault_missing');
-      return vaultLib.encrypt(key, plaintext);
+  // Cambio della master password: le password ri-cifrate si salvano insieme al nuovo vault;
+  // reset: cancellate; blocco: niente connessioni aperte senza vault sbloccato
+  vault.register({
+    rekey(reencrypt, cfg) {
+      const list = cfg.dbConnections || [];
+      return { sections: { dbConnections: list.map(c => (c.password ? { ...c, password: reencrypt(c.password) } : c)) }, count: list.filter(c => c.password).length };
     },
-    decrypt(box) {
-      const key = currentKey();
-      if (!key) throw ctx.error(423, vault() ? 'vault_locked' : 'vault_missing');
-      try { return vaultLib.decrypt(key, box); } catch { throw ctx.error(400, 'secret_unreadable'); }
-    },
-    register(consumer) { vaultConsumers.push(consumer); },
-  };
+    reset: cfg => ({ dbConnections: (cfg.dbConnections || []).map(c => ({ ...c, password: null })) }),
+    lock: () => closePools(),
+  });
 
   // ---- connessioni ----
 
@@ -149,7 +106,7 @@ module.exports = function createDbClient(ctx) {
     }
     if (c.database != null && c.database !== '' && !DB_NAME_RE.test(c.database)) throw bad('database');
     if (!isText(c.user, 80)) throw bad('user');
-    if (c.password != null && !vaultLib.isBox(c.password)) throw bad('password');
+    if (c.password != null && !vault.isBox(c.password)) throw bad('password');
     if (c.projectId != null && !KEY_RE.test(c.projectId)) throw bad('project');
     if (c.readOnly != null && typeof c.readOnly !== 'boolean') throw bad('read_only');
     if (c.folder != null && !KEY_RE.test(c.folder)) throw bad('folder');
@@ -235,7 +192,7 @@ module.exports = function createDbClient(ctx) {
   }
 
   // ---- MCP ----
-  const mcpUnlocked = () => { if (vaultState() !== 'unlocked') throw ctx.error(423, 'mcp_vault_locked'); };
+  const mcpUnlocked = () => { if (vault.state() !== 'unlocked') throw ctx.error(423, 'mcp_vault_locked'); };
   function mcpConnection(id) {
     mcpUnlocked();
     const conn = findConnection(id);
@@ -272,9 +229,7 @@ module.exports = function createDbClient(ctx) {
       delete c.host; delete c.port; // host e porta vengono dal tunnel
     }
     if (typeof body.password === 'string' && body.password !== '') {
-      const key = currentKey();
-      if (!key) throw ctx.error(423, 'vault_locked');
-      c.password = vaultLib.encrypt(key, body.password);
+      c.password = vault.encrypt(body.password);
     } else if (body.password === null) {
       c.password = null;
     } else if (c.password === undefined) {
@@ -501,29 +456,6 @@ module.exports = function createDbClient(ctx) {
   // ---- regole delle sezioni di config ----
 
   const config = {
-    vault: {
-      empty: null,
-      // Import in modalità unione: lo stesso vault (stesso verificatore) o nessuno attuale
-      merge(current, incoming) {
-        if (current && incoming && current.verifier !== incoming.verifier) {
-          throw ctx.error.config('vault_other_password');
-        }
-        return current ?? incoming;
-      },
-      validate(record) {
-        try { vaultLib.validateRecord(record); } catch (e) { throw ctx.error.config(e.key || 'vault_record_invalid'); }
-        // Un'altra master password renderebbe illeggibili le password salvate: si cambia
-        // solo con /vault/change (che ri-cifra tutto) o si importa con /connections/import
-        const current = vault();
-        if (current && record && current.verifier !== record.verifier && !allowVaultSwitch) {
-          throw ctx.error.config('vault_other_password');
-        }
-        if (record && record.lockAfterMinutes != null
-            && !(Number.isInteger(record.lockAfterMinutes) && record.lockAfterMinutes >= 1 && record.lockAfterMinutes <= 1440)) {
-          throw ctx.error.config('vault_lock_minutes');
-        }
-      },
-    },
     dbFolders: {
       empty: [], idField: 'id',
       normalize: v => (Array.isArray(v) ? v.map(f => pick(f || {}, FOLDER_FIELDS)) : v),
@@ -1139,105 +1071,26 @@ module.exports = function createDbClient(ctx) {
         res.json({ ok: true });
       },
 
-      // ---- vault ----
-
-      vaultStatus(req, res) {
-        res.json({
-          state: vaultState(),
-          lockAfterMinutes: vault()?.lockAfterMinutes ?? DEFAULT_LOCK_MINUTES,
-          minLength: vaultLib.MIN_PASSWORD,
-          retryAfter: Math.max(0, Math.ceil((throttle.retryAt - Date.now()) / 1000)),
-        });
-      },
-
-      async vaultInit(req, res) {
-        if (vault()) throw ctx.error(409, 'vault_exists');
-        let created;
-        try { created = await vaultLib.createVault(req.body.password); }
-        catch (e) { return sendFailure(res, e); }
-        ctx.config.set('vault', created.record);
-        session.key = created.encKey;
-        session.lastUse = Date.now();
-        res.json({ ok: true, state: 'unlocked' });
-      },
-
-      async vaultUnlock(req, res) {
-        const record = vault();
-        if (!record) throw ctx.error(409, 'vault_missing');
-        const wait = Math.ceil((throttle.retryAt - Date.now()) / 1000);
-        if (wait > 0) {
-          res.setHeader('Retry-After', String(wait));
-          throw ctx.error(429, 'too_many_attempts', { seconds: wait });
-        }
-        const key = await vaultLib.openVault(record, req.body.password);
-        if (!key) {
-          registerFailure();
-          throw ctx.error(401, 'wrong_password');
-        }
-        throttle.failures = 0;
-        throttle.retryAt = 0;
-        session.key = key;
-        session.lastUse = Date.now();
-        res.json({ ok: true, state: 'unlocked' });
-      },
-
-      vaultLock(req, res) {
-        lock();
-        res.json({ ok: true, state: vault() ? 'locked' : 'uninitialized' });
-      },
-
-      // Nuova master password: tutte le password vengono ri-cifrate e salvate insieme al vault
-      async vaultChange(req, res) {
-        const record = vault();
-        if (!record) throw ctx.error(409, 'vault_missing');
-        const oldKey = await vaultLib.openVault(record, req.body.oldPassword);
-        if (!oldKey) { registerFailure(); throw ctx.error(401, 'wrong_current_password'); }
-        let created;
-        try { created = await vaultLib.createVault(req.body.newPassword); }
-        catch (e) { return sendFailure(res, e); }
-        const reencrypted = connections().map(c => c.password
-          ? { ...c, password: vaultLib.encrypt(created.encKey, vaultLib.decrypt(oldKey, c.password)) }
-          : c);
-        const reencrypt = box => vaultLib.encrypt(created.encKey, vaultLib.decrypt(oldKey, box));
-        const commits = vaultConsumers.map(c => c.rekey(reencrypt)).filter(fn => typeof fn === 'function');
-        const lockAfterMinutes = record.lockAfterMinutes;
-        allowVaultSwitch = true;
-        try {
-          ctx.config.update({
-            vault: lockAfterMinutes ? { ...created.record, lockAfterMinutes } : created.record,
-            dbConnections: reencrypted,
-          });
-        } finally { allowVaultSwitch = false; }
-        for (const commit of commits) {
-          try { commit(); } catch (e) { ctx.log.error('ri-cifratura di un\'altra estensione fallita:', e.message); }
-        }
-        session.key = created.encKey;
-        session.lastUse = Date.now();
-        res.json({ ok: true, reencrypted: reencrypted.filter(c => c.password).length });
-      },
-
       // Connessioni da un file esportato altrove: le password vengono decifrate con la
       // master password di quel file e ri-cifrate con la chiave attuale (vault sbloccato)
       async importConnections(req, res) {
-        const key = currentKey();
-        if (!key) throw ctx.error(423, 'vault_locked');
+        if (vault.state() !== 'unlocked') vault.encrypt(''); // 423 del core: vault bloccato o da creare
         const { config: file, password, mode } = req.body;
         if (mode !== 'merge' && mode !== 'replace') throw ctx.error(400, 'mode_invalid');
         const incoming = file?.dbConnections;
         if (!Array.isArray(incoming)) throw ctx.error(400, 'file_no_connections');
         const withPassword = incoming.filter(c => c?.password);
-        let fileKey = null;
+        let fileVault = null;
         if (withPassword.length) {
-          try { vaultLib.validateRecord(file.vault); } catch { throw ctx.error(400, 'file_no_vault'); }
-          if (!file.vault) throw ctx.error(400, 'file_no_vault');
-          fileKey = await vaultLib.openVault(file.vault, password);
-          if (!fileKey) { registerFailure(); throw ctx.error(401, 'wrong_file_password'); }
+          if (!vault.isRecord(file.vault)) throw ctx.error(400, 'file_no_vault');
+          fileVault = await vault.openForeign(file.vault, password);
+          if (!fileVault) throw ctx.error(401, 'wrong_file_password');
         }
         let converted;
         try {
           converted = incoming.map(c => {
             const conn = pick(c || {}, CONNECTION_FIELDS);
-            conn.password = c?.password ? vaultLib.encrypt(key, vaultLib.decrypt(fileKey, c.password)) : null;
+            conn.password = c?.password ? vault.encrypt(fileVault.decrypt(c.password)) : null;
             return conn;
           });
         } catch { throw ctx.error(400, 'file_passwords_unreadable'); }
@@ -1255,30 +1108,9 @@ module.exports = function createDbClient(ctx) {
         closePools();
         res.json({ ok: true, imported: mode === 'replace' ? converted.length : next.length - current.length, skipped: mode === 'replace' ? 0 : converted.filter(c => ids.has(c.id)).length });
       },
-
-      // Password dimenticata: si cancellano vault e password salvate (le connessioni restano)
-      vaultReset(req, res) {
-        if (req.body.confirm !== 'RESET') throw ctx.error(400, 'confirm_missing');
-        const cleared = connections().map(c => ({ ...c, password: null }));
-        // prima i segreti delle altre estensioni: senza vault la config non li accetterebbe più
-        for (const c of vaultConsumers) {
-          try { c.reset(); } catch (e) { ctx.log.error('reset dei segreti di un\'altra estensione fallito:', e.message); }
-        }
-        ctx.config.update({ dbConnections: cleared, vault: null });
-        lock();
-        res.json({ ok: true, state: 'uninitialized' });
-      },
-
-      vaultSettings(req, res) {
-        const record = vault();
-        if (!record) throw ctx.error(409, 'vault_missing');
-        const minutes = Number(req.body.lockAfterMinutes);
-        ctx.config.set('vault', { ...record, lockAfterMinutes: minutes });
-        res.json({ ok: true, lockAfterMinutes: minutes });
-      },
     },
 
-    services: { decryptPassword, vault: sharedVault },
+    services: { decryptPassword },
 
     // Strumenti MCP: solo letture e solo con il vault sbloccato dall'interfaccia
     // (l'agente non riceve né può inserire la master password)

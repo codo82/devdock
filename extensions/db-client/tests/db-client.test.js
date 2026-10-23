@@ -16,42 +16,12 @@ test('estensione db-client caricata con mysql2 dalla workspace', async () => {
 });
 
 const fs = require('fs');
-const vaultLib = require('../vault');
+const vaultLib = require('../../../lib/vault-crypto');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-test('vault: creazione, blocco, sblocco e tentativi ripetuti', async () => {
-  const status = async () => (await srv.request('GET', '/api/ext/db-client/vault')).json;
-  assert.equal((await status()).state, 'uninitialized');
-
-  let r = await srv.request('POST', '/api/ext/db-client/vault/init', { body: { password: 'corta' } });
-  assert.equal(r.status, 400);
-  r = await srv.request('POST', '/api/ext/db-client/vault/init', { body: { password: 'master-password-1' } });
-  assert.deepEqual(r.json, { ok: true, state: 'unlocked' });
-  assert.equal((await srv.request('POST', '/api/ext/db-client/vault/init', { body: { password: 'master-password-1' } })).status, 409);
-
-  const record = srv.readConfig().vault;
-  assert.deepEqual(Object.keys(record).sort(), ['kdf', 'verifier', 'version']);
-  assert.equal(record.kdf.alg, 'scrypt');
-  assert.doesNotMatch(fs.readFileSync(srv.configPath, 'utf8'), /master-password-1/);
-
-  await srv.request('POST', '/api/ext/db-client/vault/lock', { body: {} });
-  assert.equal((await status()).state, 'locked');
-
-  // dal terzo errore scatta l'attesa (1s)
-  for (let i = 0; i < 3; i++) {
-    assert.equal((await srv.request('POST', '/api/ext/db-client/vault/unlock', { body: { password: 'sbagliata-' + i } })).status, 401);
-  }
-  r = await srv.request('POST', '/api/ext/db-client/vault/unlock', { body: { password: 'master-password-1' } });
-  assert.equal(r.status, 429);
-  assert.ok(Number(r.headers['retry-after']) >= 1);
-  await sleep(1100);
-  r = await srv.request('POST', '/api/ext/db-client/vault/unlock', { body: { password: 'master-password-1' } });
-  assert.equal(r.status, 200);
-  assert.equal((await status()).state, 'unlocked');
-});
-
-test('vault: cambio della master password ri-cifra tutte le password; reset le cancella', async () => {
-  // una connessione con password cifrata con la chiave attuale
+test('vault del core: le password delle connessioni già salvate restano leggibili, il cambio le ri-cifra, il reset le cancella', async () => {
+  await srv.request('POST', '/api/core/vault/init', { body: { password: 'master-password-1' } });
+  // una connessione con password cifrata con la chiave attuale, come la salvavano le versioni 1.x
   const cfg = srv.readConfig();
   const key = await vaultLib.openVault(cfg.vault, 'master-password-1');
   cfg.dbConnections = [
@@ -60,10 +30,7 @@ test('vault: cambio della master password ri-cifra tutte le password; reset le c
   ];
   fs.writeFileSync(srv.configPath, JSON.stringify(cfg));
 
-  let r = await srv.request('POST', '/api/ext/db-client/vault/change', { body: { oldPassword: 'errata-errata', newPassword: 'nuova-master-2' } });
-  assert.equal(r.status, 401);
-  await sleep(1100); // attesa dovuta al tentativo errato precedente
-  r = await srv.request('POST', '/api/ext/db-client/vault/change', { body: { oldPassword: 'master-password-1', newPassword: 'nuova-master-2' } });
+  let r = await srv.request('POST', '/api/core/vault/change', { body: { oldPassword: 'master-password-1', newPassword: 'nuova-master-2' } });
   assert.deepEqual(r.json, { ok: true, reencrypted: 1 });
 
   const after = srv.readConfig();
@@ -72,23 +39,12 @@ test('vault: cambio della master password ri-cifra tutte le password; reset le c
   assert.equal(vaultLib.decrypt(newKey, after.dbConnections[0].password), 'segreto-db-1');
   assert.doesNotMatch(fs.readFileSync(srv.configPath, 'utf8'), /segreto-db-1|nuova-master-2/);
 
-  assert.equal((await srv.request('POST', '/api/ext/db-client/vault/reset', { body: {} })).status, 400);
-  r = await srv.request('POST', '/api/ext/db-client/vault/reset', { body: { confirm: 'RESET' } });
+  assert.equal((await srv.request('POST', '/api/core/vault/reset', { body: {} })).status, 400);
+  r = await srv.request('POST', '/api/core/vault/reset', { body: { confirm: 'RESET' } });
   assert.equal(r.json.state, 'uninitialized');
   const reset = srv.readConfig();
   assert.equal(reset.vault, null);
   assert.deepEqual(reset.dbConnections.map(c => c.password), [null, null]);
-});
-
-test('vault: timeout di inattività configurabile e validato', async () => {
-  await srv.request('POST', '/api/ext/db-client/vault/init', { body: { password: 'master-password-3' } });
-  assert.equal((await srv.request('POST', '/api/ext/db-client/vault/settings', { body: { lockAfterMinutes: 0 } })).status, 400);
-  const r = await srv.request('POST', '/api/ext/db-client/vault/settings', { body: { lockAfterMinutes: 15 } });
-  assert.equal(r.json.lockAfterMinutes, 15);
-  assert.equal((await srv.request('GET', '/api/ext/db-client/vault')).json.lockAfterMinutes, 15);
-  // il cambio di password conserva l'impostazione
-  await srv.request('POST', '/api/ext/db-client/vault/change', { body: { oldPassword: 'master-password-3', newPassword: 'master-password-4' } });
-  assert.equal(srv.readConfig().vault.lockAfterMinutes, 15);
 });
 
 // ---- connessioni (con un MySQL usa e getta, se mysqld è installato) ----
@@ -101,7 +57,7 @@ test('connessioni: CRUD, password mai esposte, prova di connessione', async t =>
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer({ groups: [], servers: [{ key: 'bastion', label: 'Bastion', port: 46010, remote: 'db:3306', alias: 'devdock-test.invalid' }], projects: [] });
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' || m === 'PUT' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' || m === 'PUT' ? {} : undefined) });
     const conn = { id: 'locale', label: 'MySQL locale', host: '127.0.0.1', port: mysqlDb.port, database: 'app', user: 'devdock', password: 'devdock-pass' };
 
     // senza vault non si salvano password
@@ -168,7 +124,7 @@ test('connessioni via tunnel non disponibili se l\'estensione tunnels non è att
   try {
     const ext = (await s.request('GET', '/api/core/extensions')).json.find(e => e.code === 'db-client');
     assert.equal(ext.state, 'warning');
-    await s.request('POST', '/api/ext/db-client/vault/init', { body: { password: 'master-password-db' } });
+    await s.request('POST', '/api/core/vault/init', { body: { password: 'master-password-db' } });
     assert.equal((await s.request('GET', '/api/ext/db-client/connections')).json.tunnelsAvailable, false);
     const r = await s.request('POST', '/api/ext/db-client/connections', { body: { id: 'x', label: 'X', tunnel: 'qualsiasi', user: 'u' } });
     assert.equal(r.status, 400);
@@ -183,7 +139,7 @@ test('query: letture subito, scritture solo con la conferma della stessa istruzi
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer();
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' || m === 'PUT' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' || m === 'PUT' ? {} : undefined) });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     const base = { label: 'L', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass', database: 'app' };
     await api('POST', '/connections', { ...base, id: 'rw' });
@@ -271,7 +227,7 @@ test('schema: tabelle e struttura di una tabella', async t => {
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer();
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass' });
     // tabella con indice e chiave esterna (DDL confermato)
@@ -304,7 +260,7 @@ test('anteprima dati: pagine, ricerca, filtri, ordinamento con parametri', async
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer();
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass' });
     // 60 righe in più (INSERT confermato)
@@ -347,7 +303,7 @@ test('righe: insert, update e delete generati dal server e solo dopo conferma', 
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer();
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     const base = { label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass' };
     await api('POST', '/connections', { ...base, id: 'c' });
@@ -432,7 +388,7 @@ test('export CSV, JSON e SQL di tabelle (con filtri) e di SELECT', async t => {
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer();
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass', database: 'app' });
     // un valore con virgolette, virgola e a capo
@@ -488,7 +444,7 @@ test('creazione tabella da definizione strutturata, solo dopo conferma', async t
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer();
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     const base = { label: 'C', host: '127.0.0.1', port: mysqlDb.port, user: 'devdock', password: 'devdock-pass' };
     await api('POST', '/connections', { ...base, id: 'c' });
@@ -546,8 +502,8 @@ test('import di connessioni cifrate con un\'altra master password', async () => 
   const a = await startServer();
   const b = await startServer();
   try {
-    const apiA = (m, p, body) => a.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
-    const apiB = (m, p, body) => b.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const apiA = (m, p, body) => a.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const apiB = (m, p, body) => b.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await apiA('POST', '/vault/init', { password: 'master-di-A-123' });
     await apiA('POST', '/connections', { id: 'prod', label: 'Prod', host: 'db.local', port: 3306, user: 'u', password: 'segreto-prod' });
     const exported = (await a.request('GET', '/api/core/config/export?name=x&sections=dbConnections,vault')).json;
@@ -594,8 +550,8 @@ test('cartelle delle connessioni: creazione, spostamento, eliminazione, import',
   const a = await startServer();
   const b = await startServer();
   try {
-    const apiA = (m, p, body) => a.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
-    const apiB = (m, p, body) => b.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const apiA = (m, p, body) => a.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const apiB = (m, p, body) => b.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await apiA('POST', '/vault/init', { password: 'master-di-A-123' });
     assert.equal((await apiA('POST', '/folders', { label: ' ' })).json.code, 'db-client.folder_label_required');
     const f = (await apiA('POST', '/folders', { label: ' Produzione ' })).json;
@@ -673,7 +629,7 @@ test('database predefinito inesistente: l\'elenco dei database arriva comunque',
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer();
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     await api('POST', '/connections', { id: 'c', label: 'C', host: '127.0.0.1', port: mysqlDb.port, database: 'nonesiste', user: 'devdock', password: 'devdock-pass' });
     let r = await api('GET', '/connections/c/databases');
@@ -694,7 +650,7 @@ test('colonne JSON: mostrate come testo JSON, modificabili, esportate correttame
   if (!mysqlDb) return t.skip('mysqld non installato');
   const s = await startServer();
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     const confirmed = async (p, body) => {
       const first = await api('POST', p, body);
       return first.status === 428 ? api('POST', p, { ...body, confirm: first.json.token }) : first;

@@ -23,8 +23,7 @@
   ],
   "config": [
     "dbConnections",
-    "dbFolders",
-    "vault"
+    "dbFolders"
   ],
   "export": [
     {
@@ -196,41 +195,6 @@
         "method": "DELETE",
         "path": "/connections/:id/migrations",
         "handler": "unlinkMigrations"
-      },
-      {
-        "method": "GET",
-        "path": "/vault",
-        "handler": "vaultStatus"
-      },
-      {
-        "method": "POST",
-        "path": "/vault/init",
-        "handler": "vaultInit"
-      },
-      {
-        "method": "POST",
-        "path": "/vault/unlock",
-        "handler": "vaultUnlock"
-      },
-      {
-        "method": "POST",
-        "path": "/vault/lock",
-        "handler": "vaultLock"
-      },
-      {
-        "method": "POST",
-        "path": "/vault/change",
-        "handler": "vaultChange"
-      },
-      {
-        "method": "POST",
-        "path": "/vault/reset",
-        "handler": "vaultReset"
-      },
-      {
-        "method": "POST",
-        "path": "/vault/settings",
-        "handler": "vaultSettings"
       }
     ]
   },

@@ -76,7 +76,6 @@ function createAuth({ ctx, vault, pageText, varsOf }) {
 
   const secret = box => {
     if (!box) return '';
-    if (!vault) throw ctx.error(400, 'vault_unavailable');
     return vault.decrypt(box);
   };
 

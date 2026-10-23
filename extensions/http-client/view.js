@@ -14,7 +14,7 @@ export default {
     const byId = id => document.getElementById(id);
     const val = id => byId(id)?.value ?? '';
 
-    let info = { vault: 'unavailable', methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], maxAfterSteps: 5 };
+    let info = { vault: 'locked', methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], maxAfterSteps: 5 };
     let sections = [];
     let projects = [];
     let active = null;      // { section, request } (id)
@@ -209,39 +209,14 @@ export default {
 
     // ---- invio e salvataggio ----
 
-    // Esegue fn; se il vault del DB client è bloccato chiede la master password e riprova
+    // Esegue fn; se il vault della master password è bloccato (o da creare) lo chiede e riprova
     async function withVault(fn) {
       try { return await fn(); } catch (e) {
-        if (e.code === 'db-client.vault_locked') { if (await unlockVault()) return fn(); throw Object.assign(new Error(t('vault.stillLocked')), { handled: true }); }
-        if (e.code === 'db-client.vault_missing') throw Object.assign(new Error(t('vault.missing')), { handled: false });
-        throw e;
+        if (!ctx.vault.isVaultError(e)) throw e;
+        if (await ctx.vault.ensure()) return fn();
+        throw Object.assign(new Error(t('vault.stillLocked')), { handled: true });
       }
     }
-
-    function unlockVault() {
-      return new Promise(resolve => {
-        let done = false;
-        const finish = ok => { if (!done) { done = true; resolve(ok); } };
-        openModal(t('vault.title'), `
-          <p class="hc-muted">${esc(t('vault.text'))}</p>
-          <div class="form-row"><input class="form-input" type="password" id="f_hc_vault" autocomplete="off"
-            onkeydown="if(event.key==='Enter')Ext['http-client'].vaultSubmit()"></div>
-          <div class="hc-error" id="f_hc_vault_err"></div>`,
-          `<button class="btn btn-ghost" onclick="Ext['http-client'].vaultCancel()">${esc(t('core.action.cancel'))}</button>
-           <button class="btn btn-primary" onclick="Ext['http-client'].vaultSubmit()">${esc(t('vault.unlock'))}</button>`);
-        setTimeout(() => byId('f_hc_vault')?.focus(), 0);
-        vaultPrompt = {
-          async submit() {
-            try {
-              await ctx.apiFor('db-client').post('/vault/unlock', { password: val('f_hc_vault') });
-              closeModal(); finish(true);
-            } catch (e) { byId('f_hc_vault_err').textContent = e.message; }
-          },
-          cancel() { closeModal(); finish(false); },
-        };
-      });
-    }
-    let vaultPrompt = null;
 
     async function send() {
       if (!draft || sending) return;
@@ -443,19 +418,18 @@ export default {
     function renderUserForm(uid) {
       const u = userDraft;
       const a = u.auth;
-      const vaultNote = info.vault === 'unavailable' ? `<p class="hc-warn">${esc(t('userDlg.noVault'))}</p>` : '';
       const secretInput = (id, has) => `<input class="form-input" type="password" id="${id}" autocomplete="new-password" placeholder="${esc(t(has ? 'userDlg.secretKeep' : 'userDlg.secretNew'))}">
         ${has ? `<label class="hc-check"><input type="checkbox" id="${id}_clear"> ${esc(t('userDlg.secretRemove'))}</label>` : ''}`;
       const field = (label, html, hint) => `<div class="form-row"><label>${esc(label)}</label>${html}${hint ? `<p class="hc-muted">${esc(hint)}</p>` : ''}</div>`;
       const input = (id, value, extra = '') => `<input class="form-input" id="${id}" value="${esc(value ?? '')}" spellcheck="false" ${extra}>`;
       let fields = '';
       if (a.type === 'basic') {
-        fields = vaultNote + field(t('userDlg.username'), input('f_u_username', a.username))
+        fields = field(t('userDlg.username'), input('f_u_username', a.username))
           + field(t('userDlg.password'), secretInput('f_u_password', a.hasPassword), t('userDlg.secretHint'));
       } else if (a.type === 'manual') {
         fields = `<p class="hc-muted">${esc(t('userDlg.manualHint'))}</p>`;
       } else if (a.type === 'login') {
-        fields = vaultNote + `<div class="hc-inline">
+        fields = `<div class="hc-inline">
             <select class="form-input hc-method" id="f_u_method">${['POST', 'GET', 'PUT', 'PATCH'].map(m => `<option ${m === (a.method || 'POST') ? 'selected' : ''}>${m}</option>`).join('')}</select>
             ${input('f_u_url', a.url || '{{baseUrl}}/auth/login', 'placeholder="{{baseUrl}}/auth/login"')}</div>`
           + field(t('userDlg.contentType'), `<select class="form-input" id="f_u_ctype">${['json', 'form', 'text'].map(c => `<option value="${c}" ${c === (a.contentType || 'json') ? 'selected' : ''}>${esc(t(`userDlg.ctype.${c}`))}</option>`).join('')}</select>`)
@@ -469,7 +443,7 @@ export default {
           + `<div class="hc-grid2">${field(t('userDlg.authEndpoint'), input('f_u_authep', a.authorizationEndpoint))}${field(t('userDlg.tokenEndpoint'), input('f_u_tokenep', a.tokenEndpoint))}</div>`
           + `<div class="hc-grid2">${field(t('userDlg.clientId'), input('f_u_client', a.clientId))}${field(t('userDlg.scope'), input('f_u_scope', a.scope ?? 'openid'))}</div>`
           + field(t('userDlg.flow'), `<select class="form-input" id="f_u_flow" onchange="Ext['http-client'].userTypeChanged()">${['pkce', 'code', 'implicit'].map(f => `<option value="${f}" ${f === (a.flow || 'pkce') ? 'selected' : ''}>${esc(t(`userDlg.flows.${f}`))}</option>`).join('')}</select>`)
-          + (a.flow === 'code' ? vaultNote + field(t('userDlg.clientSecret'), secretInput('f_u_secret', a.hasClientSecret)) : '')
+          + (a.flow === 'code' ? field(t('userDlg.clientSecret'), secretInput('f_u_secret', a.hasClientSecret)) : '')
           + `<div class="hc-grid2">${field(t('userDlg.redirectUri'), input('f_u_redirect', a.redirectUri || 'http://localhost:8765/callback'), t('userDlg.redirectHint'))}
              ${field(t('userDlg.container'), input('f_u_container', a.container, `placeholder="${esc(t('userDlg.containerPlaceholder'))}"`), t('userDlg.containerHint'))}</div>`;
       }
@@ -808,8 +782,6 @@ export default {
       routes: routesDialog,
       importRoute,
       confirmImport,
-      vaultSubmit() { vaultPrompt?.submit(); },
-      vaultCancel() { vaultPrompt?.cancel(); },
     });
 
     ctx.bus.on('core:projects-changed', load);

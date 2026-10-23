@@ -20,7 +20,7 @@ test('database: solo con il vault sbloccato dall\'interfaccia, solo letture, nie
   const mysqlDb = await startMysql();
   if (!mysqlDb) return t.skip('mysqld non installato');
   try {
-    const api = (m, p, body) => srv.request(m, `/api/ext/db-client${p}`, { body });
+    const api = (m, p, body) => srv.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     await api('POST', '/connections', { id: 'c', label: 'Locale', host: '127.0.0.1', port: mysqlDb.port, database: 'app', user: 'devdock', password: 'devdock-pass' });
 

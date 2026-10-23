@@ -11,7 +11,7 @@ const path = require('path');
 const { startServer, tmpDir } = require('../../../lib/testkit');
 const { discover, stripComments } = require('../discover');
 const { jwtExpiry } = require('../auth');
-const vaultLib = require('../../db-client/vault');
+const vaultLib = require('../../../lib/vault-crypto');
 
 const freePort = () => new Promise(resolve => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
@@ -286,8 +286,8 @@ test('nessuna autorizzazione e token incollato con scadenza', async () => {
 
 test('segreti: senza master password rifiutati, poi cifrati e mai in chiaro nel config', async () => {
   let r = await call('POST', userBase(), { label: 'Basic', auth: { type: 'basic', username: 'mario', password: 'pw-segreta' } });
-  assert.deepEqual([r.status, r.json.code], [423, 'db-client.vault_missing']);
-  await srv.request('POST', '/api/ext/db-client/vault/init', { body: { password: 'master-password-1' } });
+  assert.deepEqual([r.status, r.json.code], [423, 'core.vault_missing']);
+  await srv.request('POST', '/api/core/vault/init', { body: { password: 'master-password-1' } });
   r = await call('POST', userBase(), { label: 'Basic', auth: { type: 'basic', username: 'mario', password: 'pw-segreta' } });
   assert.equal(r.status, 200, r.text);
   assert.equal(r.json.auth.hasPassword, true);
@@ -300,11 +300,11 @@ test('segreti: senza master password rifiutati, poi cifrati e mai in chiaro nel 
   r = await sendAs(basicId, '{{baseUrl}}/echo');
   assert.equal(JSON.parse(r.json.body).headers.authorization, `Basic ${Buffer.from('mario:pw-segreta').toString('base64')}`);
   assert.doesNotMatch(fs.readFileSync(srv.configPath, 'utf8'), /pw-segreta/);
-  // vault bloccato: 423 con il codice del DB client
-  await srv.request('POST', '/api/ext/db-client/vault/lock', { body: {} });
+  // vault bloccato: 423 con il codice del core
+  await srv.request('POST', '/api/core/vault/lock', { body: {} });
   r = await sendAs(basicId, '{{baseUrl}}/echo');
-  assert.deepEqual([r.status, r.json.code], [423, 'db-client.vault_locked']);
-  await srv.request('POST', '/api/ext/db-client/vault/unlock', { body: { password: 'master-password-1' } });
+  assert.deepEqual([r.status, r.json.code], [423, 'core.vault_locked']);
+  await srv.request('POST', '/api/core/vault/unlock', { body: { password: 'master-password-1' } });
 });
 
 let loginId;
@@ -411,13 +411,13 @@ test('OAuth: PKCE con login nel browser che sblocca la richiesta in attesa, refr
 });
 
 test('cambio della master password: i segreti delle utenze vengono ri-cifrati; reset: cancellati', async () => {
-  let r = await srv.request('POST', '/api/ext/db-client/vault/change', { body: { oldPassword: 'master-password-1', newPassword: 'nuova-master-2' } });
+  let r = await srv.request('POST', '/api/core/vault/change', { body: { oldPassword: 'master-password-1', newPassword: 'nuova-master-2' } });
   assert.equal(r.status, 200, r.text + srv.output());
   const cfg = srv.readConfig();
   const key = await vaultLib.openVault(cfg.vault, 'nuova-master-2');
   const basic = cfg.httpSections[0].userTypes.find(u => u.auth.type === 'basic');
   assert.equal(vaultLib.decrypt(key, basic.auth.password), 'pw-segreta');
-  r = await srv.request('POST', '/api/ext/db-client/vault/reset', { body: { confirm: 'RESET' } });
+  r = await srv.request('POST', '/api/core/vault/reset', { body: { confirm: 'RESET' } });
   assert.equal(r.status, 200);
   const after = srv.readConfig().httpSections[0].userTypes;
   assert.ok(after.every(u => !u.auth.password && !u.auth.clientSecret));

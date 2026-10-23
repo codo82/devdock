@@ -39,6 +39,8 @@
   .section-tab:last-child{border-inline-end:none}
   .section-tab:hover{background:var(--surface2);color:var(--text)}
   .section-tab.tab-dragging{opacity:.4}
+  .vault-text{font-size:12px;color:var(--muted);line-height:1.5}
+  .vault-error{min-height:16px;font-size:12px;color:var(--danger)}
   .section-tab-icon{font-size:16px}
   .section-tab-badge{font-family:var(--font);font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);transition:background .15s,color .15s,border-color .15s}
 

@@ -1,5 +1,8 @@
 {
-  "name": { "it": "HTTP", "en": "HTTP" },
+  "name": {
+    "it": "HTTP",
+    "en": "HTTP"
+  },
   "code": "http-client",
   "version": "1.0.0",
   "devdock": "^2.0",
@@ -11,43 +14,124 @@
   "icon": "📮",
   "position": "tab",
   "order": 38,
-  "dependencies": [
-    { "code": "db-client", "required": false }
+  "config": [
+    "httpSections"
   ],
-  "config": ["httpSections"],
   "export": [
     {
       "id": "sections",
-      "label": { "it": "Richieste HTTP", "en": "HTTP requests" },
+      "label": {
+        "it": "Richieste HTTP",
+        "en": "HTTP requests"
+      },
       "description": {
         "it": "Sezioni, richieste, variabili e tipologie di utenza (i segreti restano cifrati: serve la stessa master password)",
         "en": "Sections, requests, variables and user types (secrets stay encrypted: the same master password is needed)"
       },
-      "sections": ["httpSections"]
+      "sections": [
+        "httpSections",
+        "vault"
+      ]
     }
   ],
   "backend": {
     "module": "server.js",
     "routes": [
-      { "method": "GET",    "path": "/info",                                 "handler": "info" },
-      { "method": "GET",    "path": "/sections",                             "handler": "listSections" },
-      { "method": "POST",   "path": "/sections",                             "handler": "createSection" },
-      { "method": "PUT",    "path": "/sections/:id",                         "handler": "updateSection" },
-      { "method": "DELETE", "path": "/sections/:id",                         "handler": "deleteSection" },
-      { "method": "GET",    "path": "/base-url",                             "handler": "suggestBaseUrl" },
-      { "method": "POST",   "path": "/sections/:id/requests",                "handler": "createRequest" },
-      { "method": "PUT",    "path": "/sections/:id/requests/:rid",           "handler": "updateRequest" },
-      { "method": "DELETE", "path": "/sections/:id/requests/:rid",           "handler": "deleteRequest" },
-      { "method": "POST",   "path": "/sections/:id/users",                   "handler": "createUserType" },
-      { "method": "PUT",    "path": "/sections/:id/users/:uid",              "handler": "updateUserType" },
-      { "method": "DELETE", "path": "/sections/:id/users/:uid",              "handler": "deleteUserType" },
-      { "method": "GET",    "path": "/sections/:id/auth",                    "handler": "authState" },
-      { "method": "POST",   "path": "/sections/:id/users/:uid/token",        "handler": "setToken" },
-      { "method": "DELETE", "path": "/sections/:id/users/:uid/token",        "handler": "forgetToken" },
-      { "method": "POST",   "path": "/sections/:id/users/:uid/login",        "handler": "login" },
-      { "method": "GET",    "path": "/sections/:id/routes",                  "handler": "discoverRoutes" },
-      { "method": "POST",   "path": "/oidc-discovery",                       "handler": "oidcDiscovery" },
-      { "method": "POST",   "path": "/send",                                 "handler": "send" }
+      {
+        "method": "GET",
+        "path": "/info",
+        "handler": "info"
+      },
+      {
+        "method": "GET",
+        "path": "/sections",
+        "handler": "listSections"
+      },
+      {
+        "method": "POST",
+        "path": "/sections",
+        "handler": "createSection"
+      },
+      {
+        "method": "PUT",
+        "path": "/sections/:id",
+        "handler": "updateSection"
+      },
+      {
+        "method": "DELETE",
+        "path": "/sections/:id",
+        "handler": "deleteSection"
+      },
+      {
+        "method": "GET",
+        "path": "/base-url",
+        "handler": "suggestBaseUrl"
+      },
+      {
+        "method": "POST",
+        "path": "/sections/:id/requests",
+        "handler": "createRequest"
+      },
+      {
+        "method": "PUT",
+        "path": "/sections/:id/requests/:rid",
+        "handler": "updateRequest"
+      },
+      {
+        "method": "DELETE",
+        "path": "/sections/:id/requests/:rid",
+        "handler": "deleteRequest"
+      },
+      {
+        "method": "POST",
+        "path": "/sections/:id/users",
+        "handler": "createUserType"
+      },
+      {
+        "method": "PUT",
+        "path": "/sections/:id/users/:uid",
+        "handler": "updateUserType"
+      },
+      {
+        "method": "DELETE",
+        "path": "/sections/:id/users/:uid",
+        "handler": "deleteUserType"
+      },
+      {
+        "method": "GET",
+        "path": "/sections/:id/auth",
+        "handler": "authState"
+      },
+      {
+        "method": "POST",
+        "path": "/sections/:id/users/:uid/token",
+        "handler": "setToken"
+      },
+      {
+        "method": "DELETE",
+        "path": "/sections/:id/users/:uid/token",
+        "handler": "forgetToken"
+      },
+      {
+        "method": "POST",
+        "path": "/sections/:id/users/:uid/login",
+        "handler": "login"
+      },
+      {
+        "method": "GET",
+        "path": "/sections/:id/routes",
+        "handler": "discoverRoutes"
+      },
+      {
+        "method": "POST",
+        "path": "/oidc-discovery",
+        "handler": "oidcDiscovery"
+      },
+      {
+        "method": "POST",
+        "path": "/send",
+        "handler": "send"
+      }
     ]
   },
   "frontend": {

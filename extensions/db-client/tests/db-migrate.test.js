@@ -18,7 +18,7 @@ test('migration: file nel repository, DDL, errori e schema letto di nuovo', asyn
   fs.writeFileSync(path.join(dir, '001_clienti_create.sql'), '-- già applicata\n');
   const s = await startServer({ groups: [], servers: [], projects: [{ id: 'app', label: 'App', path: repo }] });
   try {
-    const api = (m, p, body) => s.request(m, `/api/ext/db-client${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
+    const api = (m, p, body) => s.request(m, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, { body: body ?? (m === 'POST' ? {} : undefined) });
     await api('POST', '/vault/init', { password: 'master-password-db' });
     await api('POST', '/connections', { id: 'c', label: 'Locale', host: '127.0.0.1', port: mysqlDb.port, database: 'app', user: 'devdock', password: 'devdock-pass' });
     assert.equal((await api('PUT', '/connections/c/migrations', { repo: 'app', dir: 'db/migrations' })).status, 200);

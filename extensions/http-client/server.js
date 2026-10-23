@@ -25,8 +25,7 @@ const isStr = (v, max) => typeof v === 'string' && v.length <= max;
 
 module.exports = function createHttpClient(ctx) {
   const { KEY_RE, isText } = ctx.lib.validate;
-  const db = ctx.require('db-client'); // opzionale: senza, niente segreti (basic, login, client secret)
-  const vault = db?.vault || null;
+  const vault = ctx.vault; // vault della master password del core
 
   const sections = () => ctx.config.get('httpSections');
   const sectionOr404 = id => {
@@ -90,7 +89,7 @@ module.exports = function createHttpClient(ctx) {
     if (r.userType != null && !users.some(u => u.id === r.userType)) throw bad('user_type');
   }
 
-  const isBox = v => (vault ? vault.isBox(v) : !!v && typeof v === 'object' && ['iv', 'tag', 'data'].every(k => typeof v[k] === 'string'));
+  const isBox = v => vault.isBox(v);
 
   function validateUser(u) {
     const bad = field => ctx.error.config(`user_${field}`, { id: String(u?.id ?? '') });
@@ -183,8 +182,9 @@ module.exports = function createHttpClient(ctx) {
     },
   };
 
-  // Cambio della master password: i segreti delle utenze vengono ri-cifrati; reset: cancellati
-  const mapSecrets = fn => sections().map(s => ({
+  // Cambio della master password: i segreti delle utenze vengono ri-cifrati (salvati insieme al
+  // nuovo vault); reset: cancellati
+  const mapSecrets = (list, fn) => list.map(s => ({
     ...s,
     userTypes: (s.userTypes || []).map(u => {
       const a = { ...u.auth };
@@ -192,12 +192,13 @@ module.exports = function createHttpClient(ctx) {
       return { ...u, auth: a };
     }),
   }));
-  vault?.register({
-    rekey(reencrypt) {
-      const next = mapSecrets(reencrypt);
-      return () => save(next);
+  vault.register({
+    rekey(reencrypt, cfg) {
+      let count = 0;
+      const next = mapSecrets(cfg.httpSections || [], box => { count++; return reencrypt(box); });
+      return { sections: { httpSections: next }, count };
     },
-    reset() { save(mapSecrets(() => null)); },
+    reset: cfg => ({ httpSections: mapSecrets(cfg.httpSections || [], () => null) }),
   });
 
   // ---- dati per il frontend: mai i segreti, solo se ci sono ----
@@ -245,7 +246,6 @@ module.exports = function createHttpClient(ctx) {
   function secretField(input, current) {
     if (input === null) return null;
     if (typeof input === 'string' && input !== '') {
-      if (!vault) throw ctx.error(400, 'vault_unavailable');
       return vault.encrypt(input);
     }
     return current ?? null;
@@ -326,7 +326,7 @@ module.exports = function createHttpClient(ctx) {
 
     handlers: {
       info(req, res) {
-        res.json({ vault: vault ? vault.state() : 'unavailable', methods: METHODS, maxResponseBytes: MAX_RESPONSE_BYTES, maxAfterSteps: MAX_AFTER_STEPS });
+        res.json({ vault: vault.state(), methods: METHODS, maxResponseBytes: MAX_RESPONSE_BYTES, maxAfterSteps: MAX_AFTER_STEPS });
       },
 
       listSections(req, res) { res.json(sections().map(publicSection)); },
@@ -422,7 +422,7 @@ module.exports = function createHttpClient(ctx) {
 
       authState(req, res) {
         const s = sectionOr404(req.params.id);
-        res.json({ vault: vault ? vault.state() : 'unavailable', users: (s.userTypes || []).map(u => auth.state(s, u)) });
+        res.json({ vault: vault.state(), users: (s.userTypes || []).map(u => auth.state(s, u)) });
       },
 
       // Token incollato a mano { token, expiresAt? (ISO) }

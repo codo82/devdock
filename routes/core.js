@@ -8,6 +8,7 @@ const { ConfigError, listSections, exportConfig, importConfig } = require('../li
 const { errorBody } = require('../lib/errors');
 const projects = require('../lib/projects');
 const layout = require('../lib/layout');
+const vault = require('../lib/vault');
 
 const NAME_RE = /^[a-z0-9-]{1,40}$/;
 
@@ -56,6 +57,22 @@ module.exports = function coreRoutes(extensions) {
   router.get('/layout', (req, res) => { res.json(layout.get()); });
   router.put('/layout/tabs', (req, res) => { res.json(layout.setTabs(req.body?.tabs, tabCodes())); });
   router.delete('/layout/tabs', (req, res) => { res.json(layout.resetTabs()); });
+
+  // Vault della master password (segreti di db-client, http-client e delle altre estensioni)
+  router.get('/vault', (req, res) => { res.json(vault.status()); });
+  // errori (anche asincroni) all'error handler del core; Retry-After dopo troppi tentativi
+  const vaultCall = fn => (req, res, next) => {
+    Promise.resolve().then(() => fn(req.body || {})).then(r => res.json(r)).catch(e => {
+      if (e.extra?.retryAfter) res.setHeader('Retry-After', String(e.extra.retryAfter));
+      next(e);
+    });
+  };
+  router.post('/vault/init', vaultCall(b => vault.init(b.password)));
+  router.post('/vault/unlock', vaultCall(b => vault.unlock(b.password)));
+  router.post('/vault/lock', vaultCall(() => { vault.lock(); return { ok: true, state: vault.state() }; }));
+  router.post('/vault/change', vaultCall(b => vault.change(b.oldPassword, b.newPassword)));
+  router.post('/vault/reset', vaultCall(b => vault.reset(b.confirm)));
+  router.post('/vault/settings', vaultCall(b => vault.settings(b.lockAfterMinutes)));
 
   // ?refresh=1 ricontrolla gli strumenti (es. dopo un'installazione)
   router.get('/system', (req, res) => {

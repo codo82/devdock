@@ -7,10 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [Unreleased]
 
 ### Breaking
+- Vault API moved to the core: `/api/ext/db-client/vault/*` → `/api/core/vault/*`, error codes `db-client.vault_locked` / `db-client.vault_missing` → `core.vault_locked` / `core.vault_missing`, and the `db-client.vault` service is replaced by `ctx.vault`.
 - Extension manifests must declare `version` (SemVer) and `devdock`, the DevDock versions they work with as an npm range (`"devdock": "^2.0"`); the loader disables an extension without them or whose range does not include the running core, and says why. `docs/EXTENSIONS.md` is now the public, versioned API for extensions: breaking changes come with a new major version and are marked here.
 
 ### Changed
 - Every extension keeps its tests in `extensions/<code>/tests/`; the core suite in `tests/` uses only fixture extensions, so it stays green without any built-in extension. The test helpers became the core **test kit** (`lib/testkit.js`, `require('devdock/testkit')` for external extensions) with `startServer`, `mcpClient`, fixture helpers and `i18nProblems(extDir)` for the translation checks of a single extension. `tests/helpers.js` was removed.
+- The master password vault moved from the `db-client` extension to the core: same `vault` section of `config.json` and same encryption, so the passwords saved by earlier versions keep working. Extensions use it through `ctx.vault` (backend: `encrypt`, `decrypt`, `register` for re-encryption and reset; frontend: `ensure()` asks for the password, or to create it, when needed); changing the master password re-encrypts the secrets of every extension in a single write of `config.json`. `http-client` no longer depends on `db-client`.
 
 ## [1.23.0] - 2026-10-23
 

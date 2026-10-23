@@ -12,18 +12,17 @@ Every feature that can be added or removed is an **extension**: a folder under `
 | `pm2` | header | 10 | — | — | `npm` (optional) | no |
 | `npm` | tab | 20 | — | — | — | yes |
 | `env` | tab | 22 | — | — | — | no |
-| `db-client` | tab | 25 | `dbConnections`, `dbFolders`, `vault` | Connessioni database | `tunnels`, `git` (optional) | no |
+| `db-client` | tab | 25 | `dbConnections`, `dbFolders` | Connessioni database | `tunnels`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | — | no |
 | `ports` | tab | 35 | — | — | `npm`, `pm2`, `tunnels` (optional) | no |
-| `http-client` | tab | 38 | `httpSections` | Richieste HTTP | `db-client` (optional) | no |
+| `http-client` | tab | 38 | `httpSections` | Richieste HTTP | — | no |
 | `mock-server` | tab | 39 | `mockServers` | Mock server | — | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
-The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox, and `layout` (the tab order chosen by the user, not exported).
+The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox, `layout` (the tab order chosen by the user, not exported) and `vault` (the master password, see *Secrets*).
 
-Services offered to other extensions (`ctx.require(code)`): `npm` → `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)` and `vault`.
+Services offered to other extensions (`ctx.require(code)`): `npm` → `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
 
-`db-client.vault` lets another extension keep secrets encrypted with the same master password: `state()` (`uninitialized`, `locked`, `unlocked`), `encrypt(text)` → box to store in its own config section, `decrypt(box)` → text (both throw `423 db-client.vault_locked` / `db-client.vault_missing`, which the frontend handles by asking for the master password), `isBox(value)` for validation, and `register({ rekey(reencrypt), reset() })`: when the master password changes, `rekey` receives the function that re-encrypts a box and returns a function that saves the re-encrypted values (called after the new vault is saved); `reset()` deletes the secrets when the vault is reset (called before the vault is removed, since config validation should refuse boxes without a vault).
 
 ## Folder layout
 
@@ -165,6 +164,7 @@ Only `handlers` is needed when the manifest declares routes (and `mcp` when it d
 | `ctx.lib.ports` | `getPortsForPgid(pid)`: TCP ports listened on by a process group; `listListeningPorts()`: every listening TCP port of the machine with pid, process name, user and command line |
 | `ctx.log.info/warn/error(...)` | Console log prefixed with `[ext:<code>]` |
 | `ctx.projects` | Projects of the core, read-only: `list()` (`{ id, label, path, folder? }`), `get(id)`, `folders()` (`{ id, label }`) |
+| `ctx.vault` | Master password vault of the core, see *Secrets* |
 
 ### MCP tools
 
@@ -267,6 +267,33 @@ After every change the core emits `core:projects-changed` on the bus; extensions
 
 Writes are atomic (temporary file + rename).
 
+## Secrets
+
+Passwords, tokens and other secrets are never saved in clear: an extension encrypts them with the core **master password vault** (`ctx.vault`) and stores the encrypted box (`{ iv, tag, data }`, AES-256-GCM) in its own config section. The vault keeps only a verifier in `config.json` (section `vault`, owned by the core); the key lives in the server's memory while the vault is unlocked, until the user locks it, DevDock restarts or the inactivity timeout expires.
+
+| Member | Purpose |
+|---|---|
+| `state()` | `uninitialized`, `locked` or `unlocked` |
+| `encrypt(text)` / `decrypt(box)` | Box to store / text back; both throw `423 core.vault_locked` (or `core.vault_missing`), which the frontend handles with `ctx.vault.ensure()` and a retry; `decrypt` throws `400 core.secret_unreadable` for a box encrypted with another password |
+| `isBox(value)`, `isRecord(value)` | Validation of a stored box (in `instance.config[...].validate`) and of a `vault` block (e.g. of a file to import) |
+| `openForeign(record, password)` | Secrets of a file encrypted with another master password: `{ decrypt(box) }`, or `null` for a wrong password (counts as a failed attempt) |
+| `register({ rekey, reset, lock })` | `rekey(reencrypt, cfg)` returns `{ sections: { <own section>: newValue }, count }` with every box re-encrypted, saved in the same write as the new vault when the password changes; `reset(cfg)` returns `{ <own section>: valueWithoutSecrets }`, saved with the vault removed; `lock()` is called when the vault locks (e.g. close connections that use a decrypted password). An extension can only rewrite its own sections |
+
+```js
+module.exports = ctx => {
+  ctx.vault.register({
+    rekey: (reencrypt, cfg) => ({ sections: { mySecrets: cfg.mySecrets.map(s => ({ ...s, box: reencrypt(s.box) })) }, count: cfg.mySecrets.length }),
+    reset: cfg => ({ mySecrets: [] }),
+  });
+  return {
+    config: { mySecrets: { empty: [], validate(list, cfg) { if (list.length && !cfg.vault) throw ctx.error.config('secret_without_vault'); } } },
+    handlers: {
+      save(req, res) { ctx.config.set('mySecrets', [{ name: 'api', box: ctx.vault.encrypt(req.body.value) }]); res.json({ ok: true }); },
+    },
+  };
+};
+```
+
 ## Export and import
 
 The header **Export** and **Import** dialogs are built from the checkboxes the extensions declare in `setting.json → export`. Each checkbox covers one or more of the extension's own `config` sections:
@@ -283,7 +310,7 @@ The header **Export** and **Import** dialogs are built from the checkboxes the e
 | `id` | Unique within the extension, `[a-z0-9-]` |
 | `label` | Checkbox label; a string or a map by language tag |
 | `description` | Optional hint under the label; a string or a map by language tag |
-| `sections` | Sections included when the box is checked; they must be listed in the extension's `config` (otherwise the extension is disabled) |
+| `sections` | Sections included when the box is checked; they must be listed in the extension's `config` (otherwise the extension is disabled), except the core's `vault`, which a checkbox includes when its sections hold encrypted secrets (they are unreadable without it) |
 
 Sections not covered by any checkbox are not exported. **Export** downloads a single `.json` file with the checked sections. **Import** reads the file in the browser, shows the checkboxes whose sections the file contains, and applies the checked ones in *merge* mode (new items added, existing ones unchanged, using `idField`/`merge`) or *replace* mode (the sections take the place of the current ones); everything else is left untouched.
 
@@ -338,6 +365,7 @@ export default {
 | `ctx.ui` | `t` (global keys), `fmt` (locale-aware formatting, see *Translations*), `toast`, `openModal`, `closeModal`, `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `contextMenu(x, y, items)` (items: `{ label, icon, action, danger, disabled }` or `'separator'`), `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`) |
 | `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions; the core emits `core:projects-changed` after any change to projects or folders |
 | `ctx.projects` | Projects and folders of the core, see *Projects and folders* |
+| `ctx.vault` | `ensure()`: resolves `true` when the master password vault is unlocked, asking for the password (or to create it) first; `isVaultError(err)`: whether an API error is a locked or missing vault (`core.vault_locked`, `core.vault_missing`); `status()` |
 | `ctx.expose(obj)` | Publishes functions as `window.Ext.<code>` for inline handlers |
 | `ctx.setBadge(value)` | Number or text on the tab or header button (`null` hides it) |
 | `ctx.setPills(html)` | The extension's pills in the header bar (`''` removes them) |
@@ -395,6 +423,7 @@ Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i1
 | `GET /api/core/mcp` · `POST /api/core/mcp/token` | MCP endpoint URL, token and tools of the extensions · regenerate the token |
 | `/mcp` | MCP server (Streamable HTTP, bearer token, no browser requests) |
 | `GET /api/core/i18n/languages` | Source language and available languages: `{ source, languages: [{ tag, name, nativeName, dir, core, completeness }] }` (`core: false` = only some extension ships it; `completeness` = % of the source keys translated, core and extensions together) |
+| `GET /api/core/vault` · `POST /api/core/vault/init`, `/unlock`, `/lock`, `/change`, `/reset`, `/settings` | Master password vault: state (`uninitialized`, `locked`, `unlocked`), lock timeout, minimum length · create, unlock (increasing wait after repeated errors, `429` with `Retry-After`), lock, change the password (every extension's secrets re-encrypted in the same write), reset (`{ confirm: "RESET" }`: vault and secrets deleted), lock timeout in minutes |
 | `GET /api/core/layout` · `PUT /api/core/layout/tabs` · `DELETE /api/core/layout/tabs` | Tab order chosen by the user (`{ tabs: [codes] }`; unknown codes and codes of header extensions are dropped, duplicates removed) · save it · back to the manifest order |
 | `GET /api/core/system` | Platform and external tools (`?refresh=1` checks again) |
 | `GET /api/core/config/sections` | Config sections and their owner |

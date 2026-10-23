@@ -80,7 +80,7 @@ before(async () => {
 });
 after(() => srv.stop());
 
-const api = (method, p, body) => srv.request(method, `/api/ext/db-client${p}`, body !== undefined ? { body } : {});
+const api = (method, p, body) => srv.request(method, `${p.startsWith('/vault') ? '/api/core' : '/api/ext/db-client'}${p}`, body !== undefined ? { body } : {});
 
 test('repository dall\'estensione Git e browser delle cartelle', async () => {
   const r = await api('GET', '/migrations/repos');
