@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-10-23
+
+### Added
+- **HTTP client** (new extension `http-client`, 📮 HTTP tab, config section `httpSections` with the **Richieste HTTP** export checkbox): sections of requests in a sidebar accordion, each with a base URL (`{{baseUrl}}`, proposed from `PORT` in the linked project's `.env`), variables (`{{name}}` in URL, query, headers and body) and an optional linked project. Requests (method, URL, query, headers, JSON or text body) are sent by the DevDock backend with a 30 s timeout and a 5 MB response limit; the response shows status, time, size, headers and the body (JSON formatted). API under `/api/ext/http-client`.
+- HTTP client, **Express route discovery** by static analysis of the linked project: from `main` or the start script it follows relative `require`/`import` (JS and TS) and composes the prefixes of `app.use`/`router.use` across files, with constants, template strings and router factories; prefixes that can't be resolved (env/config values, `readdirSync` auto-loaders) are shown as `«expression»` and completed when the route is imported. Routes are imported one at a time.
+- HTTP client, **user types** per section with an authorization method each: none, basic auth, pasted token (optional expiry), token from a login request (credentials with `{{username}}`/`{{password}}`, token path in the JSON response or a header), OAuth / OpenID Connect (issuer discovery, authorization code with PKCE, code with client secret, implicit). Configurable header name and format. Tokens are reused while valid (JWT `exp`, response lifetime, manual expiry) and obtained again otherwise, also in the middle of a send; the OAuth login opens in the browser — in the user type's Firefox container through the "Open external links in a container" add-on — while DevDock listens on the redirect URI port only for the duration of the login; refresh tokens renew the token without the browser. Tokens are kept only in memory.
+- HTTP client, **actions after the token**: up to 5 requests run right after a token is obtained, with variables extracted from their responses (JSON path or header) for the requests of that user type; a variable called `token` replaces the token.
+- Database: the master password vault is offered to other extensions (`db-client.vault` service: `encrypt`, `decrypt`, `state`, `register`). The HTTP client keeps its secrets (passwords, client secrets) encrypted with it; changing the master password re-encrypts them and resetting it deletes them.
+
+### Fixed
+- Tests: the DB migrations test no longer depends on git's default branch name.
+
 ## [1.20.1] - 2026-10-23
 
 ### Changed

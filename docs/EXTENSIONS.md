@@ -13,11 +13,14 @@ Every feature that can be added or removed is an **extension**: a folder under `
 | `db-client` | tab | 25 | `dbConnections`, `dbFolders`, `vault` | Connessioni database | `tunnels`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | — | no |
 | `ports` | tab | 35 | — | — | `npm`, `pm2`, `tunnels` (optional) | no |
+| `http-client` | tab | 38 | `httpSections` | Richieste HTTP | `db-client` (optional) | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
 The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox.
 
-Services offered to other extensions (`ctx.require(code)`): `npm` → `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
+Services offered to other extensions (`ctx.require(code)`): `npm` → `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)` and `vault`.
+
+`db-client.vault` lets another extension keep secrets encrypted with the same master password: `state()` (`uninitialized`, `locked`, `unlocked`), `encrypt(text)` → box to store in its own config section, `decrypt(box)` → text (both throw `423 db-client.vault_locked` / `db-client.vault_missing`, which the frontend handles by asking for the master password), `isBox(value)` for validation, and `register({ rekey(reencrypt), reset() })`: when the master password changes, `rekey` receives the function that re-encrypts a box and returns a function that saves the re-encrypted values (called after the new vault is saved); `reset()` deletes the secrets when the vault is reset (called before the vault is removed, since config validation should refuse boxes without a vault).
 
 ## Folder layout
 

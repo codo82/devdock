@@ -1,6 +1,6 @@
 # DevDock
 
-Local web dashboard for everyday development: SSH tunnels, npm scripts, PM2, Git and Swagger preview in a single interface.
+Local web dashboard for everyday development: SSH tunnels, npm scripts, PM2, Git, databases, `.env` files, ports, an HTTP client and Swagger preview in a single interface.
 
 It runs on your own machine and only answers on `http://127.0.0.1:3500`. The user interface is available in Italian and English, and new languages can be added with JSON files (see *Languages*).
 
@@ -14,6 +14,7 @@ It runs on your own machine and only answers on `http://127.0.0.1:3500`. The use
 | `autossh` | no | used for tunnels when available; otherwise `ssh` with reconnection handled by DevDock |
 | `pm2` | no | PM2 section |
 | `lsof` (macOS/Linux) or `ss` (Linux) | no | shows the listening ports of npm processes |
+| Firefox with the "Open external links in a container" add-on | no | OAuth logins of the HTTP client in a Firefox container (otherwise the default browser) |
 
 The UI reports missing optional tools and shows how to install them.
 
@@ -40,6 +41,7 @@ Each section is an extension (see [Writing an extension](#writing-an-extension))
 - **🗄️ Database** (`db-client`) — MySQL/MariaDB client. Connections (direct or through an SSH tunnel of the Tunnels section) with passwords encrypted by a **master password** asked once per session; sidebar tree connection ▸ database ▸ tables ▸ columns with a context menu on tables, with connections grouped in **folders** of their own (one level; 📁+ to create one, the Folder field of the connection to move it, ⋯ or right click on a folder to rename or delete it); SQL editor with highlighting and **parametric queries** (`?` and `:name` placeholders: a dialog asks for the values, with the names of the `?` guessed from the query where possible, e.g. `nome = ?`, `id IN (?, ?)`, `BETWEEN ? AND ?`, `LIMIT ?`, `INSERT … VALUES (?, ?)`; values are escaped into the statement and kept in DevDock's memory until it restarts (never on disk or in the browser): a query already run runs again at once with its values, shown above the results with **✎ Change** to edit them; a new query asks, prefilled with the last values of the same names); data browser with pagination, search, filters and sorting; row insert/edit/delete inline or through a dialog, multiple deletion; several cells, also of different rows, can be edited before saving (changed cells are highlighted, Tab moves to the next cell, Enter or **Save** writes them all with one confirmation and in a single transaction), in the table data view and in the editable results of a SELECT; table designer; export of tables and queries as CSV, JSON or SQL; session query history. **Every statement that changes data or schema is shown and must be confirmed before it runs**; read-only connections refuse them.
 - **🔑 Env** (`env`) — the `.env*` files of each project compared with the template (`.env.example`, `.env.sample`…): keys missing, extra or empty. Values are hidden and shown one at a time; edit, add, rename or delete keys, add the missing keys from the template, create a `.env` from the template. Files are rewritten keeping comments, blank lines and order; a file changed outside DevDock in the meantime is not overwritten. Values never go into the DevDock configuration, its exports or the MCP tools.
 - **🔌 Ports** (`ports`) — listening TCP ports of the machine with process, PID, user and command line, linked to what DevDock started (npm script, PM2 process, SSH tunnel); search, "only my processes" filter, and stop of the process that holds a port after a confirmation: **Stop** (SIGTERM) or **Force stop** (SIGKILL, `taskkill /F` on Windows); processes started by DevDock are stopped through their section, also when forced, and if the port is still in use after a normal stop DevDock offers to force it. Only processes of the current user can be stopped. macOS/Linux (`lsof` or `ss`) and Windows (`netstat`).
+- **📮 HTTP** (`http-client`) — HTTP client for the projects' local APIs: sections of requests with a base URL and variables, requests sent by the DevDock backend (no CORS limits), Express routes found in the code of the linked project, an authorization per user type with the token obtained automatically. See *HTTP client*.
 - **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
 - **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ button in the header.
 
@@ -61,6 +63,16 @@ A connection can be linked to a **migrations folder in a repository** (📁 Migr
 - **Numbering**: the next number follows the highest one among the files in the folder. It is computed again right before writing and a file is never overwritten.
 - **Where changes come from**: the table designer (new tables and *Edit structure* on existing ones) and `CREATE` / `ALTER` / `RENAME` / `DROP` statements typed in the SQL editor (*Save as migration…* in the confirmation dialog). Before applying, a dialog shows the SQL and the migration file; table and operation in the file name are proposed and can be changed. If a statement fails, the file is removed (or reduced to the statements that did run). Data changes (`INSERT` / `UPDATE` / `DELETE`) never produce migrations.
 - Nothing is committed automatically: review and commit the files from the Git section.
+
+## HTTP client
+
+- **Sections**: a section groups the requests of one API (sidebar accordion; ⋯ or right click for its menu). It has a **base URL** used as `{{baseUrl}}` (proposed from `PORT` in the `.env` of the linked project), **variables** used as `{{name}}` in URL, query, headers and body, and it can be linked to a project. Requests are saved explicitly (**Save** or Ctrl+S; Enter in the URL or Ctrl+Enter sends).
+- **Sending**: requests go through the DevDock backend, with a 30 s timeout and a 5 MB response limit (larger responses are truncated); redirects are not followed. The response shows status, time, size, headers and body (JSON formatted and highlighted; binary content only by size).
+- **Express routes** (*Express routes of the project…* in the section menu): static analysis of the linked project, starting from `main` of `package.json` or the start script. Relative `require`/`import` (JS and TS) are followed and the prefixes of `app.use`/`router.use` are composed across files, constants, template strings, factories (`require('./routes')(app)`, functions that return a router) included. Prefixes that can't be resolved (environment or config values, routers loaded with `readdirSync`) are shown as `«expression»` and marked *to complete*: they are edited when the route is imported. Routes are imported one at a time as requests on `{{baseUrl}}`. NestJS, Fastify and Koa are not supported.
+- **User types** (👤 Users): every request is sent with a user type (e.g. admin, customer) or without authorization. Methods: **none**; **basic auth**; **pasted token** (with an optional expiry); **token from a login request** (method, URL, body with `{{username}}`/`{{password}}`, path of the token in the JSON response or `header:<name>`, optional lifetime path); **OAuth / OpenID Connect** (issuer with endpoints read from `/.well-known/openid-configuration`, or endpoints by hand; client id, scope, flow: authorization code with PKCE, code with client secret, or implicit; redirect URI registered in the client). Header name and format are configurable (default `Authorization: Bearer {token}`).
+- **Tokens**: on send the token of the user type is used while it is valid (JWT `exp`, the lifetime of the response or the manual expiry; 30 s margin), otherwise it is obtained again and the request continues: the login request is repeated, the OAuth refresh token is used, or the OAuth login opens in the browser and the request waits for it (up to 5 minutes; a link to the login page is shown in case the browser does not open). DevDock listens on the redirect URI port only during the login. With a **Firefox container** set on the user type, the login opens in that container (`ext+container:` URL of the "Open external links in a container" add-on), so different users stay logged in side by side. Tokens and refresh tokens are kept only in memory: they are lost when DevDock restarts.
+- **Actions after the token**: up to 5 requests run right after a token is obtained, with the new token in the header (e.g. choose the tenant, get a CSRF token). Values are extracted from their responses (JSON path or `header:<name>`) into variables of the user type, used as `{{name}}` in its requests; a variable called `token` replaces the token (e.g. a second token obtained through an exchange). If an action fails the token is not kept.
+- **Secrets** (basic auth and login passwords, OAuth client secret) are encrypted with the master password of the Database section (the vault is shared; the section asks to unlock it when needed) and never saved in clear; changing the master password re-encrypts them and resetting it deletes them. Without the Database extension only methods without secrets are available. The **HTTP requests** checkbox exports sections, requests, variables and user types, with the secrets still encrypted.
 
 ## MCP server
 
@@ -102,7 +114,7 @@ Everything is stored in `config.json` in the project folder. The file is created
 - `projects[].path` — absolute path of the project folder
 - `projects[].folder` — optional sidebar folder (`projectFolders[].id`); without it the project is at the root of the sidebars
 
-Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env) or to an extension (`groups` and `servers` to tunnels, `dbConnections`, `dbFolders` and `vault` to db-client), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle) and of the extensions (Tunnel SSH, Connessioni database) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
+Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env) or to an extension (`groups` and `servers` to tunnels, `dbConnections`, `dbFolders` and `vault` to db-client, `httpSections` to http-client), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle) and of the extensions (Tunnel SSH, Connessioni database, Richieste HTTP) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
 
 ## Languages
 
@@ -127,6 +139,8 @@ Active protections:
 - external libraries (Swagger UI) are loaded with Subresource Integrity.
 
 Local command-line clients (curl, scripts) that send no `Origin` header are allowed, like any other local program.
+
+The HTTP client sends requests from the DevDock backend to the URLs you enter (http and https only); during an OAuth login it listens for the redirect on `127.0.0.1` (and `::1`), only on the port of the redirect URI and only until the login ends.
 
 ## Project structure
 
