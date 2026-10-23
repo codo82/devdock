@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Changed
 - Every extension keeps its tests in `extensions/<code>/tests/`; the core suite in `tests/` uses only fixture extensions, so it stays green without any built-in extension. The test helpers became the core **test kit** (`lib/testkit.js`, `require('devdock/testkit')` for external extensions) with `startServer`, `mcpClient`, fixture helpers and `i18nProblems(extDir)` for the translation checks of a single extension. `tests/helpers.js` was removed.
 - The master password vault moved from the `db-client` extension to the core: same `vault` section of `config.json` and same encryption, so the passwords saved by earlier versions keep working. Extensions use it through `ctx.vault` (backend: `encrypt`, `decrypt`, `register` for re-encryption and reset; frontend: `ensure()` asks for the password, or to create it, when needed); changing the master password re-encrypts the secrets of every extension in a single write of `config.json`. `http-client` no longer depends on `db-client`.
+- Extensions are read from two folders: the built-in ones in `extensions/` and the installed ones in `~/.devdock/extensions` (`DEVDOCK_HOME`); `GET /api/core/extensions` reports the `source` of each one, and two extensions with the same code are an error shown on the second one. The loader became an extension manager that starts, stops and reloads an extension at runtime.
 
 ## [1.23.0] - 2026-10-23
 

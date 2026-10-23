@@ -1,7 +1,7 @@
 // DevDock — entry point: middleware di sicurezza, route API, file statici, avvio
 const express = require('express');
 const path = require('path');
-const { ROOT, PORT, CONFIG_PATH, EXTENSIONS_DIR } = require('./lib/env');
+const { ROOT, PORT, CONFIG_PATH, EXTENSIONS_DIR, INSTALLED_DIR } = require('./lib/env');
 const { applySecurity } = require('./lib/security');
 const { ConfigError } = require('./lib/config');
 const { ApiError, coreError, errorBody } = require('./lib/errors');
@@ -17,7 +17,7 @@ app.use(express.json());
 app.use(express.static(path.join(ROOT, 'public')));
 
 // Estensioni: API su /api/ext/<code>, file frontend dichiarati su /ext/<code>
-const extensions = loadExtensions(EXTENSIONS_DIR, {
+const extensions = loadExtensions([{ dir: EXTENSIONS_DIR, source: 'builtin' }, { dir: INSTALLED_DIR, source: 'installed' }], {
   lib: {
     validate: require('./lib/validate'),
     config:   require('./lib/config'),

@@ -155,5 +155,7 @@
   "core.vault.create": "Create",
   "core.vault.unlock": "Unlock",
   "core.vault.tooShort": "At least {min} characters",
-  "core.vault.mismatch": "The two passwords don't match"
+  "core.vault.mismatch": "The two passwords don't match",
+  "core.errors.extensions_invalid": "Invalid extensions section",
+  "core.errors.extensions_catalogs": "Invalid extension catalogs: at most 20 http(s) URLs"
 }

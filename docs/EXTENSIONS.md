@@ -97,10 +97,13 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
 
 ### Loading and states
 
-At startup the loader reads every `extensions/*/setting.json` and gives each extension a state, shown by `GET /api/core/extensions`:
+Extensions come from two folders: the **built-in** ones in `extensions/` of the DevDock repository (updated with DevDock itself) and the **installed** ones in `~/.devdock/extensions` (the DevDock home: `DEVDOCK_HOME` changes it), outside the repository, where the Extensions panel installs them. Folders whose name starts with `.` are ignored (staging and backups). Two extensions with the same `code` are an error, never a silent choice: the built-in one is used and the other is listed as disabled with the folder of the one already loaded.
+
+At startup the loader reads every `setting.json` of both folders and gives each extension a state, shown by `GET /api/core/extensions` (with `source`: `builtin` or `installed`):
 
 - `ok` — loaded
 - `warning` — loaded, but an optional dependency is missing (`warnings` lists it)
+- `off` — switched off by the user from the Extensions panel (`extensions.disabled` in `config.json`)
 - `disabled` — not loaded; `error` says why: invalid manifest, core version outside the `devdock` range, missing required dependency, dependency cycle, config key already owned by another extension, backend that throws or lacks a handler named in the manifest
 
 Backends are created in dependency order (topological sort) and shut down in reverse order when the server stops. A disabled extension never takes the others down; those that require it are disabled too.

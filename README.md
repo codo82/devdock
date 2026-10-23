@@ -27,7 +27,7 @@ npm start          # or: npm run dev  (restarts automatically on changes)
 
 Then open <http://127.0.0.1:3500>.
 
-Optional environment variables: `DEVDOCK_PORT` (port, default 3500) and `DEVDOCK_CONFIG` (configuration path, default `config.json` in the project folder).
+Optional environment variables: `DEVDOCK_PORT` (port, default 3500), `DEVDOCK_CONFIG` (configuration path, default `config.json` in the project folder) and `DEVDOCK_HOME` (DevDock's own folder outside the repository, default `~/.devdock`: installed extensions, their lock file and backups).
 
 When the server stops (Ctrl+C, `kill` or closing the terminal), the tunnels and npm processes started by DevDock are terminated.
 
