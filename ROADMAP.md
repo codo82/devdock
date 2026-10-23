@@ -256,13 +256,27 @@ Goal: see at a glance which variables a project's `.env` is missing compared wit
 
 ## M11 — HTTP client — new extension `http-client`
 
-Goal: send requests to the local APIs of a project and keep the useful ones. Minimal version.
+Goal: send requests to the local APIs of a project and keep the useful ones, with the right token for each kind of user obtained automatically. Minimal version.
 
-- [ ] **M11.1** Requests (method, URL, headers, query, JSON or text body) saved in collections per npm project, in its own config section, with an Export/Import checkbox
+- [ ] **M11.1** Sections of requests (method, URL, headers, query, JSON or text body) in their own config section, with an Export/Import checkbox; a section can optionally be linked to a project. One base URL per section (`{{baseUrl}}`, proposed from `PORT` in the project's `.env`) plus section variables used in URL, headers and body
 - [ ] **M11.2** Sending through the DevDock backend (no CORS limits), with timeout and response size limit; response shown with status, time, size, headers and body (JSON formatted)
-- [ ] **M11.3** Variables per project (`{{baseUrl}}`, `{{token}}`) used in URL, headers and body; variables marked as secret are encrypted with the master password vault of the DB client (optional dependency: without it secrets can't be saved)
-- [ ] **M11.4** Import of the operations of an OpenAPI file (YAML/JSON) as requests of a collection
-- [ ] **M11.5** Tests (local test server: methods, headers, body, timeout, variables, secrets never in clear in `config.json`), README, CHANGELOG
+- [ ] **M11.3** Express route discovery for a linked section by static analysis: starting from `main` or the start script, it follows relative `require`/`import` (JS and TS) and composes the prefixes of `app.use`/`router.use` across files, constants included. Routes are listed and imported one at a time; prefixes that can't be resolved (env/config values, `readdirSync` auto-loaders) are shown as "to complete" and edited on import. NestJS, Fastify and Koa are not supported
+- [ ] **M11.4** User types per section (e.g. admin, customer); every request is tagged with one, or with none (request sent without authorization). Each user type has an authorization method: **none**; **basic auth** (user and password, encrypted with the DB client vault, optional dependency); **manual token** (pasted, any type, optional expiry); **token from a login request** (method, URL, body with secret credentials in the vault, path of the token in the JSON response); **OAuth / OpenID Connect token** (Keycloak or any other provider, see M11.5). Token header name and format configurable (default `Authorization: Bearer …`). On send, the token of the user type is used if present and not expired (JWT: `exp` claim; manual expiry otherwise), otherwise it is acquired again and the request continues afterwards. Tokens kept only in memory (lost when DevDock restarts)
+- [ ] **M11.5** OAuth / OpenID Connect: issuer URL (endpoints from `/.well-known/openid-configuration`, or entered by hand), client id, scope, flow (authorization code with PKCE by default, code with client secret encrypted in the vault, or implicit) and the redirect URI registered in the client (port and path). DevDock listens on that port only for the duration of the login, opens the authorization URL in Firefox in the Firefox container of the user type (`ext+container:` URL of the "Open external links in a container" add-on; default browser when no container is set), receives the redirect and exchanges the code for the token; a refresh token, when returned, is kept in memory and used to renew the token without the browser
+- [ ] **M11.6** Tests (local test server: methods, headers, body, timeout, variables, route discovery on fixtures split over several files, each authorization method, token reuse and expiry, OAuth flow against a fake provider, secrets never in clear in `config.json`), README, CHANGELOG
+
+
+## M14 — Mock server — new extension `mock-server`
+
+Goal: simulate an API that doesn't exist yet or isn't reachable: every call gets a predefined response, and every incoming call is logged with its payload. Minimal version.
+
+- [ ] **M14.1** Mock servers in their own config section, with an Export/Import checkbox: name and port (listening on `127.0.0.1` only; a port already in use is reported with its owner through `lib/ports.js`). Start/stop from the UI, status in the sidebar; running mocks are stopped when DevDock shuts down
+- [ ] **M14.2** Routes per mock: method (or any), path with parameters (`/users/:id`) and `*` wildcard; predefined response with status, headers, body (JSON or text) and optional delay. The first matching route in list order answers; a call without a match gets a `404` with a JSON body that says so. Routes are edited while the mock is running, without restarting it
+- [ ] **M14.3** CORS option per mock (on by default): `Access-Control-Allow-*` headers and automatic answer to preflight `OPTIONS`, so a frontend on another local port can call the mock
+- [ ] **M14.4** Log of incoming calls, live in the UI: time, method, path, query, headers, body (JSON formatted, text, or size only for binary content; size limit), matched route (or "no match") and response status. Kept in memory with a cap per mock (latest 500 calls), with a clear button
+- [ ] **M14.5** "Create route from this call" on a logged call without a match: opens the route editor prefilled with its method and path, ready for the response to be filled in
+- [ ] **M14.6** MCP tool `mock_requests` (read-only): calls logged by a mock, with filters by method, path and "no match only", and a limit; header values that look like credentials (`Authorization`, `Cookie`, `X-Api-Key`…) redacted
+- [ ] **M14.7** Tests (routes with parameters and wildcard, order of match, unmatched call, delay, CORS preflight, log with JSON and text bodies, port in use, route created from a logged call, MCP tool with redaction), README, CHANGELOG
 
 
 ## M12 — Tab order — core
@@ -286,6 +300,7 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 - [ ] **M13.5** Indexes of a collection (read-only list); export of a collection or of a filtered result as JSON
 - [ ] **M13.6** MCP tools (read-only, only with the vault unlocked): connections without credentials, databases, collections, `find` with filter and limit, count
 - [ ] **M13.7** Tests against a disposable `mongod` (skipped when not installed), README, CHANGELOG
+
 ---
 
 ## Suggested order and size
@@ -304,6 +319,7 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 | M8 MCP server | L | after M6 and M7; core server + contract first, then read-only tools per extension, write tools opt-in |
 | M9 Ports in use | S | `lib/ports.js` extended; Windows through `netstat` |
 | M10 Environment files | S | read and write, comments and order kept; values never stored in DevDock or sent to agents |
-| M11 HTTP client | M | secrets through the DB client vault (optional dependency) |
+| M11 HTTP client | L | Express route discovery, authorization per user type (none, basic, manual token, login request, OAuth/OIDC with Firefox containers); secrets through the DB client vault (optional dependency) |
+| M14 Mock server | M | one HTTP listener per mock on `127.0.0.1`; predefined responses, call log with payload, route from a logged call, read-only MCP tool |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
 | M13 MongoDB client | L | same vault and confirmation rules as the MySQL client; read-only MCP tools |
