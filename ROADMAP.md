@@ -268,14 +268,14 @@ Goal: send requests to the local APIs of a project and keep the useful ones, wit
 
 ## M15 — Installable extensions — core
 
-Goal: DevDock ships with a set of built-in extensions and can install others from their own git repositories. Built-in: `git`, `npm`, `tunnels`, `ports`, `env`, `db-client`, `swagger`, `http-client`. External, each in its own repository: `pm2` (moved out: of little use locally), `mock-server` (M14) and `mongo-client` (M13), which are created directly as external extensions.
+Goal: DevDock ships with a set of built-in extensions and can install others from their own git repositories. Built-in: `git`, `npm`, `tunnels`, `env`, `db-client`, `swagger`, `http-client`. External, each in its own repository: `pm2` (moved out: of little use locally), `ports` (moved out; `lib/ports.js` stays in the core, other extensions use it), `mock-server` (M14) and `mongo-client` (M13), which are created directly as external extensions.
 
 - [ ] **M15.1** Versioned contract: the manifest declares the compatible core versions (`"devdock": "^2.0"`); the loader refuses an incompatible extension with a clear error. `docs/EXTENSIONS.md` becomes the public API, breaking changes marked in the CHANGELOG
 - [ ] **M15.2** Self-contained extensions: tests move into `extensions/<code>/tests/` and use a test kit exported by the core (today's `tests/helpers.js`); the i18n check runs per extension; removing an extension folder leaves the core suite green
 - [ ] **M15.3** The master password vault moves from `db-client` to the core (security is core), with the same file and the same encryption, so existing passwords keep working; `db-client`, `http-client` and `mongo-client` use it through the core `ctx`
 - [ ] **M15.4** Second extensions folder for installed extensions, outside the repository (`~/.devdock/extensions`, configurable); the loader reads both; two extensions with the same `code` are an error, not a silent choice
 - [ ] **M15.5** Install from a git URL (at a tag, or the latest tag) or a local path, from the UI and from the command line (`devdock ext install …`): clone, `npm install --omit=dev` in the extension folder, manifest and compatibility checks, then restart. Before installing, a confirmation that shows the source and says that an extension runs with the full rights of the user. Update (newer tags), remove, enable/disable. No marketplace
-- [ ] **M15.6** `pm2` moved to its own repository (history kept with `git subtree split`) and removed from the built-in set; its config sections are kept in `config.json`, so reinstalling it brings everything back. `ports` keeps its optional dependency on it
+- [ ] **M15.6** `pm2` and `ports` moved to their own repositories (history kept with `git subtree split`) and removed from the built-in set, tests and MCP tools included; their config sections are kept in `config.json`, so reinstalling them brings everything back. `ports` keeps its optional dependencies on `pm2`, `npm` and `tunnels`
 - [ ] **M15.7** Tests (incompatible version refused, duplicate code, install from a local git repo with tags, update, remove, vault migration with existing passwords), README, CHANGELOG
 
 
@@ -333,7 +333,7 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 | M9 Ports in use | S | `lib/ports.js` extended; Windows through `netstat` |
 | M10 Environment files | S | read and write, comments and order kept; values never stored in DevDock or sent to agents |
 | M11 HTTP client | L | Express route discovery, authorization per user type (none, basic, manual token, login request, OAuth/OIDC with Firefox containers); secrets through the DB client vault (optional dependency) |
-| M15 Installable extensions | M | core; versioned contract, self-contained extensions, vault in the core, install from git; `pm2` moved out, M14 and M13 born external |
+| M15 Installable extensions | M | core; versioned contract, self-contained extensions, vault in the core, install from git; `pm2` and `ports` moved out, M14 and M13 born external |
 | M14 Mock server | M | one HTTP listener per mock on `127.0.0.1`; predefined responses, call log with payload, route from a logged call, read-only MCP tool |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
 | M13 MongoDB client | L | same vault and confirmation rules as the MySQL client; read-only MCP tools |
