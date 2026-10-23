@@ -34,6 +34,7 @@ window.Shell = (() => {
       entry.tab = meta.position === 'header' ? createHeaderButton(meta) : createTab(meta);
       exts.set(meta.code, entry);
     }
+    await setupTabOrder();
 
     // preload: modulo montato subito (nascosto), per pill, badge e notifiche in background
     await Promise.all([...exts.values()].filter(e => e.meta.frontend.preload).map(e => load(e).catch(() => {})));
@@ -60,12 +61,95 @@ window.Shell = (() => {
       <span class="section-tab-name">${esc(pick(meta.name))}</span>${warningMark(meta)}
       <span class="section-tab-badge" style="display:none"></span>`;
     btn.dataset.order = meta.order;
+    btn.title = t('core.tabs.moveHint');
     btn.addEventListener('click', () => open(meta.code));
     // posizione per "order", insieme ai tab delle sezioni del core (data-order)
     const nav = document.querySelector('.section-nav');
     const next = [...nav.children].find(el => Number(el.dataset.order ?? 100) > meta.order);
     nav.insertBefore(btn, next || null);
     return btn;
+  }
+
+  // ---- ordine delle tab: trascinamento (o Alt+←/→), salvato in config.json (layout.tabs) ----
+  const coreApi = apiClient('/api/core');
+  let defaultTabOrder = []; // codici nell'ordine dei manifest
+  let customTabOrder = false;
+  const navEl = () => document.querySelector('.section-nav');
+  const tabButtons = () => [...navEl().querySelectorAll('.section-tab')];
+  const tabCode = el => el.id.replace(/^ext-tab-/, '');
+
+  // Prima le tab nell'ordine salvato, poi le altre (estensioni nuove) nell'ordine dei manifest
+  function applyTabOrder(saved) {
+    const rank = code => { const i = saved.indexOf(code); return i < 0 ? saved.length + defaultTabOrder.indexOf(code) : i; };
+    tabButtons().sort((a, b) => rank(tabCode(a)) - rank(tabCode(b))).forEach(el => navEl().appendChild(el));
+  }
+
+  async function saveTabOrder() {
+    try {
+      await coreApi.put('/layout/tabs', { tabs: tabButtons().map(tabCode) });
+      customTabOrder = true;
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  async function restoreTabOrder() {
+    try {
+      await coreApi.del('/layout/tabs');
+      customTabOrder = false;
+      applyTabOrder([]);
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  async function setupTabOrder() {
+    const nav = navEl();
+    defaultTabOrder = tabButtons().map(tabCode);
+    let saved = [];
+    try { saved = (await coreApi.get('/layout')).tabs; } catch { /* ordine dei manifest */ }
+    customTabOrder = saved.length > 0;
+    applyTabOrder(saved);
+
+    let dragged = null, before = '';
+    for (const tab of tabButtons()) {
+      tab.draggable = true;
+      tab.addEventListener('dragstart', e => {
+        dragged = tab;
+        before = tabButtons().map(tabCode).join();
+        tab.classList.add('tab-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', tabCode(tab));
+      });
+      tab.addEventListener('dragend', () => {
+        tab.classList.remove('tab-dragging');
+        dragged = null;
+        if (tabButtons().map(tabCode).join() !== before) saveTabOrder();
+      });
+      // Alt+←/→ sposta la tab che ha il focus (in una lingua da destra a sinistra le frecce si invertono)
+      tab.addEventListener('keydown', e => {
+        if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+        e.preventDefault();
+        const forward = (e.key === 'ArrowRight') !== (document.documentElement.dir === 'rtl');
+        const sibling = forward ? tab.nextElementSibling : tab.previousElementSibling;
+        if (!sibling?.classList.contains('section-tab')) return;
+        nav.insertBefore(tab, forward ? sibling.nextElementSibling : sibling);
+        tab.focus();
+        saveTabOrder();
+      });
+    }
+    nav.addEventListener('dragover', e => {
+      if (!dragged) return;
+      e.preventDefault();
+      const target = e.target.closest('.section-tab');
+      if (!target || target === dragged) return;
+      const rect = target.getBoundingClientRect();
+      const after = (e.clientX > rect.left + rect.width / 2) !== (document.documentElement.dir === 'rtl');
+      nav.insertBefore(dragged, after ? target.nextElementSibling : target);
+    });
+    nav.addEventListener('drop', e => { if (dragged) e.preventDefault(); });
+    nav.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      contextMenu(e.clientX, e.clientY, [
+        { label: t('core.tabs.restore'), icon: '↺', disabled: !customTabOrder, action: restoreTabOrder },
+      ]);
+    });
   }
 
   function createHeaderButton(meta) {
@@ -478,7 +562,7 @@ window.Shell = (() => {
     for (const e of exts.values()) {
       const name = pick(e.meta.name);
       const label = e.tab?.querySelector('.section-tab-name');
-      if (label) label.textContent = name;
+      if (label) { label.textContent = name; e.tab.title = t('core.tabs.moveHint'); }
       else if (e.tab) e.tab.title = name;
       if (!e.module || !e.ctx) continue;
       try { (e.module.languageChanged || e.module.refresh)?.call(e.module, e.ctx); } catch (err) { console.error(err); }

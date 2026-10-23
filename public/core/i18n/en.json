@@ -129,5 +129,9 @@
   "core.projects.folderNameRequired": "The folder name is required",
   "core.projects.confirmDeleteFolder": "Delete the folder \"{name}\"? Its projects go back to the root.",
   "core.projects.edit": "Edit project",
-  "core.projects.remove": "Remove project"
+  "core.projects.remove": "Remove project",
+  "core.tabs.moveHint": "Drag to change the order of the sections (or Alt+←/→); right click to restore it",
+  "core.tabs.restore": "Restore the default order of the sections",
+  "core.errors.layout_invalid": "Invalid layout section",
+  "core.errors.layout_tabs": "Invalid tab order: a list of extension codes without repetitions"
 }

@@ -129,5 +129,9 @@
   "core.projects.folderNameRequired": "Il nome della cartella è obbligatorio",
   "core.projects.confirmDeleteFolder": "Eliminare la cartella \"{name}\"? I suoi progetti tornano nella radice.",
   "core.projects.edit": "Modifica progetto",
-  "core.projects.remove": "Rimuovi progetto"
+  "core.projects.remove": "Rimuovi progetto",
+  "core.tabs.moveHint": "Trascina per cambiare l'ordine delle sezioni (o Alt+←/→); tasto destro per ripristinarlo",
+  "core.tabs.restore": "Ripristina l'ordine predefinito delle sezioni",
+  "core.errors.layout_invalid": "Sezione layout non valida",
+  "core.errors.layout_tabs": "Ordine delle tab non valido: una lista di codici di estensione senza ripetizioni"
 }

@@ -38,6 +38,7 @@
   .section-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;height:40px;background:none;border:none;border-inline-end:1px solid var(--border);border-bottom:3px solid transparent;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--sans);color:var(--muted);transition:background .15s,color .15s,border-color .15s;position:relative}
   .section-tab:last-child{border-inline-end:none}
   .section-tab:hover{background:var(--surface2);color:var(--text)}
+  .section-tab.tab-dragging{opacity:.4}
   .section-tab-icon{font-size:16px}
   .section-tab-badge{font-family:var(--font);font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);transition:background .15s,color .15s,border-color .15s}
 
