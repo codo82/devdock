@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-10-23
+
+### Changed
+- Database, parametric queries: the values are saved in the browser (`localStorage`, per connection and query text, last 200 queries; also by parameter name). A query already run runs again at once with its saved values, without the dialog; the values used are shown above the results (also after an error) with **✎ Change**, which reopens the dialog prefilled. A new query asks for the values, prefilled with the last ones used for the same names. Changes still ask for confirmation of the statement with the values.
+
 ## [1.19.0] - 2026-10-23
 
 ### Added

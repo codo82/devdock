@@ -1471,11 +1471,11 @@ export default {
     }
 
     let running = false;
-    // opts: { sql, token } per rimandare un'istruzione confermata, { params } con i valori
-    // dei parametri (query con ? o :nome)
+    // opts: { sql, token } per rimandare un'istruzione confermata; { sql, params, paramInfo }
+    // con i valori dei parametri (query con ? o :nome)
     async function run(opts) {
       const c = active();
-      const sql = opts?.token ? opts.sql : statement();
+      const sql = opts?.sql || statement();
       if (!c || !sql || running) return;
       const body = {
         sql, database: activeDb.get(c.id) || null, limit: Number($(ctx.root, 'limit').value),
@@ -1492,10 +1492,11 @@ export default {
         });
         const data = await res.json().catch(() => ({}));
         const record = (ok, summary) => addHistory({ sql, connId: c.id, db: body.database, at: Date.now(), ok, summary });
-        if (res.status === 422 && data.needsParams) askParams(data.params);
-        else if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token }));
-        else if (!res.ok) { renderError(ctx.ui.errorText(data, `HTTP ${res.status}`), sql); record(false); }
+        if (res.status === 422 && data.needsParams) needParams(c, sql, data.params);
+        else if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token, paramInfo: opts?.paramInfo }));
+        else if (!res.ok) { renderError(ctx.ui.errorText(data, `HTTP ${res.status}`), sql); showParamsUsed(opts?.paramInfo); record(false); }
         else {
+          data.paramInfo = opts?.paramInfo || null;
           renderResult(data);
           record(true, data.kind === 'rows' ? { rows: data.rowCount } : { affected: data.affectedRows });
           // istruzione di schema eseguita dall'editor: l'albero si aggiorna da solo
@@ -1510,54 +1511,118 @@ export default {
       }
     }
 
-    // ---- query parametriche: un campo per parametro, valori ricordati per nome nella sessione ----
-    const paramMemory = new Map(); // nome → { value, type }
-    let pendingParams = null;
-    function askParams(params) {
-      pendingParams = params;
+    // ---- query parametriche: un campo per parametro ----
+    // I valori restano nel browser (localStorage): per query (connessione + testo) e per nome.
+    // Una query già eseguita riparte con i suoi valori senza chiederli; "Cambia" li riapre.
+    const PARAMS_KEY = 'devdock.db.queryParams', NAMES_KEY = 'devdock.db.paramNames', MAX_SAVED = 200;
+    const readStore = key => { try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { return {}; } };
+    const writeStore = (key, obj) => { try { localStorage.setItem(key, JSON.stringify(obj)); } catch { /* solo per questa sessione */ } };
+    const queryKey = (c, sql) => `${c.id}|${sql.trim()}`;
+    // values: { chiave: { value, type } } — l'ultima query usata va in fondo, le più vecchie escono
+    function rememberParams(c, sql, list, values) {
+      const queries = readStore(PARAMS_KEY);
+      delete queries[queryKey(c, sql)];
+      queries[queryKey(c, sql)] = values;
+      const keys = Object.keys(queries);
+      for (const k of keys.slice(0, Math.max(0, keys.length - MAX_SAVED))) delete queries[k];
+      writeStore(PARAMS_KEY, queries);
+      const names = readStore(NAMES_KEY);
+      for (const p of list) names[p.name] = values[p.key];
+      writeStore(NAMES_KEY, names);
+    }
+    // Valori da inviare, o null se un valore salvato non è più valido
+    function paramsFrom(list, values) {
+      const params = {};
+      for (const p of list) {
+        const v = paramValue(values[p.key].value, values[p.key].type);
+        if (v.error) return null;
+        params[p.key] = v.value;
+      }
+      return params;
+    }
+
+    // Risposta 422: valori salvati per questa query → si riparte subito, altrimenti la modale
+    function needParams(c, sql, list) {
+      const saved = readStore(PARAMS_KEY)[queryKey(c, sql)];
+      const params = saved && list.every(p => saved[p.key]) ? paramsFrom(list, saved) : null;
+      if (params) {
+        const paramInfo = { sql, list, values: saved };
+        rememberParams(c, sql, list, saved);
+        setTimeout(() => run({ sql, params, paramInfo }), 0); // dopo la fine di questa esecuzione
+        return;
+      }
+      askParams(c, sql, list, saved || {});
+    }
+
+    let pendingParams = null; // { c, sql, list }
+    function askParams(c, sql, list, saved) {
+      pendingParams = { c, sql, list };
       $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('params.waiting'))}</div>`;
+      const byName = readStore(NAMES_KEY);
       const types = ['auto', 'text', 'number', 'null'];
-      const rows = params.map((p, i) => {
-        const saved = paramMemory.get(p.name) || { value: '', type: 'auto' };
+      const rows = list.map((p, i) => {
+        const v = saved[p.key] || byName[p.name] || { value: '', type: 'auto' };
         const label = p.kind === 'named' ? `:${p.name}` : p.name;
         const hint = p.kind === 'named' ? '' : t(p.guessed ? 'params.positional' : 'params.positionalUnknown', { n: p.key.slice(1) });
         return `<div class="db-param-row">
           <label for="f_param_${i}"><span class="db-mono">${esc(label)}</span>${hint ? `<span class="db-param-hint">${esc(hint)}</span>` : ''}</label>
-          <input class="form-input" id="f_param_${i}" value="${esc(saved.value)}" autocomplete="off" ${saved.type === 'null' ? 'disabled' : ''}
+          <input class="form-input" id="f_param_${i}" value="${esc(v.value)}" autocomplete="off" ${v.type === 'null' ? 'disabled' : ''}
                  onkeydown="if(event.key==='Enter'){event.preventDefault();Ext['db-client'].runWithParams()}">
           <select class="form-input db-select" id="f_param_type_${i}" onchange="document.getElementById('f_param_${i}').disabled=this.value==='null'" title="${esc(t('params.typeTitle'))}">
-            ${types.map(ty => `<option value="${ty}" ${ty === saved.type ? 'selected' : ''}>${esc(t(`params.type.${ty}`))}</option>`).join('')}
+            ${types.map(ty => `<option value="${ty}" ${ty === v.type ? 'selected' : ''}>${esc(t(`params.type.${ty}`))}</option>`).join('')}
           </select>
         </div>`;
       }).join('');
-      openModal(t('params.title', { count: params.length }), `<p class="db-muted">${esc(t('params.hint'))}</p><div class="db-params">${rows}</div>`,
+      openModal(t('params.title', { count: list.length }), `<p class="db-muted">${esc(t('params.hint'))}</p><div class="db-params">${rows}</div>`,
         `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].cancelParams()">${esc(t('core.action.cancel'))}</button>
          <button class="btn btn-primary" onclick="Ext['db-client'].runWithParams()">${esc(t('params.run'))}</button>`);
-      setTimeout(() => document.getElementById('f_param_0')?.focus(), 0);
+      setTimeout(() => { const f = document.getElementById('f_param_0'); f?.focus(); f?.select(); }, 0);
     }
     // Valore da inviare: auto → numero se ha la forma di un numero (senza zeri iniziali), altrimenti testo
     function paramValue(raw, type) {
       if (type === 'null') return { value: null };
       if (type === 'text') return { value: raw };
-      const numeric = /^-?(0|[1-9]\d*)(\.\d+)?$/.test(raw.trim());
+      const numeric = /^-?(0|[1-9]\d*)(\.\d+)?$/.test(String(raw).trim());
       if (type === 'number') return numeric ? { value: Number(raw) } : { error: true };
       return { value: numeric ? Number(raw) : raw };
     }
     function runWithParams() {
-      const list = pendingParams;
-      if (!list) return;
-      const params = {};
+      if (!pendingParams) return;
+      const { c, sql, list } = pendingParams;
+      const values = {};
       for (const [i, p] of list.entries()) {
         const raw = document.getElementById(`f_param_${i}`)?.value ?? '';
         const type = document.getElementById(`f_param_type_${i}`)?.value || 'auto';
-        const v = paramValue(raw, type);
-        if (v.error) { toast(t('params.notNumber', { name: p.name }), 'error'); document.getElementById(`f_param_${i}`)?.focus(); return; }
-        params[p.key] = v.value;
-        paramMemory.set(p.name, { value: raw, type });
+        if (paramValue(raw, type).error) { toast(t('params.notNumber', { name: p.name }), 'error'); document.getElementById(`f_param_${i}`)?.focus(); return; }
+        values[p.key] = { value: raw, type };
       }
       pendingParams = null;
       closeModal();
-      run({ params });
+      rememberParams(c, sql, list, values);
+      run({ sql, params: paramsFrom(list, values), paramInfo: { sql, list, values } });
+    }
+
+    // Valori usati, sopra i risultati, con "Cambia" per riaprire la modale
+    function paramsUsed(info) {
+      if (!info) return '';
+      const shown = info.list.map(p => {
+        const v = info.values[p.key];
+        const text = v.type === 'null' ? 'NULL' : paramValue(v.value, v.type).value;
+        return `${p.kind === 'named' ? ':' : ''}${p.name} = ${typeof text === 'number' ? text : text === 'NULL' ? 'NULL' : `'${text}'`}`;
+      }).join(', ');
+      return `<div class="db-params-used"><span class="db-muted">${esc(t('params.used'))}</span> <span class="db-mono" title="${esc(shown)}">${esc(shown)}</span>
+        <button class="btn btn-ghost btn-sm" data-action="change-params">✎ ${esc(t('params.change'))}</button></div>`;
+    }
+    let lastParamInfo = null;
+    function showParamsUsed(info) {
+      lastParamInfo = info || null;
+      if (info) $(ctx.root, 'results').insertAdjacentHTML('afterbegin', paramsUsed(info));
+    }
+    function changeParams() {
+      const info = lastParamInfo;
+      const c = active();
+      if (!info || !c) return;
+      askParams(c, info.sql, info.list, info.values);
     }
 
     // Nessuna modifica parte senza che l'utente veda e confermi l'istruzione esatta
@@ -1658,13 +1723,15 @@ export default {
       const el = $(ctx.root, 'results');
       if (!keepSort) resultSort = null;
       lastResult = data;
+      lastParamInfo = data.paramInfo || null;
       if (data.kind === 'result') {
-        el.innerHTML = `<div class="db-ok">${esc(t('result.affected', { count: data.affectedRows }))}${data.insertId ? ` · insertId ${esc(data.insertId)}` : ''}${data.info ? ` · ${esc(data.info)}` : ''} <span class="db-muted">(${esc(t('result.ms', { ms: data.ms }))})</span></div>`;
+        el.innerHTML = `${paramsUsed(data.paramInfo)}<div class="db-ok">${esc(t('result.affected', { count: data.affectedRows }))}${data.insertId ? ` · insertId ${esc(data.insertId)}` : ''}${data.info ? ` · ${esc(data.info)}` : ''} <span class="db-muted">(${esc(t('result.ms', { ms: data.ms }))})</span></div>`;
         return;
       }
       const target = resultTarget(data);
       const editable = i => !!target?.colOf[i];
       el.innerHTML = `
+        ${paramsUsed(data.paramInfo)}
         <div class="db-result-meta">${esc(t('result.rows', { count: data.rowCount }))}${data.truncated ? ` ${esc(t('result.truncated', { limit: data.limit }))}` : ''} · ${esc(t('result.ms', { ms: data.ms }))}
           ${target ? `<span class="db-badge" title="${esc(t('result.editableHint'))}">✎ ${esc(t('result.editable', { table: target.table }))}</span>` : ''}
           ${target ? editsBar(data) : ''}</div>
@@ -1944,6 +2011,7 @@ export default {
       const a = e.target.closest('[data-action]')?.dataset.action;
       if (a === 'vault-reset') resetVault();
       else if (a === 'run') run();
+      else if (a === 'change-params') changeParams();
       else if (a === 'export-query') exportQuery(e.target.closest('[data-action]'));
       else if (a === 'history') showHistory();
       else if (a === 'new-table') { const c = active(); if (c) openDesigner(c, activeDb.get(c.id)); }

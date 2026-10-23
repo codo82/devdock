@@ -193,3 +193,6 @@
 .db-param-row label>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db-param-hint{font-size:10.5px;color:var(--muted)}
 .db-param-row input:disabled{opacity:.4}
+.db-params-used{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border);min-width:0}
+.db-params-used .db-mono{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto}
+.db-params-used .btn{flex-shrink:0}

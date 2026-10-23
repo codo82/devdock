@@ -493,7 +493,7 @@
     "one": "Parametro della query",
     "other": "{count} parametri della query"
   },
-  "params.hint": "La query contiene segnaposto: i valori vengono inseriti nella query (escapati) prima di eseguirla. Le modifiche chiedono comunque conferma, con i valori già inseriti.",
+  "params.hint": "La query contiene segnaposto: i valori vengono inseriti nella query (escapati) prima di eseguirla e restano salvati nel browser, così la prossima volta la query parte subito (con «Cambia» sopra i risultati si modificano). Le modifiche chiedono comunque conferma, con i valori già inseriti.",
   "params.waiting": "In attesa dei valori dei parametri…",
   "params.positional": "? n° {n} · nome dedotto",
   "params.positionalUnknown": "? n° {n}",
@@ -505,5 +505,7 @@
   "params.run": "Esegui",
   "params.notNumber": "{name}: non è un numero",
   "errors.params_invalid": "Valori dei parametri non validi: solo testo, numeri, booleani o NULL",
-  "errors.params_missing": "Mancano i valori dei parametri: {params}"
+  "errors.params_missing": "Mancano i valori dei parametri: {params}",
+  "params.used": "Parametri:",
+  "params.change": "Cambia"
 }

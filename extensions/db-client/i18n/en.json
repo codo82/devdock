@@ -493,7 +493,7 @@
     "one": "Query parameter",
     "other": "{count} query parameters"
   },
-  "params.hint": "The query contains placeholders: the values are put into the query (escaped) before it runs. Changes still ask for confirmation, with the values in place.",
+  "params.hint": "The query contains placeholders: the values are put into the query (escaped) before it runs and are saved in the browser, so next time the query runs at once (use «Change» above the results to edit them). Changes still ask for confirmation, with the values in place.",
   "params.waiting": "Waiting for the parameter values…",
   "params.positional": "? no. {n} · guessed name",
   "params.positionalUnknown": "? no. {n}",
@@ -505,5 +505,7 @@
   "params.run": "Run",
   "params.notNumber": "{name}: not a number",
   "errors.params_invalid": "Invalid parameter values: only text, numbers, booleans or NULL",
-  "errors.params_missing": "Missing parameter values: {params}"
+  "errors.params_missing": "Missing parameter values: {params}",
+  "params.used": "Parameters:",
+  "params.change": "Change"
 }
