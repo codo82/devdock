@@ -139,11 +139,6 @@ Built as an extension on the M3 architecture.
 
 Planned after the current milestones, independent of the work in progress. Order: M6 → M7 → M8.
 
-## DB client — PostgreSQL
-
-- [ ] **M5.7** PostgreSQL support in the `db-client` extension (it appears among the configured server types): driver, classification of statements, schema browser, data browser and export
-- [ ] **M7.15** Migrations for PostgreSQL once M5.7 is done
-
 ## M6 — Internationalization (i18n) ✅ (1.7.0)
 
 Goal: the whole UI (core and extensions) translatable into **any language**, with no list of languages hard-coded in the code: a language exists when its catalog exists. Adding one means adding JSON files, without touching JS. Italian is the **source language** (the complete reference and the last fallback); the first additional language is English. No build step and no external libraries: a small vanilla JS helper in the core, consistent with the rest of the project.
@@ -290,6 +285,21 @@ Goal: let the user put the extension tabs in the order they prefer. It is part o
 - [x] **M12.4** Tests (API, validation of the list, unknown codes ignored), README, CHANGELOG
 
 
+## M15 — DB client: PostgreSQL and SQL Server — inside the `db-client` extension
+
+Goal: the Database section works with PostgreSQL and Microsoft SQL Server as well as MySQL/MariaDB, with the same features and the same safety rules (every change shown and confirmed before it runs, read-only connections, passwords in the vault). Replaces the former M5.7 and M7.15.
+
+- [ ] **M15.1** Engine layer in `db-client`: one module per engine (`engines/mysql.js`, `engines/postgres.js`, `engines/mssql.js`) with pool and connection, query with timeout and row limit, read-only transaction, identifier quoting and value escaping, pagination, list of databases/schemas/tables, introspection and error mapping. MySQL moves onto it first with no change in behaviour (the existing tests stay green). Connection field `type`: `mysql` (default), `postgres`, `mssql`, with default ports 3306 / 5432 / 1433. Drivers as npm workspace dependencies of `db-client`: `pg` and `mssql` (tedious), both pure JavaScript, so they work the same on macOS and Windows; SQL Server uses SQL authentication only (Windows integrated authentication would need a native driver)
+- [ ] **M15.2** Per-dialect statement classification (only recognised reads run without confirmation): PostgreSQL dollar quoting, `E''` strings, `::` casts, `RETURNING`, `COPY`, `DO`, `LISTEN`/`NOTIFY`; SQL Server `[brackets]`, `N''` strings, `EXEC`, `MERGE`, `SELECT … INTO` (a write), `GO` batch separator refused. Parametric queries keep `?` and `:name` in the editor and are bound with the engine's syntax
+- [ ] **M15.3** Connection options per engine: PostgreSQL `sslmode`, SQL Server `encrypt` / `trustServerCertificate` (needed for local Docker and Azure), default database, through an SSH tunnel as today; connection test
+- [ ] **M15.4** Sidebar tree with schemas for PostgreSQL and SQL Server: connection ▸ database ▸ schema ▸ tables/views ▸ columns (MySQL unchanged), context menu on tables as today; SQL editor highlighting with each dialect's keywords
+- [ ] **M15.5** Data browser for the new engines: pagination (`LIMIT/OFFSET`, `OFFSET … FETCH`), search, filters, sorting, inline and dialog edit, multiple deletion, multi-cell edit in one transaction; types shown and edited correctly (PostgreSQL arrays, `json`/`jsonb`, `uuid`, `bytea`; SQL Server `uniqueidentifier`, `datetime2`, `varbinary`, identity columns); export as CSV, JSON and SQL
+- [ ] **M15.6** Table designer and schema changes per dialect: list of types, identity/serial columns, defaults, indexes, foreign keys; generated `ALTER` statements (PostgreSQL `ALTER COLUMN … TYPE/SET DEFAULT/SET NOT NULL`; SQL Server `sp_rename`, named default constraints); DDL in a transaction where the engine allows it, so a failure leaves nothing half applied
+- [ ] **M15.7** Migrations for the new engines in the same `NNN_<table>_<operation>.sql` files, with the dialect's SQL
+- [ ] **M15.8** MCP tools aware of the engine (`db_client_*` with schemas; reads in a read-only transaction: `BEGIN READ ONLY` on PostgreSQL, a transaction always rolled back on SQL Server plus the classification of the statement)
+- [ ] **M15.9** Tests: per-dialect unit tests that need no server (classification, quoting, pagination, DDL generation, introspection mapping), integration tests against disposable PostgreSQL and SQL Server servers when they are available (skipped otherwise, like the MySQL ones); README, CHANGELOG
+
+
 ## M13 — MongoDB client — new extension `mongo-client`
 
 Goal: browse and edit MongoDB databases like the MySQL client does, with the same safety rules. Minimal version.
@@ -323,4 +333,5 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 | M11 HTTP client | L | Express route discovery, authorization per user type (none, basic, manual token, login request, OAuth/OIDC with Firefox containers), actions after the token; secrets through the DB client vault (optional dependency) |
 | M14 Mock server | M | one HTTP listener per mock on `127.0.0.1`; predefined responses, call log with payload, route from a logged call, read-only MCP tool |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
+| M15 DB client: PostgreSQL and SQL Server | L | engine layer first (MySQL moved onto it with no change), then one dialect at a time through classification, browser, designer, migrations and MCP |
 | M13 MongoDB client | L | same vault and confirmation rules as the MySQL client; read-only MCP tools |
