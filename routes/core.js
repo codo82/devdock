@@ -7,6 +7,7 @@ const { getTools, refreshTools } = require('../lib/system');
 const { ConfigError, listSections, exportConfig, importConfig } = require('../lib/config');
 const { errorBody } = require('../lib/errors');
 const projects = require('../lib/projects');
+const layout = require('../lib/layout');
 
 const NAME_RE = /^[a-z0-9-]{1,40}$/;
 
@@ -49,6 +50,12 @@ module.exports = function coreRoutes(extensions) {
   router.post('/folders', (req, res) => { res.json(projects.createFolder(req.body)); });
   router.put('/folders/:id', (req, res) => { res.json(projects.updateFolder(req.params.id, req.body)); });
   router.delete('/folders/:id', (req, res) => { projects.deleteFolder(req.params.id); res.json({ ok: true }); });
+
+  // Ordine delle tab scelto dall'utente (codici sconosciuti scartati); DELETE = ordine dei manifest
+  const tabCodes = () => extensions.list().filter(e => e.state !== 'disabled' && e.position === 'tab' && e.frontend?.js).map(e => e.code);
+  router.get('/layout', (req, res) => { res.json(layout.get()); });
+  router.put('/layout/tabs', (req, res) => { res.json(layout.setTabs(req.body?.tabs, tabCodes())); });
+  router.delete('/layout/tabs', (req, res) => { res.json(layout.resetTabs()); });
 
   // ?refresh=1 ricontrolla gli strumenti (es. dopo un'installazione)
   router.get('/system', (req, res) => {

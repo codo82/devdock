@@ -7,6 +7,7 @@ const { ConfigError } = require('./lib/config');
 const { ApiError, coreError, errorBody } = require('./lib/errors');
 const { loadExtensions, frontendRouter } = require('./lib/extensions');
 const projects = require('./lib/projects'); // registra le sezioni dei progetti prima delle estensioni
+require('./lib/layout');                    // sezione "layout" del core (ordine delle tab)
 
 const app = express();
 
