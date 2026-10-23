@@ -186,3 +186,10 @@
 .db-ac-keyword{color:#ff7b72;border-color:#ff7b72}
 .db-ac-label{font-family:var(--font)}
 .db-ac-detail{color:var(--muted);margin-inline-start:auto;overflow:hidden;text-overflow:ellipsis}
+/* parametri di una query (? e :nome) */
+.db-params{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.db-param-row{display:grid;grid-template-columns:minmax(120px,1fr) 2fr auto;gap:8px;align-items:center}
+.db-param-row label{display:flex;flex-direction:column;font-size:12px;min-width:0;overflow:hidden}
+.db-param-row label>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db-param-hint{font-size:10.5px;color:var(--muted)}
+.db-param-row input:disabled{opacity:.4}

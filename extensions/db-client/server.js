@@ -7,7 +7,7 @@ const path = require('path');
 const mysqlCb = require('mysql2');
 const mysql = require('mysql2/promise');
 const vaultLib = require('./vault');
-const { classify, schemaChange } = require('./sql');
+const { classify, schemaChange, describeParams, bindParams } = require('./sql');
 const ddl = require('./ddl');
 const mig = require('./migrations');
 const schemaOps = require('./ops');
@@ -884,9 +884,22 @@ module.exports = function createDbClient(ctx) {
 
       // Esegue una istruzione. Le letture partono subito; tutto ciò che può modificare
       // dati o schema richiede il token di conferma di quella esatta istruzione (428).
+      // Query parametriche (? e :nome): senza params la risposta è 422 con i parametri da
+      // chiedere; con params i valori vengono escapati nel testo, e da lì è una query normale
+      // (la conferma mostra e firma l'istruzione con i valori).
       async query(req, res) {
         const conn = connectionOr404(req.params.id);
-        const { sql, confirm } = req.body;
+        const { confirm, params } = req.body;
+        let { sql } = req.body;
+        const wanted = typeof sql === 'string' ? describeParams(sql) : [];
+        if (wanted.length) {
+          if (!params || typeof params !== 'object' || Array.isArray(params)) return res.status(422).json({ needsParams: true, params: wanted });
+          const scalar = v => v === null || ['string', 'number', 'boolean'].includes(typeof v);
+          if (!Object.values(params).every(scalar)) throw ctx.error(400, 'params_invalid');
+          const bound = bindParams(sql, params, mysqlCb.escape);
+          if (bound.missing) throw ctx.error(400, 'params_missing', { params: bound.missing.map(k => wanted.find(w => w.key === k)?.name || k).join(', ') });
+          sql = bound.sql;
+        }
         const database = req.body.database || conn.database || null;
         if (database && !DB_NAME_RE.test(database)) throw ctx.error(400, 'database_invalid');
         const limit = Math.min(Math.max(parseInt(req.body.limit) || DEFAULT_ROW_LIMIT, 1), MAX_ROW_LIMIT);
@@ -906,7 +919,7 @@ module.exports = function createDbClient(ctx) {
         }
         try {
           const result = await execute(await poolFor(conn, database), sql, limit);
-          res.json({ ...result, statement: c.kind, database, limit });
+          res.json({ ...result, statement: c.kind, database, limit, ...(wanted.length ? { sql } : {}) });
         } catch (e) {
           sendFailure(res, e);
         }

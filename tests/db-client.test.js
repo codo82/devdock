@@ -190,6 +190,21 @@ test('query: letture subito, scritture solo con la conferma della stessa istruzi
     await api('POST', '/connections', { ...base, id: 'ro', readOnly: true });
     const q = (id, body) => api('POST', `/connections/${id}/query`, body);
 
+    // query parametriche: prima i parametri da chiedere, poi i valori escapati nel testo
+    let p = await q('rw', { sql: 'SELECT nome FROM clienti WHERE id > :min AND nome <> ? ORDER BY id LIMIT ?' });
+    assert.equal(p.status, 422);
+    assert.deepEqual(p.json.params.map(x => [x.key, x.name]), [['min', 'min'], ['#1', 'nome'], ['#2', 'limit']]);
+    p = await q('rw', { sql: 'SELECT nome FROM clienti WHERE id > :min AND nome <> ? ORDER BY id LIMIT ?', params: { min: 0, '#1': "Ros'si", '#2': 2 } });
+    assert.equal(p.status, 200, p.text);
+    assert.deepEqual(p.json.rows, [['Rossi'], ['Bianchi']]);
+    assert.equal(p.json.sql, "SELECT nome FROM clienti WHERE id > 0 AND nome <> 'Ros\\'si' ORDER BY id LIMIT 2");
+    assert.equal((await q('rw', { sql: 'SELECT ?', params: {} })).json.code, 'db-client.params_missing');
+    assert.equal((await q('rw', { sql: 'SELECT ?', params: { '#1': { x: 1 } } })).json.code, 'db-client.params_invalid');
+    // scrittura parametrica: la conferma riguarda l'istruzione con i valori
+    p = await q('rw', { sql: 'UPDATE clienti SET note = :nota WHERE id = :id', params: { nota: 'x', id: 99 } });
+    assert.equal(p.status, 428);
+    assert.equal(p.json.sql, "UPDATE clienti SET note = 'x' WHERE id = 99");
+
     // lettura: colonne, righe come array, NULL conservati
     let r = await q('rw', { sql: 'SELECT id, nome, note FROM clienti ORDER BY id' });
     assert.equal(r.status, 200, r.text);

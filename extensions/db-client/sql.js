@@ -151,4 +151,112 @@ function schemaChange(sql) {
   return { table, operation: 'alter' };
 }
 
-module.exports = { classify, mask, schemaChange };
+// ---- query parametriche: segnaposto ? e :nome ----
+
+// Come mask, ma con la stessa lunghezza del testo (stringhe, identificatori quotati e
+// commenti diventano spazi): le posizioni restano quelle della query originale
+function blank(sql) {
+  const out = sql.split('');
+  const clear = (from, to) => { for (let k = from; k < to && k < out.length; k++) if (out[k] !== '\n') out[k] = ' '; };
+  let i = 0;
+  while (i < sql.length) {
+    const c = sql[i], n = sql[i + 1];
+    if (c === "'" || c === '"' || c === '`') {
+      const start = i;
+      i++;
+      while (i < sql.length) {
+        if (sql[i] === '\\' && c !== '`') { i += 2; continue; }
+        if (sql[i] === c) { if (sql[i + 1] === c) { i += 2; continue; } break; }
+        i++;
+      }
+      i++;
+      // un identificatore resta riconoscibile come nome (serve per dare il nome ai ?)
+      if (c === '`') { const name = sql.slice(start + 1, i - 1).replace(/[^A-Za-z0-9_$]/g, '_'); clear(start, i); out.splice(start, name.length, ...name); }
+      else clear(start, i);
+    } else if ((c === '-' && n === '-' && /\s/.test(sql[i + 2] ?? ' ')) || c === '#') {
+      const start = i;
+      while (i < sql.length && sql[i] !== '\n') i++;
+      clear(start, i);
+    } else if (c === '/' && n === '*' && sql[i + 2] !== '!') {
+      const end = sql.indexOf('*/', i + 2);
+      const stop = end === -1 ? sql.length : end + 2;
+      clear(i, stop);
+      i = stop;
+    } else i++;
+  }
+  return out.join('');
+}
+
+// Segnaposto fuori da stringhe e commenti: [{ start, end, key, kind: 'positional' | 'named', name? }].
+// ? → key "#1", "#2"…; :nome → key "nome" (non :: né :=, non dopo una lettera, es. etichette)
+function placeholders(sql) {
+  if (typeof sql !== 'string') return [];
+  const text = blank(sql);
+  const list = [];
+  let n = 0;
+  const re = /\?|(?<![A-Za-z0-9_$:]):([A-Za-z_][A-Za-z0-9_]*)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    if (m[0] === '?') list.push({ start: m.index, end: m.index + 1, key: `#${++n}`, kind: 'positional' });
+    else list.push({ start: m.index, end: m.index + m[0].length, key: m[1], kind: 'named', name: m[1] });
+  }
+  return list;
+}
+
+// Nome di un ? ricavato dal testo intorno (colonna confrontata, colonne di un INSERT,
+// LIMIT/OFFSET, estremi di un BETWEEN); null se non si capisce
+const COL = '(?:[A-Za-z0-9_$]+\\s*\\.\\s*)?([A-Za-z_][A-Za-z0-9_$]*)';
+function guessName(text, p) {
+  const before = text.slice(0, p.start), after = text.slice(p.end);
+  let m;
+  if ((m = new RegExp(`${COL}\\s*(?:=|<=>|<>|!=|<=|>=|<|>|\\bNOT\\s+LIKE\\b|\\bLIKE\\b|\\bREGEXP\\b)\\s*$`, 'i').exec(before))) return m[1];
+  if ((m = new RegExp(`${COL}\\s+(?:NOT\\s+)?IN\\s*\\((?:[^()]*,)?\\s*$`, 'i').exec(before))) return m[1];
+  if ((m = new RegExp(`${COL}\\s+(?:NOT\\s+)?BETWEEN\\s*$`, 'i').exec(before))) return `${m[1]}_min`;
+  if ((m = new RegExp(`${COL}\\s+(?:NOT\\s+)?BETWEEN\\s+\\S+\\s+AND\\s*$`, 'i').exec(before))) return `${m[1]}_max`;
+  if (/\bOFFSET\s*$/i.test(before)) return 'offset';
+  if (/\bLIMIT\s*$/i.test(before)) return /^\s*,/.test(after) ? 'offset' : 'limit';
+  if (/\bLIMIT\s+\S+\s*,\s*$/i.test(before)) return 'limit';
+  if ((m = new RegExp(`^\\s*(?:=|<>|!=|<=|>=|<|>)\\s*${COL}`, 'i').exec(after))) return m[1];
+  // INSERT INTO t (a, b, c) VALUES (?, ?, ?): la colonna nella stessa posizione
+  if ((m = /\bINSERT\s+(?:IGNORE\s+)?(?:INTO\s+)?\S+\s*\(([^()]*)\)\s*VALUES\s*(?:\([^()]*\)\s*,\s*)*\(([^()]*)$/i.exec(before))) {
+    const cols = m[1].split(',').map(c => c.trim());
+    return cols[(m[2].match(/,/g) || []).length] || null;
+  }
+  return null;
+}
+
+// Parametri da chiedere all'utente, uno per chiave: [{ key, name, kind, guessed }]
+// (nomi dei ? ricavati dalla query; uguali → nome_2, nome_3…; altrimenti "param_N")
+function describeParams(sql) {
+  const list = placeholders(sql);
+  const text = blank(sql);
+  const out = [];
+  const used = new Map();
+  for (const p of list) {
+    if (out.some(x => x.key === p.key)) continue; // :nome ripetuto: un solo valore
+    let name = p.name, guessed = false;
+    if (p.kind === 'positional') {
+      const g = guessName(text, p);
+      guessed = !!g;
+      name = g || `param_${p.key.slice(1)}`;
+      const seen = used.get(name) || 0;
+      used.set(name, seen + 1);
+      if (seen) name = `${name}_${seen + 1}`;
+    }
+    out.push({ key: p.key, name, kind: p.kind, guessed });
+  }
+  return out;
+}
+
+// Query con i valori al posto dei segnaposto. escape(v) dal driver (mysql2); values: { key: valore }
+// (stringa, numero, booleano o null). Restituisce { sql } oppure { missing: [chiavi] }
+function bindParams(sql, values, escape) {
+  const list = placeholders(sql);
+  const missing = [...new Set(list.filter(p => !Object.hasOwn(values || {}, p.key)).map(p => p.key))];
+  if (missing.length) return { missing };
+  let out = sql;
+  for (const p of [...list].reverse()) out = out.slice(0, p.start) + escape(values[p.key]) + out.slice(p.end);
+  return { sql: out };
+}
+
+module.exports = { classify, mask, schemaChange, placeholders, describeParams, bindParams };

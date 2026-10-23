@@ -488,5 +488,22 @@
   "row.updatedMany": {
     "one": "{count} row updated",
     "other": "{count} rows updated"
-  }
+  },
+  "params.title": {
+    "one": "Query parameter",
+    "other": "{count} query parameters"
+  },
+  "params.hint": "The query contains placeholders: the values are put into the query (escaped) before it runs. Changes still ask for confirmation, with the values in place.",
+  "params.waiting": "Waiting for the parameter values…",
+  "params.positional": "? no. {n} · guessed name",
+  "params.positionalUnknown": "? no. {n}",
+  "params.typeTitle": "Value type: Auto sends a number when the text looks like a number",
+  "params.type.auto": "Auto",
+  "params.type.text": "Text",
+  "params.type.number": "Number",
+  "params.type.null": "NULL",
+  "params.run": "Run",
+  "params.notNumber": "{name}: not a number",
+  "errors.params_invalid": "Invalid parameter values: only text, numbers, booleans or NULL",
+  "errors.params_missing": "Missing parameter values: {params}"
 }

@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { classify, schemaChange } = require('../extensions/db-client/sql');
+const { classify, schemaChange, describeParams, bindParams } = require('../extensions/db-client/sql');
+const { escape } = require('mysql2');
 
 const kind = sql => classify(sql).kind;
 
@@ -55,4 +56,25 @@ test('istruzioni di schema: tabella e operazione per il nome della migration', (
   ];
   for (const [sql, table, operation] of cases) assert.deepEqual(schemaChange(sql), { table, operation }, sql);
   assert.equal(schemaChange('SELECT 1'), null);
+});
+
+test('query parametriche: segnaposto fuori da stringhe e commenti, nomi ricavati dalla query', () => {
+  const names = sql => describeParams(sql).map(p => p.name);
+  assert.deepEqual(names('SELECT * FROM clienti c WHERE c.nome = ? AND note LIKE ? AND id IN (?, ?) AND creato BETWEEN ? AND ? LIMIT ?, ?'),
+    ['nome', 'note', 'id', 'id_2', 'creato_min', 'creato_max', 'offset', 'limit']);
+  assert.deepEqual(names('INSERT INTO clienti (nome, `note`) VALUES (?, ?)'), ['nome', 'note']);
+  assert.deepEqual(names('UPDATE t SET `stato` = ? WHERE ? = id LIMIT ?'), ['stato', 'id', 'limit']);
+  assert.deepEqual(names('SELECT COALESCE(?, 1)'), ['param_1']);
+  // :nome ripetuto → un solo valore; niente ? o :x dentro stringhe, commenti e backtick; niente :: e :=
+  const p = describeParams("SELECT * FROM t WHERE a = :nome OR b = :nome AND x = '? :no' -- ? :no\n AND `c?` = ? AND @v := 2 AND y = 'a'::text");
+  assert.deepEqual(p.map(x => [x.key, x.name, x.kind]), [['nome', 'nome', 'named'], ['#1', 'c_', 'positional']]);
+  assert.deepEqual(describeParams('SELECT 1'), []);
+  assert.deepEqual(describeParams('lbl: BEGIN END'), []); // etichetta, non un parametro
+});
+
+test('query parametriche: valori escapati al posto dei segnaposto', () => {
+  const sql = "SELECT * FROM t WHERE a = :nome AND b = ? AND c = :nome AND d = '?'";
+  assert.deepEqual(bindParams(sql, { nome: "o'k" }, escape), { missing: ['#1'] });
+  assert.equal(bindParams(sql, { nome: "o'k", '#1': null }, escape).sql, "SELECT * FROM t WHERE a = 'o\\'k' AND b = NULL AND c = 'o\\'k' AND d = '?'");
+  assert.equal(bindParams('SELECT * FROM t LIMIT ?', { '#1': 10 }, escape).sql, 'SELECT * FROM t LIMIT 10');
 });

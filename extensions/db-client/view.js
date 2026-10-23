@@ -1471,13 +1471,16 @@ export default {
     }
 
     let running = false;
-    async function run(confirmToken) {
+    // opts: { sql, token } per rimandare un'istruzione confermata, { params } con i valori
+    // dei parametri (query con ? o :nome)
+    async function run(opts) {
       const c = active();
-      const sql = typeof confirmToken === 'object' ? confirmToken.sql : statement();
+      const sql = opts?.token ? opts.sql : statement();
       if (!c || !sql || running) return;
       const body = {
         sql, database: activeDb.get(c.id) || null, limit: Number($(ctx.root, 'limit').value),
-        ...(typeof confirmToken === 'object' ? { confirm: confirmToken.token } : {}),
+        ...(opts?.token ? { confirm: opts.token } : {}),
+        ...(opts?.params ? { params: opts.params } : {}),
       };
       running = true;
       grid = null;
@@ -1489,7 +1492,8 @@ export default {
         });
         const data = await res.json().catch(() => ({}));
         const record = (ok, summary) => addHistory({ sql, connId: c.id, db: body.database, at: Date.now(), ok, summary });
-        if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token }));
+        if (res.status === 422 && data.needsParams) askParams(data.params);
+        else if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token }));
         else if (!res.ok) { renderError(ctx.ui.errorText(data, `HTTP ${res.status}`), sql); record(false); }
         else {
           renderResult(data);
@@ -1504,6 +1508,56 @@ export default {
       } finally {
         running = false;
       }
+    }
+
+    // ---- query parametriche: un campo per parametro, valori ricordati per nome nella sessione ----
+    const paramMemory = new Map(); // nome → { value, type }
+    let pendingParams = null;
+    function askParams(params) {
+      pendingParams = params;
+      $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('params.waiting'))}</div>`;
+      const types = ['auto', 'text', 'number', 'null'];
+      const rows = params.map((p, i) => {
+        const saved = paramMemory.get(p.name) || { value: '', type: 'auto' };
+        const label = p.kind === 'named' ? `:${p.name}` : p.name;
+        const hint = p.kind === 'named' ? '' : t(p.guessed ? 'params.positional' : 'params.positionalUnknown', { n: p.key.slice(1) });
+        return `<div class="db-param-row">
+          <label for="f_param_${i}"><span class="db-mono">${esc(label)}</span>${hint ? `<span class="db-param-hint">${esc(hint)}</span>` : ''}</label>
+          <input class="form-input" id="f_param_${i}" value="${esc(saved.value)}" autocomplete="off" ${saved.type === 'null' ? 'disabled' : ''}
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();Ext['db-client'].runWithParams()}">
+          <select class="form-input db-select" id="f_param_type_${i}" onchange="document.getElementById('f_param_${i}').disabled=this.value==='null'" title="${esc(t('params.typeTitle'))}">
+            ${types.map(ty => `<option value="${ty}" ${ty === saved.type ? 'selected' : ''}>${esc(t(`params.type.${ty}`))}</option>`).join('')}
+          </select>
+        </div>`;
+      }).join('');
+      openModal(t('params.title', { count: params.length }), `<p class="db-muted">${esc(t('params.hint'))}</p><div class="db-params">${rows}</div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].cancelParams()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" onclick="Ext['db-client'].runWithParams()">${esc(t('params.run'))}</button>`);
+      setTimeout(() => document.getElementById('f_param_0')?.focus(), 0);
+    }
+    // Valore da inviare: auto → numero se ha la forma di un numero (senza zeri iniziali), altrimenti testo
+    function paramValue(raw, type) {
+      if (type === 'null') return { value: null };
+      if (type === 'text') return { value: raw };
+      const numeric = /^-?(0|[1-9]\d*)(\.\d+)?$/.test(raw.trim());
+      if (type === 'number') return numeric ? { value: Number(raw) } : { error: true };
+      return { value: numeric ? Number(raw) : raw };
+    }
+    function runWithParams() {
+      const list = pendingParams;
+      if (!list) return;
+      const params = {};
+      for (const [i, p] of list.entries()) {
+        const raw = document.getElementById(`f_param_${i}`)?.value ?? '';
+        const type = document.getElementById(`f_param_type_${i}`)?.value || 'auto';
+        const v = paramValue(raw, type);
+        if (v.error) { toast(t('params.notNumber', { name: p.name }), 'error'); document.getElementById(`f_param_${i}`)?.focus(); return; }
+        params[p.key] = v.value;
+        paramMemory.set(p.name, { value: raw, type });
+      }
+      pendingParams = null;
+      closeModal();
+      run({ params });
     }
 
     // Nessuna modifica parte senza che l'utente veda e confermi l'istruzione esatta
@@ -1811,6 +1865,11 @@ export default {
           if (result.ran !== false) refreshDatabase(c, database);
         });
         if (!p.keepResults) $(ctx.root, 'results').innerHTML = '';
+      },
+      runWithParams: () => runWithParams(),
+      cancelParams() {
+        pendingParams = null;
+        $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('run.cancelled'))}</div>`;
       },
       cancelConfirm() {
         const p = pendingConfirm;

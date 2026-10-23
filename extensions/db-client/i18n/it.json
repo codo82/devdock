@@ -488,5 +488,22 @@
   "row.updatedMany": {
     "one": "{count} riga aggiornata",
     "other": "{count} righe aggiornate"
-  }
+  },
+  "params.title": {
+    "one": "Parametro della query",
+    "other": "{count} parametri della query"
+  },
+  "params.hint": "La query contiene segnaposto: i valori vengono inseriti nella query (escapati) prima di eseguirla. Le modifiche chiedono comunque conferma, con i valori già inseriti.",
+  "params.waiting": "In attesa dei valori dei parametri…",
+  "params.positional": "? n° {n} · nome dedotto",
+  "params.positionalUnknown": "? n° {n}",
+  "params.typeTitle": "Tipo del valore: Auto usa un numero se il testo ha la forma di un numero",
+  "params.type.auto": "Auto",
+  "params.type.text": "Testo",
+  "params.type.number": "Numero",
+  "params.type.null": "NULL",
+  "params.run": "Esegui",
+  "params.notNumber": "{name}: non è un numero",
+  "errors.params_invalid": "Valori dei parametri non validi: solo testo, numeri, booleani o NULL",
+  "errors.params_missing": "Mancano i valori dei parametri: {params}"
 }

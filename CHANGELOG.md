@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-10-23
+
+### Added
+- Database: parametric queries in the SQL editor with `?` and `:name` placeholders (outside strings, comments and quoted names; `::` and `:=` are not placeholders). Running such a query opens a dialog with one field per parameter: `:name` shows the variable name (a repeated name is asked once), each `?` gets a name guessed from the query when possible (compared column, `IN (…)`, `BETWEEN` min/max, `LIMIT`/`OFFSET`, `INSERT … (columns) VALUES (…)`), otherwise `param_N`. Each value has a type (Auto, Text, Number, NULL; Auto sends a number when the text looks like one) and is remembered by name for the session; Enter runs. The server escapes the values into the statement (`params` in `POST …/query`, 422 `needsParams` with the list when they are missing), so reads run at once and changes are confirmed with the actual values.
+
 ## [1.18.0] - 2026-10-22
 
 ### Added
