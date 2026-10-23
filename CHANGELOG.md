@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-10-23
+
+### Added
+- **Mock server** (new extension `mock-server`, 🎭 Mock tab, config section `mockServers` with the **Mock server** export checkbox): mock servers with name and port, listening on `127.0.0.1` only, started and stopped from the UI (status in the sidebar, running count on the tab) and stopped when DevDock stops; a port in use is reported with the process that holds it. Routes with method (or any), path with `:parameters` and `*`, status, headers, JSON or text body and optional delay; the first matching route in list order answers (reorderable), unmatched calls get a JSON `404`; routes change while the mock runs. CORS on by default, with automatic answers to preflight requests. API under `/api/ext/mock-server`.
+- Mock server, **call log**: every incoming call with time, method, path, query, headers, body (JSON, text, or size only for binary content; truncated over 64 KB), matched route and status, live in the UI through a stream; the latest 500 calls per mock in memory, with **Clear** and **Create route from this call** for calls without a route.
+- MCP tools `mock_server_list` and `mock_server_requests` (read-only): calls of a mock with filters by method, path and "unmatched only", a limit, and credential headers (`Authorization`, `Cookie`, API keys, tokens) redacted.
+
 ## [1.21.0] - 2026-10-23
 
 ### Added

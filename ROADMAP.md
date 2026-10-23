@@ -267,17 +267,17 @@ Goal: send requests to the local APIs of a project and keep the useful ones, wit
 - [x] **M11.6** Tests (local test server: methods, headers, body, timeout, variables, route discovery on fixtures split over several files, each authorization method, token reuse and expiry, OAuth flow against a fake provider, secrets never in clear in `config.json`), README, CHANGELOG
 
 
-## M14 — Mock server — new extension `mock-server`
+## M14 — Mock server — new extension `mock-server` ✅ (1.22.0)
 
 Goal: simulate an API that doesn't exist yet or isn't reachable: every call gets a predefined response, and every incoming call is logged with its payload. Minimal version.
 
-- [ ] **M14.1** Mock servers in their own config section, with an Export/Import checkbox: name and port (listening on `127.0.0.1` only; a port already in use is reported with its owner through `lib/ports.js`). Start/stop from the UI, status in the sidebar; running mocks are stopped when DevDock shuts down
-- [ ] **M14.2** Routes per mock: method (or any), path with parameters (`/users/:id`) and `*` wildcard; predefined response with status, headers, body (JSON or text) and optional delay. The first matching route in list order answers; a call without a match gets a `404` with a JSON body that says so. Routes are edited while the mock is running, without restarting it
-- [ ] **M14.3** CORS option per mock (on by default): `Access-Control-Allow-*` headers and automatic answer to preflight `OPTIONS`, so a frontend on another local port can call the mock
-- [ ] **M14.4** Log of incoming calls, live in the UI: time, method, path, query, headers, body (JSON formatted, text, or size only for binary content; size limit), matched route (or "no match") and response status. Kept in memory with a cap per mock (latest 500 calls), with a clear button
-- [ ] **M14.5** "Create route from this call" on a logged call without a match: opens the route editor prefilled with its method and path, ready for the response to be filled in
-- [ ] **M14.6** MCP tool `mock_requests` (read-only): calls logged by a mock, with filters by method, path and "no match only", and a limit; header values that look like credentials (`Authorization`, `Cookie`, `X-Api-Key`…) redacted
-- [ ] **M14.7** Tests (routes with parameters and wildcard, order of match, unmatched call, delay, CORS preflight, log with JSON and text bodies, port in use, route created from a logged call, MCP tool with redaction), README, CHANGELOG
+- [x] **M14.1** Mock servers in their own config section, with an Export/Import checkbox: name and port (listening on `127.0.0.1` only; a port already in use is reported with its owner through `lib/ports.js`). Start/stop from the UI, status in the sidebar; running mocks are stopped when DevDock shuts down
+- [x] **M14.2** Routes per mock: method (or any), path with parameters (`/users/:id`) and `*` wildcard; predefined response with status, headers, body (JSON or text) and optional delay. The first matching route in list order answers; a call without a match gets a `404` with a JSON body that says so. Routes are edited while the mock is running, without restarting it
+- [x] **M14.3** CORS option per mock (on by default): `Access-Control-Allow-*` headers and automatic answer to preflight `OPTIONS`, so a frontend on another local port can call the mock
+- [x] **M14.4** Log of incoming calls, live in the UI: time, method, path, query, headers, body (JSON formatted, text, or size only for binary content; size limit), matched route (or "no match") and response status. Kept in memory with a cap per mock (latest 500 calls), with a clear button
+- [x] **M14.5** "Create route from this call" on a logged call without a match: opens the route editor prefilled with its method and path, ready for the response to be filled in
+- [x] **M14.6** MCP tool `mock_requests` (read-only; published as `mock_server_requests`, with `mock_server_list` for the mock ids): calls logged by a mock, with filters by method, path and "no match only", and a limit; header values that look like credentials (`Authorization`, `Cookie`, `X-Api-Key`…) redacted
+- [x] **M14.7** Tests (routes with parameters and wildcard, order of match, unmatched call, delay, CORS preflight, log with JSON and text bodies, port in use, route created from a logged call, MCP tool with redaction), README, CHANGELOG
 
 
 ## M12 — Tab order — core

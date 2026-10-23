@@ -1,6 +1,6 @@
 # DevDock
 
-Local web dashboard for everyday development: SSH tunnels, npm scripts, PM2, Git, databases, `.env` files, ports, an HTTP client and Swagger preview in a single interface.
+Local web dashboard for everyday development: SSH tunnels, npm scripts, PM2, Git, databases, `.env` files, ports, an HTTP client, mock servers and Swagger preview in a single interface.
 
 It runs on your own machine and only answers on `http://127.0.0.1:3500`. The user interface is available in Italian and English, and new languages can be added with JSON files (see *Languages*).
 
@@ -42,6 +42,7 @@ Each section is an extension (see [Writing an extension](#writing-an-extension))
 - **🔑 Env** (`env`) — the `.env*` files of each project compared with the template (`.env.example`, `.env.sample`…): keys missing, extra or empty. Values are hidden and shown one at a time; edit, add, rename or delete keys, add the missing keys from the template, create a `.env` from the template. Files are rewritten keeping comments, blank lines and order; a file changed outside DevDock in the meantime is not overwritten. Values never go into the DevDock configuration, its exports or the MCP tools.
 - **🔌 Ports** (`ports`) — listening TCP ports of the machine with process, PID, user and command line, linked to what DevDock started (npm script, PM2 process, SSH tunnel); search, "only my processes" filter, and stop of the process that holds a port after a confirmation: **Stop** (SIGTERM) or **Force stop** (SIGKILL, `taskkill /F` on Windows); processes started by DevDock are stopped through their section, also when forced, and if the port is still in use after a normal stop DevDock offers to force it. Only processes of the current user can be stopped. macOS/Linux (`lsof` or `ss`) and Windows (`netstat`).
 - **📮 HTTP** (`http-client`) — HTTP client for the projects' local APIs: sections of requests with a base URL and variables, requests sent by the DevDock backend (no CORS limits), Express routes found in the code of the linked project, an authorization per user type with the token obtained automatically. See *HTTP client*.
+- **🎭 Mock** (`mock-server`) — local mock servers that answer with predefined responses and log every incoming call with its payload. See *Mock server*.
 - **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
 - **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ button in the header.
 
@@ -74,6 +75,14 @@ A connection can be linked to a **migrations folder in a repository** (📁 Migr
 - **Actions after the token**: up to 5 requests run right after a token is obtained, with the new token in the header (e.g. choose the tenant, get a CSRF token). Values are extracted from their responses (JSON path or `header:<name>`) into variables of the user type, used as `{{name}}` in its requests; a variable called `token` replaces the token (e.g. a second token obtained through an exchange). If an action fails the token is not kept.
 - **Secrets** (basic auth and login passwords, OAuth client secret) are encrypted with the master password of the Database section (the vault is shared; the section asks to unlock it when needed) and never saved in clear; changing the master password re-encrypts them and resetting it deletes them. Without the Database extension only methods without secrets are available. The **HTTP requests** checkbox exports sections, requests, variables and user types, with the secrets still encrypted.
 
+## Mock server
+
+- **Mock servers**: each one has a name and a port and listens on `127.0.0.1` only; start/stop from the sidebar (▶ ■) or the panel, with the status shown in the sidebar and the number of running mocks on the tab. A port already in use is reported with the process that holds it. Running mocks stop when DevDock stops; changing the port of a running mock restarts it on the new one.
+- **Routes**: method (or *Any*), path with parameters (`/users/:id`) and the `*` wildcard (`/api/*`), status, response headers, body (JSON, text or none) and an optional delay. The first matching route in list order answers (↑ ↓ to reorder; `GET` routes also answer `HEAD`); a call without a match gets a `404` with a JSON body that says so. Routes are edited while the mock is running, without restarting it.
+- **CORS** (on by default): `Access-Control-Allow-*` headers on every response and an automatic `204` answer to preflight `OPTIONS` requests, so a frontend on another local port can call the mock.
+- **Calls**: every incoming call is logged live — time, method, path, query, headers, body (JSON formatted, text, or only the size for binary content; bodies over 64 KB are truncated), the route that answered (or *no route*) and the status. The latest 500 calls per mock are kept in memory (also after the mock stops, until **Clear** or a restart of DevDock). **Create route from this call** on a call without a route opens the route editor with its method and path, ready for the response.
+- The **Mock servers** export checkbox exports mocks and routes (not the call log).
+
 ## MCP server
 
 DevDock is also an **MCP server**, so AI agents (Claude Code, Claude Desktop, any MCP client) can look at your development environment: tunnels, PM2 processes, Git repositories, npm projects and databases. Click 🤖 in the header for the endpoint, the token and ready-to-copy setup:
@@ -82,7 +91,7 @@ DevDock is also an **MCP server**, so AI agents (Claude Code, Claude Desktop, an
 claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"
 ```
 
-- **What an agent can do**: read tunnels and their status, listening ports and their processes, which `.env` keys are missing (never the values), PM2 processes and logs, Git repositories (branch, ahead/behind, status, log), npm projects and scripts, the output of npm processes; **start and stop npm scripts**; on databases list connections (without credentials), databases, tables and table structures, and run read-only queries (row limit, run in a `READ ONLY` transaction). Nothing else changes state.
+- **What an agent can do**: read tunnels and their status, listening ports and their processes, which `.env` keys are missing (never the values), PM2 processes and logs, Git repositories (branch, ahead/behind, status, log), npm projects and scripts, the output of npm processes; **start and stop npm scripts**; on databases list connections (without credentials), databases, tables and table structures, and run read-only queries (row limit, run in a `READ ONLY` transaction); list the mock servers and read the calls they received (credential headers such as `Authorization`, `Cookie` and API keys are redacted). Nothing else changes state.
 - **Databases need the vault unlocked from the DevDock UI**: the master password never goes through the agent. When the vault is locked the tools answer with a clear error asking you to unlock it.
 - **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.devdock-mcp-token` next to `config.json` (not exported, regenerable from the 🤖 dialog). Requests coming from a browser are rejected.
 - Tool names are prefixed with the extension (`git_status`, `npm_run`, `db_client_query`); errors carry the same codes as the API.
@@ -114,7 +123,7 @@ Everything is stored in `config.json` in the project folder. The file is created
 - `projects[].path` — absolute path of the project folder
 - `projects[].folder` — optional sidebar folder (`projectFolders[].id`); without it the project is at the root of the sidebars
 
-Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env) or to an extension (`groups` and `servers` to tunnels, `dbConnections`, `dbFolders` and `vault` to db-client, `httpSections` to http-client), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle) and of the extensions (Tunnel SSH, Connessioni database, Richieste HTTP) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
+Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env) or to an extension (`groups` and `servers` to tunnels, `dbConnections`, `dbFolders` and `vault` to db-client, `httpSections` to http-client, `mockServers` to mock-server), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle) and of the extensions (Tunnel SSH, Connessioni database, Richieste HTTP, Mock server) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
 
 ## Languages
 
@@ -140,7 +149,7 @@ Active protections:
 
 Local command-line clients (curl, scripts) that send no `Origin` header are allowed, like any other local program.
 
-The HTTP client sends requests from the DevDock backend to the URLs you enter (http and https only); during an OAuth login it listens for the redirect on `127.0.0.1` (and `::1`), only on the port of the redirect URI and only until the login ends.
+The HTTP client sends requests from the DevDock backend to the URLs you enter (http and https only); during an OAuth login it listens for the redirect on `127.0.0.1` (and `::1`), only on the port of the redirect URI and only until the login ends. Mock servers listen on `127.0.0.1` only, on the ports you choose, and answer any local caller (that is their purpose, CORS included); their calls are kept in memory only.
 
 ## Project structure
 

@@ -14,6 +14,7 @@ Every feature that can be added or removed is an **extension**: a folder under `
 | `git` | tab | 30 | — | — | — | no |
 | `ports` | tab | 35 | — | — | `npm`, `pm2`, `tunnels` (optional) | no |
 | `http-client` | tab | 38 | `httpSections` | Richieste HTTP | `db-client` (optional) | no |
+| `mock-server` | tab | 39 | `mockServers` | Mock server | — | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
 The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox.
@@ -201,7 +202,7 @@ Steps to enable MCP for an extension:
 3. Restart DevDock: the tools appear in the 🤖 *MCP server* dialog of the header and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
 4. Try them from a client: copy the setup from the panel (for Claude Code `claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"`), or in a test with the SDK client as in `tests/mcp.test.js`.
 
-The extensions shipped with DevDock expose: `tunnels_list`; `ports_list`; `env_check`; `pm2_list`, `pm2_logs`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI).
+The extensions shipped with DevDock expose: `tunnels_list`; `ports_list`; `env_check`; `pm2_list`, `pm2_logs`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI); `mock_server_list`, `mock_server_requests` (credential headers redacted).
 
 Keep tools read-only unless the user asked otherwise, never return secrets (passwords, tokens, vault data), and limit long outputs with a parameter (`limit`, `lines`) and a `truncated` flag. A missing handler disables the extension like a missing route handler.
 
