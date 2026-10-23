@@ -268,7 +268,7 @@ Goal: send requests to the local APIs of a project and keep the useful ones, wit
 
 ## M15 — Installable extensions — core
 
-Goal: DevDock ships with a set of built-in extensions and can install others from their own git repositories. Built-in: `git`, `npm`, `tunnels`, `env`, `db-client`, `swagger`, `http-client`. External, each in its own repository: `pm2` (moved out: of little use locally), `ports` (moved out; `lib/ports.js` stays in the core, other extensions use it), `mock-server` (M14) and `mongo-client` (M13), which are created directly as external extensions.
+Goal: DevDock ships with a set of built-in extensions and can install others from their own git repositories. Built-in: `git`, `npm`, `tunnels`, `env`, `db-client`, `swagger`, `http-client`, `mock-server` (M14). External, each in its own repository: `pm2` (moved out: of little use locally), `ports` (moved out; `lib/ports.js` stays in the core, other extensions use it) and `mongo-client` (M13), which is created directly as an external extension.
 
 - [ ] **M15.1** Versioned contract: the manifest declares the compatible core versions (`"devdock": "^2.0"`); the loader refuses an incompatible extension with a clear error. `docs/EXTENSIONS.md` becomes the public API, breaking changes marked in the CHANGELOG
 - [ ] **M15.2** Self-contained extensions: tests move into `extensions/<code>/tests/` and use a test kit exported by the core (today's `tests/helpers.js`); the i18n check runs per extension; removing an extension folder leaves the core suite green
@@ -279,7 +279,7 @@ Goal: DevDock ships with a set of built-in extensions and can install others fro
 - [ ] **M15.7** Tests (incompatible version refused, duplicate code, install from a local git repo with tags, update, remove, vault migration with existing passwords), README, CHANGELOG
 
 
-## M14 — Mock server — new external extension `mock-server`
+## M14 — Mock server — new extension `mock-server`
 
 Goal: simulate an API that doesn't exist yet or isn't reachable: every call gets a predefined response, and every incoming call is logged with its payload. Minimal version.
 
@@ -333,7 +333,7 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 | M9 Ports in use | S | `lib/ports.js` extended; Windows through `netstat` |
 | M10 Environment files | S | read and write, comments and order kept; values never stored in DevDock or sent to agents |
 | M11 HTTP client | L | Express route discovery, authorization per user type (none, basic, manual token, login request, OAuth/OIDC with Firefox containers); secrets through the DB client vault (optional dependency) |
-| M15 Installable extensions | M | core; versioned contract, self-contained extensions, vault in the core, install from git; `pm2` and `ports` moved out, M14 and M13 born external |
+| M15 Installable extensions | M | core; versioned contract, self-contained extensions, vault in the core, install from git; `pm2` and `ports` moved out, M13 born external |
 | M14 Mock server | M | one HTTP listener per mock on `127.0.0.1`; predefined responses, call log with payload, route from a logged call, read-only MCP tool |
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
 | M13 MongoDB client | L | same vault and confirmation rules as the MySQL client; read-only MCP tools |
