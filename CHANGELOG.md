@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-10-23
+
+### Added
+- **Tab order**: the section tabs can be reordered by drag and drop or from the keyboard (Alt+←/→ on a focused tab, reversed in right-to-left languages). The order is saved in the new core section `layout` of `config.json` (`layout.tabs`, not exported) and restored at startup, so the first tab opened is the first of the chosen order; extensions not in the list (newly added) go after the others in manifest order, removed ones are ignored. Right click on the tab bar → **Restore the default order**. Core API: `GET /api/core/layout`, `PUT`/`DELETE /api/core/layout/tabs`.
+
 ## [1.22.0] - 2026-10-23
 
 ### Added

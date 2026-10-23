@@ -46,6 +46,8 @@ Each section is an extension (see [Writing an extension](#writing-an-extension))
 - **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
 - **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ button in the header.
 
+The section tabs can be put in any order by dragging them (or with Alt+←/→ on a focused tab); the order is saved in `config.json` and the first tab is the one opened at startup. Right click on the tab bar → *Restore the default order*. New extensions go after the others.
+
 The header also holds the language (🌐), desktop notifications (🔔), **Export**/**Import** of the configuration, the MCP server (🤖) and ↻ to refresh. The sidebar can be resized by dragging its edge (or with ←/→ when the edge is focused; double click restores the initial width); each section has its own width, remembered by the browser.
 
 ## Database client
@@ -123,7 +125,7 @@ Everything is stored in `config.json` in the project folder. The file is created
 - `projects[].path` — absolute path of the project folder
 - `projects[].folder` — optional sidebar folder (`projectFolders[].id`); without it the project is at the root of the sidebars
 
-Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env) or to an extension (`groups` and `servers` to tunnels, `dbConnections`, `dbFolders` and `vault` to db-client, `httpSections` to http-client, `mockServers` to mock-server), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle) and of the extensions (Tunnel SSH, Connessioni database, Richieste HTTP, Mock server) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
+Each key belongs to the core (`projects` and `projectFolders`, shared by NPM, Git and Env; `layout`, the order of the tabs) or to an extension (`groups` and `servers` to tunnels, `dbConnections`, `dbFolders` and `vault` to db-client, `httpSections` to http-client, `mockServers` to mock-server), which validates it on every save. **Export** offers the checkboxes of the core (Progetti e cartelle) and of the extensions (Tunnel SSH, Connessioni database, Richieste HTTP, Mock server) and downloads one `.json` file; **Import** shows the checkboxes found in the file and lets you *merge* (add new items) or *replace* (overwrite those sections). Anything not selected is left untouched.
 
 ## Languages
 

@@ -17,7 +17,7 @@ Every feature that can be added or removed is an **extension**: a folder under `
 | `mock-server` | tab | 39 | `mockServers` | Mock server | — | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
-The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox.
+The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox, and `layout` (the tab order chosen by the user, not exported).
 
 Services offered to other extensions (`ctx.require(code)`): `npm` → `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)` and `vault`.
 
@@ -81,7 +81,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
 | `color` | yes | Accent colour (`#rrggbb`) for tab, badges, pills and `--ext-color` |
 | `icon` | no | Emoji or short text for the tab / header button |
 | `position` | yes | `"tab"`: entry in the section bar with its own panel · `"header"`: button in the header bar that opens its panel |
-| `order` | no | Sort order among tabs and among header buttons (default 100). The first tab opens at startup |
+| `order` | no | Sort order among tabs and among header buttons (default 100); it is the default order: the user can reorder the tabs (saved in `layout.tabs`), and extensions not in that list go after the others in `order`. The first tab opens at startup |
 | `dependencies` | no | `required: true` → the extension is not loaded if the dependency is missing or disabled · `required: false` → it loads with a warning icon and must cope with the dependency being absent |
 | `config` | no | Top-level keys of `config.json` owned by the extension (see *Configuration*) |
 | `export` | no | Checkboxes the extension adds to the Export and Import dialogs, each with the sections it covers (see *Export and import*) |
@@ -390,6 +390,7 @@ Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i1
 | `GET /api/core/mcp` · `POST /api/core/mcp/token` | MCP endpoint URL, token and tools of the extensions · regenerate the token |
 | `/mcp` | MCP server (Streamable HTTP, bearer token, no browser requests) |
 | `GET /api/core/i18n/languages` | Source language and available languages: `{ source, languages: [{ tag, name, nativeName, dir, core, completeness }] }` (`core: false` = only some extension ships it; `completeness` = % of the source keys translated, core and extensions together) |
+| `GET /api/core/layout` · `PUT /api/core/layout/tabs` · `DELETE /api/core/layout/tabs` | Tab order chosen by the user (`{ tabs: [codes] }`; unknown codes and codes of header extensions are dropped, duplicates removed) · save it · back to the manifest order |
 | `GET /api/core/system` | Platform and external tools (`?refresh=1` checks again) |
 | `GET /api/core/config/sections` | Config sections and their owner |
 | `GET /api/core/config/export?sections=a,b&name=x` | Export (download), optionally limited to some sections |

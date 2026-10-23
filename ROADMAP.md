@@ -280,14 +280,14 @@ Goal: simulate an API that doesn't exist yet or isn't reachable: every call gets
 - [x] **M14.7** Tests (routes with parameters and wildcard, order of match, unmatched call, delay, CORS preflight, log with JSON and text bodies, port in use, route created from a logged call, MCP tool with redaction), README, CHANGELOG
 
 
-## M12 — Tab order — core
+## M12 — Tab order — core ✅ (1.23.0)
 
 Goal: let the user put the extension tabs in the order they prefer. It is part of the shell, so it lives in the core.
 
-- [ ] **M12.1** Drag and drop of the tabs in the section bar (mouse and keyboard: with a tab focused, Alt+←/→ moves it); the order of the manifests (`order`) stays the default
-- [ ] **M12.2** The chosen order is saved in a core section of `config.json` (`layout.tabs`: list of extension codes) through a core API; extensions not in the list (newly added) go after the others in manifest order, removed ones are ignored
-- [ ] **M12.3** "Restore default order" (context menu on the section bar)
-- [ ] **M12.4** Tests (API, validation of the list, unknown codes ignored), README, CHANGELOG
+- [x] **M12.1** Drag and drop of the tabs in the section bar (mouse and keyboard: with a tab focused, Alt+←/→ moves it); the order of the manifests (`order`) stays the default
+- [x] **M12.2** The chosen order is saved in a core section of `config.json` (`layout.tabs`: list of extension codes) through a core API; extensions not in the list (newly added) go after the others in manifest order, removed ones are ignored
+- [x] **M12.3** "Restore default order" (context menu on the section bar)
+- [x] **M12.4** Tests (API, validation of the list, unknown codes ignored), README, CHANGELOG
 
 
 ## M13 — MongoDB client — new extension `mongo-client`
