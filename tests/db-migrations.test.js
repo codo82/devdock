@@ -67,7 +67,7 @@ before(async () => {
   git(repo, 'push', '-q', '-u', 'origin', 'main');
   // un collega aggiunge 002 sul remoto: in locale non c'è ancora
   const other = path.join(base, 'other');
-  git(base, 'clone', '-q', path.join(base, 'origin.git'), other);
+  git(base, 'clone', '-q', '-b', 'main', path.join(base, 'origin.git'), other);
   fs.writeFileSync(path.join(other, 'database/migrations/002_orders_create.sql'), 'CREATE TABLE orders (id INT);\n');
   git(other, 'add', '.');
   git(other, 'commit', '-qm', 'migration 2');

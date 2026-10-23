@@ -507,5 +507,6 @@
   "errors.params_invalid": "Invalid parameter values: only text, numbers, booleans or NULL",
   "errors.params_missing": "Missing parameter values: {params}",
   "params.used": "Parameters:",
-  "params.change": "Change"
+  "params.change": "Change",
+  "errors.secret_unreadable": "The saved secret can't be decrypted with the current master password"
 }

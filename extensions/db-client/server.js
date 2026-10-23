@@ -112,6 +112,27 @@ module.exports = function createDbClient(ctx) {
     return vaultLib.decrypt(key, conn.password);
   }
 
+  // ---- vault per le altre estensioni (es. http-client): stessi segreti, stessa sessione ----
+  // Ogni estensione registra { rekey(reencrypt), reset() }: al cambio della master password
+  // rekey riceve la funzione che ri-cifra un valore e restituisce la funzione che salva
+  // (chiamata dopo il salvataggio del nuovo vault); al reset i segreti vanno cancellati.
+  const vaultConsumers = [];
+  const sharedVault = {
+    state: () => vaultState(),
+    isBox: vaultLib.isBox,
+    encrypt(plaintext) {
+      const key = currentKey();
+      if (!key) throw ctx.error(423, vault() ? 'vault_locked' : 'vault_missing');
+      return vaultLib.encrypt(key, plaintext);
+    },
+    decrypt(box) {
+      const key = currentKey();
+      if (!key) throw ctx.error(423, vault() ? 'vault_locked' : 'vault_missing');
+      try { return vaultLib.decrypt(key, box); } catch { throw ctx.error(400, 'secret_unreadable'); }
+    },
+    register(consumer) { vaultConsumers.push(consumer); },
+  };
+
   // ---- connessioni ----
 
   function validateConnection(c) {
@@ -1177,6 +1198,8 @@ module.exports = function createDbClient(ctx) {
         const reencrypted = connections().map(c => c.password
           ? { ...c, password: vaultLib.encrypt(created.encKey, vaultLib.decrypt(oldKey, c.password)) }
           : c);
+        const reencrypt = box => vaultLib.encrypt(created.encKey, vaultLib.decrypt(oldKey, box));
+        const commits = vaultConsumers.map(c => c.rekey(reencrypt)).filter(fn => typeof fn === 'function');
         const lockAfterMinutes = record.lockAfterMinutes;
         allowVaultSwitch = true;
         try {
@@ -1185,6 +1208,9 @@ module.exports = function createDbClient(ctx) {
             dbConnections: reencrypted,
           });
         } finally { allowVaultSwitch = false; }
+        for (const commit of commits) {
+          try { commit(); } catch (e) { ctx.log.error('ri-cifratura di un\'altra estensione fallita:', e.message); }
+        }
         session.key = created.encKey;
         session.lastUse = Date.now();
         res.json({ ok: true, reencrypted: reencrypted.filter(c => c.password).length });
@@ -1234,6 +1260,10 @@ module.exports = function createDbClient(ctx) {
       vaultReset(req, res) {
         if (req.body.confirm !== 'RESET') throw ctx.error(400, 'confirm_missing');
         const cleared = connections().map(c => ({ ...c, password: null }));
+        // prima i segreti delle altre estensioni: senza vault la config non li accetterebbe più
+        for (const c of vaultConsumers) {
+          try { c.reset(); } catch (e) { ctx.log.error('reset dei segreti di un\'altra estensione fallito:', e.message); }
+        }
         ctx.config.update({ dbConnections: cleared, vault: null });
         lock();
         res.json({ ok: true, state: 'uninitialized' });
@@ -1248,7 +1278,7 @@ module.exports = function createDbClient(ctx) {
       },
     },
 
-    services: { decryptPassword },
+    services: { decryptPassword, vault: sharedVault },
 
     // Strumenti MCP: solo letture e solo con il vault sbloccato dall'interfaccia
     // (l'agente non riceve né può inserire la master password)

@@ -507,5 +507,6 @@
   "errors.params_invalid": "Valori dei parametri non validi: solo testo, numeri, booleani o NULL",
   "errors.params_missing": "Mancano i valori dei parametri: {params}",
   "params.used": "Parametri:",
-  "params.change": "Cambia"
+  "params.change": "Cambia",
+  "errors.secret_unreadable": "Il segreto salvato non si può decifrare con la master password attuale"
 }
