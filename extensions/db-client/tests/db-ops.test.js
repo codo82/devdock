@@ -1,8 +1,8 @@
 // Modello delle operazioni di schema: SQL generato, avvisi, nomi proposti, confronto
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const ops = require('../extensions/db-client/ops');
-const { enumValues } = require('../extensions/db-client/introspect');
+const ops = require('../ops');
+const { enumValues } = require('../introspect');
 
 const col = (name, extra = {}) => ({ name, type: 'VARCHAR', length: 50, nullable: true, default: { kind: 'none' }, ...extra });
 

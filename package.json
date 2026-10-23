@@ -7,6 +7,11 @@
     "extensions/*"
   ],
   "main": "server.js",
+  "exports": {
+    ".": "./server.js",
+    "./testkit": "./lib/testkit.js",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",

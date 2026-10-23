@@ -8,10 +8,10 @@ const fs = require('fs');
 const http = require('http');
 const net = require('net');
 const path = require('path');
-const { startServer, tmpDir } = require('./helpers');
-const { discover, stripComments } = require('../extensions/http-client/discover');
-const { jwtExpiry } = require('../extensions/http-client/auth');
-const vaultLib = require('../extensions/db-client/vault');
+const { startServer, tmpDir } = require('../../../lib/testkit');
+const { discover, stripComments } = require('../discover');
+const { jwtExpiry } = require('../auth');
+const vaultLib = require('../../db-client/vault');
 
 const freePort = () => new Promise(resolve => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });

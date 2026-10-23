@@ -4,7 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { startServer, tmpDir, makeRepo, git } = require('./helpers');
+const { startServer, tmpDir, makeRepo, git } = require('../../../lib/testkit');
 const { startMysql } = require('./mysql');
 
 const col = (name, extra = {}) => ({ name, type: 'VARCHAR', length: 50, nullable: true, default: { kind: 'none' }, ...extra });

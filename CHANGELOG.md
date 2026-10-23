@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Breaking
 - Extension manifests must declare `version` (SemVer) and `devdock`, the DevDock versions they work with as an npm range (`"devdock": "^2.0"`); the loader disables an extension without them or whose range does not include the running core, and says why. `docs/EXTENSIONS.md` is now the public, versioned API for extensions: breaking changes come with a new major version and are marked here.
 
+### Changed
+- Every extension keeps its tests in `extensions/<code>/tests/`; the core suite in `tests/` uses only fixture extensions, so it stays green without any built-in extension. The test helpers became the core **test kit** (`lib/testkit.js`, `require('devdock/testkit')` for external extensions) with `startServer`, `mcpClient`, fixture helpers and `i18nProblems(extDir)` for the translation checks of a single extension. `tests/helpers.js` was removed.
+
 ## [1.23.0] - 2026-10-23
 
 ### Added

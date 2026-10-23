@@ -1,12 +1,12 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer } = require('./helpers');
+const { startServer } = require('../lib/testkit');
+const { sampleExtensions } = require('./fixtures');
 
 let srv;
-before(async () => { srv = await startServer(); });
+before(async () => { srv = await startServer(undefined, { extensions: sampleExtensions() }); });
 after(() => srv.stop());
 
-const server = (over = {}) => ({ key: 'db', label: 'DB', port: 3306, remote: '10.0.0.1:3306', alias: 'bastion', ...over });
 
 test('progetti: percorso assoluto obbligatorio, PUT solo campi noti', async () => {
   assert.equal((await srv.request('POST', '/api/core/projects', { body: { id: 'rel', label: 'R', path: '.' } })).json.code, 'core.path_absolute');
@@ -47,20 +47,17 @@ test('cartelle: creazione, spostamento dei progetti, eliminazione che li riporta
 });
 
 test('import: sezioni parziali, merge e replace', async () => {
-  const tunnels = {
-    groups: [{ key: 'g2', label: 'G2', color: '#112233', servers: ['s1'] }],
-    servers: [server({ key: 's1', port: 1001 })],
-  };
-  let r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'merge', config: tunnels } });
-  assert.equal(r.status, 200);
-  assert.deepEqual(r.json.sections, ['groups', 'servers']);
+  const sample = { items: [{ id: 'i1' }], links: [{ id: 'l1', item: 'i1' }] };
+  let r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'merge', config: sample } });
+  assert.equal(r.status, 200, r.text);
+  assert.deepEqual(r.json.sections, ['items', 'links']);
 
   r = await srv.request('POST', '/api/core/config/import', {
-    body: { mode: 'merge', config: { projects: [{ id: 'q', label: 'Q', path: '/tmp/q' }] } },
+    body: { mode: 'merge', config: { projects: [{ id: 'q', label: 'Q', path: '/tmp/q' }], items: [{ id: 'i1', extra: 1 }, { id: 'i2' }] } },
   });
   assert.equal(r.status, 200);
   let cfg = srv.readConfig();
-  assert.ok(cfg.servers.some(s => s.key === 's1'));
+  assert.deepEqual(cfg.items, [{ id: 'i1' }, { id: 'i2' }], 'merge: aggiunti solo gli elementi nuovi');
   assert.deepEqual(cfg.projects.map(p => p.id), ['q']);
 
   // replace di una sola sezione non tocca le altre
@@ -70,39 +67,39 @@ test('import: sezioni parziali, merge e replace', async () => {
   assert.equal(r.status, 200);
   cfg = srv.readConfig();
   assert.deepEqual(cfg.projects.map(p => p.id), ['z']);
-  assert.ok(cfg.servers.some(s => s.key === 's1'));
+  assert.equal(cfg.items.length, 2);
 
-  // risultato non valido (gruppi verso server rimossi) → 400 e config invariata
-  r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'replace', config: { servers: [] } } });
+  // risultato non valido (link verso un item rimosso) → 400 e config invariata
+  r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'replace', config: { items: [] } } });
   assert.equal(r.status, 400);
-  assert.ok(srv.readConfig().servers.some(s => s.key === 's1'));
+  assert.equal(srv.readConfig().items.length, 2);
 
   r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'merge', config: { foo: 1 } } });
   assert.equal(r.status, 400);
   assert.match(r.json.error, /sezioni riconosciute/);
-  r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'boh', config: tunnels } });
+  r = await srv.request('POST', '/api/core/config/import', { body: { mode: 'boh', config: sample } });
   assert.equal(r.status, 400);
 });
 
-test('sezioni: groups/servers appartengono all\'estensione tunnels, projects e projectFolders al core', async () => {
+test('sezioni: quelle dichiarate appartengono all\'estensione, projects, projectFolders e layout al core', async () => {
   const sections = Object.fromEntries((await srv.request('GET', '/api/core/config/sections')).json.map(x => [x.key, x.owner]));
-  assert.equal(sections.groups, 'tunnels');
-  assert.equal(sections.servers, 'tunnels');
+  assert.equal(sections.items, 'sample');
+  assert.equal(sections.links, 'sample');
   assert.equal(sections.projects, 'core');
   assert.equal(sections.projectFolders, 'core');
+  assert.equal(sections.layout, 'core');
 });
 
 test('export per tipo', async () => {
-  const git = await srv.request('GET', '/api/core/config/export?name=git&sections=projects');
-  assert.deepEqual(Object.keys(git.json), ['projects']);
-  assert.match(git.headers['content-disposition'], /devdock-config-git-/);
-  const tunnels = await srv.request('GET', '/api/core/config/export?name=tunnels&sections=groups,servers');
-  assert.deepEqual(Object.keys(tunnels.json).sort(), ['groups', 'servers']);
+  const projects = await srv.request('GET', '/api/core/config/export?name=progetti&sections=projects');
+  assert.deepEqual(Object.keys(projects.json), ['projects']);
+  assert.match(projects.headers['content-disposition'], /devdock-config-progetti-/);
+  const sample = await srv.request('GET', '/api/core/config/export?name=sample&sections=items,links');
+  assert.deepEqual(Object.keys(sample.json).sort(), ['items', 'links']);
 });
 
 test('le estensioni dichiarano le caselle del dialog di export', async () => {
   const exts = Object.fromEntries((await srv.request('GET', '/api/core/extensions')).json.map(e => [e.code, e.export]));
-  assert.deepEqual(exts.tunnels.map(x => x.sections), [['groups', 'servers']]);
-  assert.deepEqual(exts.npm, []);
-  assert.deepEqual(exts.git, []);
+  assert.deepEqual(exts.sample.map(x => x.sections), [['items', 'links']]);
+  assert.deepEqual(exts.second, []);
 });

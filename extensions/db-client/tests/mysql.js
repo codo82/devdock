@@ -4,7 +4,7 @@ const { spawn, execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const net = require('net');
 const path = require('path');
-const { tmpDir } = require('./helpers');
+const { tmpDir } = require('../../../lib/testkit');
 
 function findMysqld() {
   const candidates = [process.env.DEVDOCK_TEST_MYSQLD, '/opt/homebrew/opt/mysql/bin/mysqld', '/usr/local/opt/mysql/bin/mysqld', '/usr/sbin/mysqld'];

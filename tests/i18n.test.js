@@ -2,7 +2,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { startServer, tmpDir } = require('./helpers');
+const { startServer, tmpDir } = require('../lib/testkit');
 const { parseCatalog, CatalogError, isLocalizedText, sourceText } = require('../lib/i18n');
 
 function ext(root, code, files) {

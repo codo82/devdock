@@ -38,6 +38,7 @@ extensions/
     style.css        styles (optional)
     i18n/it.json     translations, one file per language (optional; see *Translations*)
     package.json     own npm dependencies (optional, npm workspace)
+    tests/           the extension's tests (node:test, *.test.js), run by npm test
 ```
 
 Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) or backend-only (a service used by other extensions).
@@ -423,4 +424,35 @@ A single `npm install` at the root installs everything into the shared `node_mod
 5. Texts: write the UI strings in `i18n/it.json` (the source language) and use them with `data-i18n…` attributes and `ctx.t()`; add `i18n/en.json` and any other language.
 6. MCP (optional): declare `mcp.tools` and implement them in `instance.mcp` (see *MCP tools*).
 7. Restart the server: the log line `Estensioni: …` lists the loaded extensions, and `GET /api/core/extensions` explains why one is disabled.
-8. Add tests in `tests/` (see `tests/helpers.js`: `startServer()` runs DevDock on a free port with a temporary config).
+8. Add tests in `extensions/<code>/tests/` (see *Testing an extension*).
+
+## Testing an extension
+
+Each extension keeps its tests in its own `tests/` folder (`*.test.js`, `node:test`), so it can be removed, moved or published on its own: the core suite (`tests/`) only uses fixture extensions and stays green without any of the built-in ones. The core exports a test kit: built-in extensions require `../../../lib/testkit`, external ones `require('devdock/testkit')` with DevDock as a dev dependency.
+
+| Member | Purpose |
+|---|---|
+| `startServer(config, opts)` | Starts DevDock as a separate process on a free port with a temporary `config.json` and a temporary home (`DEVDOCK_HOME`: installed extensions, lock file); resolves `{ port, configPath, home, request(method, path, { body, headers, raw }), readConfig(), stop(), output() }`. `opts.extensions`: folder of the built-in extensions (default the repository's, `null` for none); `opts.install`: extension folders to add to the installed ones (e.g. `[path.join(__dirname, '..')]` for the extension under test); `opts.env`: more environment variables |
+| `mcpClient(srv)` | MCP client (official SDK) connected to the instance with its token |
+| `tmpDir()`, `freePort()` | Temporary folder, free TCP port |
+| `git(cwd, ...args)`, `makeRepo(dir, { scripts })`, `commitFile(dir, name)` | Disposable git repositories with a `package.json` |
+| `manifest(code, extra)`, `writeExtension(root, code, files)` | Minimal valid manifest and fixture extensions written to disk |
+| `i18nProblems(extDir)` | The translation checks for one extension: catalogs valid and consistent with the source language, keys used in the code present in `i18n/it.json`, no UI text written in the code (exceptions in `tests/i18n-allowlist.txt`); `[]` when everything is fine |
+| `parseSse(text)` | Events of a Server-Sent Events response |
+
+```js
+// extensions/hello/tests/hello.test.js
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('path');
+const { startServer, i18nProblems } = require('devdock/testkit'); // built-in: '../../../lib/testkit'
+
+let srv;
+before(async () => { srv = await startServer({ projects: [] }, { install: [path.join(__dirname, '..')] }); });
+after(() => srv.stop());
+
+test('greets', async () => {
+  assert.deepEqual((await srv.request('GET', '/api/ext/hello/greet')).json, { text: 'hello' });
+});
+test('translations', () => assert.deepEqual(i18nProblems(path.join(__dirname, '..')), []));
+```

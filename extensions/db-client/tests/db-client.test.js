@@ -1,6 +1,6 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer } = require('./helpers');
+const { startServer } = require('../../../lib/testkit');
 
 let srv;
 before(async () => { srv = await startServer(); });
@@ -16,7 +16,7 @@ test('estensione db-client caricata con mysql2 dalla workspace', async () => {
 });
 
 const fs = require('fs');
-const vaultLib = require('../extensions/db-client/vault');
+const vaultLib = require('../vault');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 test('vault: creazione, blocco, sblocco e tentativi ripetuti', async () => {
@@ -94,7 +94,7 @@ test('vault: timeout di inattività configurabile e validato', async () => {
 // ---- connessioni (con un MySQL usa e getta, se mysqld è installato) ----
 const { startMysql } = require('./mysql');
 const path = require('path');
-const { tmpDir } = require('./helpers');
+const { tmpDir } = require('../../../lib/testkit');
 
 test('connessioni: CRUD, password mai esposte, prova di connessione', async t => {
   const mysqlDb = await startMysql();
@@ -163,7 +163,7 @@ test('connessioni: CRUD, password mai esposte, prova di connessione', async t =>
 test('connessioni via tunnel non disponibili se l\'estensione tunnels non è attiva', async () => {
   // cartella estensioni con il solo db-client
   const dir = tmpDir('devdock-ext-db-');
-  fs.symlinkSync(path.join(__dirname, '..', 'extensions', 'db-client'), path.join(dir, 'db-client'));
+  fs.symlinkSync(path.join(__dirname, '..'), path.join(dir, 'db-client'));
   const s = await startServer(undefined, { env: { DEVDOCK_EXTENSIONS_DIR: dir } });
   try {
     const ext = (await s.request('GET', '/api/core/extensions')).json.find(e => e.code === 'db-client');

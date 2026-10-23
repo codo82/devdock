@@ -4,8 +4,8 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { startServer, tmpDir, makeRepo, git } = require('./helpers');
-const mig = require('../extensions/db-client/migrations');
+const { startServer, tmpDir, makeRepo, git } = require('../../../lib/testkit');
+const mig = require('../migrations');
 
 test('numerazione: numero attuale, larghezza, file fuori formato, duplicati', () => {
   assert.deepEqual(mig.scan([]), { files: [], ignored: [], current: 0, width: 3, duplicates: [] });

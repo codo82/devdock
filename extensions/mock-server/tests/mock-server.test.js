@@ -5,8 +5,8 @@ const assert = require('node:assert/strict');
 const net = require('net');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
-const { startServer } = require('./helpers');
-const { pathRegex, matchRoute } = require('../extensions/mock-server/server');
+const { startServer } = require('../../../lib/testkit');
+const { pathRegex, matchRoute } = require('../server');
 
 const freePort = () => new Promise(resolve => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });

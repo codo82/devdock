@@ -157,16 +157,16 @@ The HTTP client sends requests from the DevDock backend to the URLs you enter (h
 
 ```
 server.js            entry point: security middleware, extension loader, core API, startup
-lib/                 core services: config by section, extension loader, security,
+lib/                 core services: config by section, extension loader, security, test kit,
                      validators, external tools, port detection, SSE, MCP server
 routes/core.js       core API (/api/core): extensions, system, config export/import
 public/              UI shell: index.html, core/shell.js (navigation, header, dialogs),
                      core/ui.js (shared helpers), core/i18n.js (translations and
                      formatting), core/i18n/<lang>.json (core catalogs), core/shell.css
 extensions/<code>/   one folder per feature: setting.json, server.js, view.html,
-                     sidebar.html, view.js, style.css, i18n/<lang>.json
+                     sidebar.html, view.js, style.css, i18n/<lang>.json, tests/
 scripts/             i18n-report.js (translation completeness)
-tests/               integration tests (node:test)
+tests/               core tests (node:test, fixture extensions only)
 docs/EXTENSIONS.md   extension contract
 ```
 
@@ -183,7 +183,7 @@ The full contract — manifest fields, the `ctx` objects given to backend and fr
 ## Development
 
 ```bash
-npm test           # integration tests: each file starts DevDock with a temporary config
+npm test           # core tests (tests/) and each extension's (extensions/<code>/tests/): every file starts DevDock with a temporary config
 npm run dev        # restarts on backend changes
 npm run i18n:report  # translation completeness per language and extension
 ```

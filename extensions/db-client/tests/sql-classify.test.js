@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { classify, schemaChange, describeParams, bindParams } = require('../extensions/db-client/sql');
+const { classify, schemaChange, describeParams, bindParams } = require('../sql');
 const { escape } = require('mysql2');
 
 const kind = sql => classify(sql).kind;

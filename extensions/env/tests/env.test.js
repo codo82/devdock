@@ -3,8 +3,8 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { startServer, tmpDir } = require('./helpers');
-const dotenv = require('../extensions/env/dotenv');
+const { startServer, tmpDir } = require('../../../lib/testkit');
+const dotenv = require('../dotenv');
 
 test('parser: commenti, export, virgolette, valori su più righe', () => {
   const text = '# app\nAPP=DevDock # nome\nexport HOST=localhost\n\nQ="a\\"b\\nc"\nM="riga1\nriga2"\nS=\'x # y\'\nE=\nDUP=1\nDUP=2\n';

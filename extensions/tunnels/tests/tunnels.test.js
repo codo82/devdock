@@ -1,6 +1,6 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer } = require('./helpers');
+const { startServer } = require('../../../lib/testkit');
 
 let srv;
 before(async () => {

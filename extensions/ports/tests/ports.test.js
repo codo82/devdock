@@ -3,7 +3,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { spawn } = require('child_process');
-const { startServer, tmpDir, makeRepo } = require('./helpers');
+const { startServer, tmpDir, makeRepo } = require('../../../lib/testkit');
 
 const listenScript = port => `require('http').createServer((q, r) => r.end('ok')).listen(${port}, '127.0.0.1')`;
 const freePort = () => new Promise(r => { const s = require('net').createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => r(port)); }); });
