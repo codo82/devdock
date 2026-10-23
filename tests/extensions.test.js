@@ -13,7 +13,7 @@ function ext(root, code, files) {
   }
 }
 
-const manifest = (code, extra = {}) => ({ name: code.toUpperCase(), code, color: '#336699', position: 'tab', ...extra });
+const manifest = (code, extra = {}) => ({ name: code.toUpperCase(), code, version: '1.0.0', devdock: '^2.0', color: '#336699', position: 'tab', ...extra });
 
 let srv;
 before(async () => {
@@ -86,6 +86,12 @@ before(async () => {
   ext(root, 'badexport', { 'setting.json': manifest('badexport', { config: ['propria'], export: [{ id: 'x', label: 'X', sections: ['servers'] }] }) });
   ext(root, 'escape', { 'setting.json': manifest('escape', { frontend: { js: '../alpha/server.js' } }) });
   fs.mkdirSync(path.join(root, 'senza-manifest'));
+  // contratto versionato
+  ext(root, 'future', { 'setting.json': manifest('future', { devdock: '^3.0' }) });
+  ext(root, 'old', { 'setting.json': manifest('old', { devdock: '^1.0' }) });
+  ext(root, 'norange', { 'setting.json': manifest('norange', { devdock: undefined }) });
+  ext(root, 'badversion', { 'setting.json': manifest('badversion', { version: 'uno' }) });
+  ext(root, 'wide', { 'setting.json': manifest('wide', { devdock: '>=1.5 <3 || ^4' }) });
 
   srv = await startServer({ groups: [], servers: [], projects: [] }, { env: { DEVDOCK_EXTENSIONS_DIR: root } });
 });
@@ -110,6 +116,19 @@ test('stato delle estensioni dopo il caricamento', async () => {
   assert.match(all.clash.error, /chiave di config "alpha" già usata da "alpha"/);
   assert.match(all.escape.error, /frontend\.js/);
   assert.equal(all['senza-manifest'], undefined);
+});
+
+test('contratto versionato: versioni di DevDock compatibili', async () => {
+  const all = await list();
+  const core = require('../package.json').version;
+  assert.equal(all.future.state, 'disabled');
+  assert.equal(all.future.error, `future/setting.json: richiede DevDock ^3.0, questa è la ${core}`);
+  assert.match(all.old.error, /richiede DevDock \^1\.0/);
+  assert.match(all.norange.error, /"devdock" obbligatorio/);
+  assert.match(all.badversion.error, /"version" obbligatoria/);
+  assert.equal(all.wide.state, 'ok');
+  assert.equal(all.wide.devdock, '>=1.5 <3 || ^4');
+  assert.equal(all.wide.version, '1.0.0');
 });
 
 test('lista ordinata per order e con i dati del manifest', async () => {

@@ -2,6 +2,7 @@
   "name": { "it": "Porte", "en": "Ports" },
   "code": "ports",
   "version": "1.0.0",
+  "devdock": "^2.0",
   "description": {
     "it": "Porte TCP in ascolto con il processo che le usa, collegate a script npm, PM2 e tunnel; arresto del processo che occupa una porta",
     "en": "Listening TCP ports with the process using them, linked to npm scripts, PM2 and tunnels; stop the process that holds a port"

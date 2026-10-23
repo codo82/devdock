@@ -13,7 +13,7 @@ function ext(root, code, files) {
   }
 }
 
-const manifest = (code, extra = {}) => ({ name: code, code, color: '#336699', position: 'tab', frontend: { js: 'view.js' }, ...extra });
+const manifest = (code, extra = {}) => ({ name: code, code, version: '1.0.0', devdock: '^2.0', color: '#336699', position: 'tab', frontend: { js: 'view.js' }, ...extra });
 
 let srv;
 before(async () => {

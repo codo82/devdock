@@ -2,6 +2,7 @@
   "name": "PM2",
   "code": "pm2",
   "version": "1.0.0",
+  "devdock": "^2.0",
   "description": {
     "it": "Processi PM2: lista, start/stop/restart/delete e log in streaming",
     "en": "PM2 processes: list, start/stop/restart/delete and streaming logs"

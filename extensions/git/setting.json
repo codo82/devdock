@@ -2,6 +2,7 @@
   "name": "Git",
   "code": "git",
   "version": "1.0.0",
+  "devdock": "^2.0",
   "description": {
     "it": "Status, commit, grafo dei commit e operazioni remote per i repository dei progetti",
     "en": "Status, commits, commit graph and remote operations for the repositories of the projects"

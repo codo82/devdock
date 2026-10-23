@@ -2,6 +2,7 @@
   "name": "Swagger",
   "code": "swagger",
   "version": "1.0.0",
+  "devdock": "^2.0",
   "description": {
     "it": "Anteprima di specifiche OpenAPI (.yaml/.json) caricate dal disco",
     "en": "Preview of OpenAPI specifications (.yaml/.json) loaded from disk"

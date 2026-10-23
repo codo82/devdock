@@ -6,6 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Breaking
+- Extension manifests must declare `version` (SemVer) and `devdock`, the DevDock versions they work with as an npm range (`"devdock": "^2.0"`); the loader disables an extension without them or whose range does not include the running core, and says why. `docs/EXTENSIONS.md` is now the public, versioned API for extensions: breaking changes come with a new major version and are marked here.
+
 ## [1.23.0] - 2026-10-23
 
 ### Added

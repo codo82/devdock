@@ -1,5 +1,7 @@
 # DevDock extensions
 
+This document is the **public API** of DevDock for extensions: manifest, backend and frontend `ctx`, configuration sections, routes and the core API they may use. It follows the core version (SemVer): additions come with a minor version, and any change that can break an existing extension comes with a new major version and is marked **Breaking** in the [CHANGELOG](../CHANGELOG.md). Every extension declares in its manifest the core versions it works with (`devdock`).
+
 Every feature that can be added or removed is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, the projects shared by the extensions, a few shared services and the UI shell (navigation, header, dialogs).
 
 ## Existing extensions
@@ -47,6 +49,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
   "name": "Git",
   "code": "git",
   "version": "1.0.0",
+  "devdock": "^2.0",
   "description": "Status, commit, grafo dei commit e operazioni remote per i repository dei progetti",
   "color": "#3fb950",
   "icon": "🌿",
@@ -76,7 +79,8 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
 |---|---|---|
 | `name` | yes | Label shown in the UI: a string or a map by language tag (`{ "it": "Database", "en": "Database" }`) |
 | `code` | yes | Unique id, `[a-z0-9-]`, equal to the folder name (`core` is reserved); used in URLs (`/api/ext/<code>`, `/ext/<code>`), in `dependencies` and as `window.Ext.<code>` |
-| `version` | no | Extension version (SemVer) |
+| `version` | yes | Extension version (SemVer, `1.2.0`) |
+| `devdock` | yes | DevDock versions the extension works with, as an npm range (`^2.0`, `>=2.1 <3`, `^2.0 \|\| ^3.0`). The loader refuses an extension whose range does not include the running core version: it is listed as disabled with the reason (`richiede DevDock ^3.0, questa è la 2.0.0`) |
 | `description` | no | One line; a string or a map by language tag |
 | `color` | yes | Accent colour (`#rrggbb`) for tab, badges, pills and `--ext-color` |
 | `icon` | no | Emoji or short text for the tab / header button |
@@ -97,7 +101,7 @@ At startup the loader reads every `extensions/*/setting.json` and gives each ext
 
 - `ok` — loaded
 - `warning` — loaded, but an optional dependency is missing (`warnings` lists it)
-- `disabled` — not loaded; `error` says why: invalid manifest, missing required dependency, dependency cycle, config key already owned by another extension, backend that throws or lacks a handler named in the manifest
+- `disabled` — not loaded; `error` says why: invalid manifest, core version outside the `devdock` range, missing required dependency, dependency cycle, config key already owned by another extension, backend that throws or lacks a handler named in the manifest
 
 Backends are created in dependency order (topological sort) and shut down in reverse order when the server stops. A disabled extension never takes the others down; those that require it are disabled too.
 

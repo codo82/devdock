@@ -2,6 +2,7 @@
   "name": { "it": "Mock", "en": "Mock" },
   "code": "mock-server",
   "version": "1.0.0",
+  "devdock": "^2.0",
   "description": {
     "it": "Mock server locali: risposte predefinite per rotta, CORS, registro delle chiamate in arrivo con il payload",
     "en": "Local mock servers: predefined responses per route, CORS, log of the incoming calls with their payload"
