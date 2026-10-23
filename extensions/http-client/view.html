@@ -1,0 +1,27 @@
+<div class="empty-state" data-role="empty"><div class="icon">📮</div><p data-i18n="empty"></p></div>
+<div class="hc-workspace" data-role="workspace" hidden>
+  <div class="hc-title-bar">
+    <span class="hc-section-name" data-role="section-name"></span>
+    <span class="hc-sep">›</span>
+    <input class="form-input hc-label" data-role="label" data-i18n-aria-label="editor.label">
+    <span class="hc-dirty" data-role="dirty" data-i18n="editor.unsaved" hidden></span>
+    <div class="hc-title-actions">
+      <button class="btn btn-ghost btn-sm" data-action="users" data-i18n="editor.users" data-i18n-title="editor.usersTitle"></button>
+      <button class="btn btn-ghost btn-sm" data-action="save" data-i18n="core.action.save" data-i18n-title="editor.saveTitle"></button>
+    </div>
+  </div>
+  <div class="hc-url-bar">
+    <select class="form-input hc-method" data-role="method"></select>
+    <input class="form-input hc-url" data-role="url" spellcheck="false" autocomplete="off" placeholder="{{baseUrl}}/api/…">
+    <select class="form-input hc-user" data-role="user" data-i18n-title="editor.userTitle"></select>
+    <button class="btn btn-primary" data-action="send" data-role="send-btn" data-i18n="editor.send" data-i18n-title="editor.sendTitle"></button>
+  </div>
+  <div class="hc-vars" data-role="vars"></div>
+  <div class="hc-tabs" role="tablist" data-role="req-tabs">
+    <button class="hc-tab" data-tab="query" data-role="tab-query"></button>
+    <button class="hc-tab" data-tab="headers" data-role="tab-headers"></button>
+    <button class="hc-tab" data-tab="body" data-role="tab-body"></button>
+  </div>
+  <div class="hc-req-pane" data-role="req-pane"></div>
+  <div class="hc-response" data-role="response"></div>
+</div>

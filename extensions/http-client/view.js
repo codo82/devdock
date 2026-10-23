@@ -1,0 +1,822 @@
+// Client HTTP: sezioni di richieste nella sidebar (fisarmonica), editor della richiesta con
+// query, header e body, risposta formattata, dialoghi per sezione, tipologie di utenza e
+// rotte Express trovate nel progetto collegato.
+
+const METHOD_COLORS = { GET: '#3fb950', POST: '#d29922', PUT: '#58a6ff', PATCH: '#a371f7', DELETE: '#f85149', HEAD: '#8b949e', OPTIONS: '#8b949e' };
+const COLLAPSED_KEY = 'devdock.httpSections.collapsed';
+const AUTH_TYPES = ['none', 'basic', 'manual', 'login', 'oauth'];
+
+export default {
+  async mount(ctx) {
+    const { esc, js, toast, openModal, closeModal, fmt } = ctx.ui;
+    const { t } = ctx;
+    const $ = (root, role) => root.querySelector(`[data-role="${role}"]`);
+    const byId = id => document.getElementById(id);
+    const val = id => byId(id)?.value ?? '';
+
+    let info = { vault: 'unavailable', methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], maxAfterSteps: 5 };
+    let sections = [];
+    let projects = [];
+    let active = null;      // { section, request } (id)
+    let draft = null;       // copia della richiesta in modifica
+    let dirty = false;
+    let tab = 'query';
+    let response = null;    // ultima risposta della richiesta attiva
+    let respTab = 'body';
+    let sending = false;
+    let pendingLogin = null; // URL di autorizzazione mentre si attende il login nel browser
+
+    const section = id => sections.find(s => s.id === id);
+    const activeSection = () => (active ? section(active.section) : null);
+    const methodBadge = m => `<span class="hc-badge" style="--m:${ctx.ui.cssColor(METHOD_COLORS[m])}">${esc(m)}</span>`;
+
+    // ---- caricamento ----
+
+    async function load() {
+      try {
+        [info, sections] = await Promise.all([ctx.api.get('/info'), ctx.api.get('/sections')]);
+      } catch (e) { toast(e.message, 'error'); sections = []; }
+      try { projects = (await ctx.projects.load()).projects; } catch { projects = []; }
+      if (active && !section(active.section)?.requests.some(r => r.id === active.request)) { active = null; draft = null; dirty = false; }
+      renderSidebar();
+      renderEditor();
+    }
+
+    // ---- sidebar ----
+
+    function collapsed() { try { return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]')); } catch { return new Set(); } }
+    function storeCollapsed(set) { try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set])); } catch { /* solo in questa sessione */ } }
+
+    function renderSidebar() {
+      const el = $(ctx.sidebar, 'sections');
+      if (!sections.length) { el.innerHTML = `<p class="hc-muted hc-pad">${esc(t('sidebar.none'))}</p>`; ctx.setBadge(null); return; }
+      const closed = collapsed();
+      el.innerHTML = sections.map(s => {
+        const open = !closed.has(s.id);
+        const project = s.projectId ? projects.find(p => p.id === s.projectId) : null;
+        return `<div class="hc-group ${open ? '' : 'collapsed'}">
+          <div class="sb-item hc-group-head" role="button" tabindex="0" aria-expanded="${open}"
+               onclick="Ext['http-client'].toggle(${js(s.id)})" oncontextmenu="event.preventDefault();Ext['http-client'].sectionMenu(event,${js(s.id)})">
+            <svg class="pf-chevron ${open ? 'open' : ''}" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1.5 7 5 3.5 8.5" /></svg>
+            <span class="hc-group-label" title="${esc(project ? t('sidebar.linked', { project: project.label }) : s.label)}">${esc(s.label)}</span>
+            <span class="sb-count">${esc(fmt.number(s.requests.length))}</span>
+            <button class="sb-item-act" onclick="event.stopPropagation();Ext['http-client'].sectionMenu(event,${js(s.id)})" title="${esc(t('sidebar.sectionActions'))}">⋯</button>
+          </div>
+          <div class="hc-children">
+            ${s.requests.map(r => `<button class="sb-item hc-req ${active?.request === r.id && active?.section === s.id ? 'active' : ''}"
+                onclick="Ext['http-client'].open(${js(s.id)},${js(r.id)})" oncontextmenu="event.preventDefault();Ext['http-client'].requestMenu(event,${js(s.id)},${js(r.id)})">
+                ${methodBadge(r.method)}<span class="hc-req-label">${esc(r.label)}</span></button>`).join('')}
+            <button class="sb-item hc-add" onclick="Ext['http-client'].newRequest(${js(s.id)})">＋ ${esc(t('sidebar.newRequest'))}</button>
+          </div>
+        </div>`;
+      }).join('');
+      ctx.setBadge(null);
+    }
+
+    function menuAt(event, items) {
+      const rect = event.currentTarget?.getBoundingClientRect?.();
+      ctx.ui.contextMenu(event.clientX || rect?.left || 0, event.clientY || rect?.bottom || 0, items);
+    }
+
+    // ---- editor ----
+
+    function openRequest(sectionId, requestId) {
+      const s = section(sectionId);
+      const r = s?.requests.find(x => x.id === requestId);
+      if (!r) return;
+      active = { section: sectionId, request: requestId };
+      draft = JSON.parse(JSON.stringify(r));
+      dirty = false;
+      response = null;
+      pendingLogin = null;
+      renderSidebar();
+      renderEditor();
+    }
+
+    function markDirty() {
+      dirty = true;
+      $(ctx.root, 'dirty').hidden = false;
+    }
+
+    function renderEditor() {
+      const has = !!(active && draft);
+      $(ctx.root, 'empty').hidden = has;
+      $(ctx.root, 'workspace').hidden = !has;
+      if (!has) return;
+      const s = activeSection();
+      $(ctx.root, 'section-name').textContent = s.label;
+      $(ctx.root, 'label').value = draft.label;
+      $(ctx.root, 'dirty').hidden = !dirty;
+      $(ctx.root, 'method').innerHTML = info.methods.map(m => `<option ${m === draft.method ? 'selected' : ''}>${esc(m)}</option>`).join('');
+      $(ctx.root, 'method').style.color = ctx.ui.cssColor(METHOD_COLORS[draft.method]);
+      $(ctx.root, 'url').value = draft.url;
+      $(ctx.root, 'user').innerHTML = `<option value="">${esc(t('editor.noUser'))}</option>` +
+        s.userTypes.map(u => `<option value="${esc(u.id)}" ${u.id === draft.userType ? 'selected' : ''}>👤 ${esc(u.label)}</option>`).join('');
+      renderVars();
+      renderTabs();
+      renderResponse();
+    }
+
+    function renderVars() {
+      const s = activeSection();
+      const names = ['baseUrl', ...s.variables.map(v => v.name)];
+      $(ctx.root, 'vars').innerHTML = `<span class="hc-muted">${esc(t('editor.variables'))}</span> ` +
+        names.map(n => `<code class="hc-var" title="${esc(n === 'baseUrl' ? s.baseUrl || t('editor.baseUrlMissing') : s.variables.find(v => v.name === n)?.value ?? '')}">{{${esc(n)}}}</code>`).join(' ') +
+        ` <button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].editSection(${js(s.id)})">✎</button>`;
+    }
+
+    const count = list => (list || []).filter(p => p.name && p.enabled !== false).length;
+
+    function renderTabs() {
+      const label = (key, n) => `${esc(t(key))}${n ? ` <span class="hc-tab-count">${esc(fmt.number(n))}</span>` : ''}`;
+      $(ctx.root, 'tab-query').innerHTML = label('tabs.query', count(draft.query));
+      $(ctx.root, 'tab-headers').innerHTML = label('tabs.headers', count(draft.headers));
+      $(ctx.root, 'tab-body').innerHTML = label('tabs.body', draft.bodyType !== 'none' ? 1 : 0).replace(/<span class="hc-tab-count">1<\/span>/, '<span class="hc-tab-count">●</span>');
+      ctx.root.querySelectorAll('.hc-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      const pane = $(ctx.root, 'req-pane');
+      if (tab === 'body') {
+        pane.innerHTML = `<div class="hc-body-types">
+            ${['none', 'json', 'text'].map(bt => `<label class="hc-radio"><input type="radio" name="hc_body_type" value="${bt}" ${draft.bodyType === bt ? 'checked' : ''}> ${esc(t(`body.${bt}`))}</label>`).join('')}
+            ${draft.bodyType === 'json' ? `<button class="btn btn-ghost btn-sm" data-action="format-json">${esc(t('body.format'))}</button>` : ''}
+          </div>
+          ${draft.bodyType === 'none' ? `<p class="hc-muted">${esc(t('body.noneHint'))}</p>`
+            : `<textarea class="form-input hc-code" data-role="body" spellcheck="false" rows="10">${esc(draft.body)}</textarea>`}`;
+      } else {
+        pane.innerHTML = pairsTable(tab, draft[tab] || []);
+      }
+    }
+
+    // Tabella nome/valore modificabile (query e header dell'editor)
+    function pairsTable(list, items) {
+      return `<table class="hc-pairs"><tbody>
+        ${items.map((p, i) => `<tr>
+          <td class="hc-pair-check"><input type="checkbox" data-list="${list}" data-index="${i}" data-field="enabled" ${p.enabled === false ? '' : 'checked'} title="${esc(t('pairs.enabled'))}"></td>
+          <td><input class="form-input" data-list="${list}" data-index="${i}" data-field="name" value="${esc(p.name)}" placeholder="${esc(t('pairs.name'))}" spellcheck="false"></td>
+          <td><input class="form-input" data-list="${list}" data-index="${i}" data-field="value" value="${esc(p.value)}" placeholder="${esc(t('pairs.value'))}" spellcheck="false"></td>
+          <td class="hc-pair-check"><button class="sb-item-act hc-visible" data-action="remove-pair" data-list="${list}" data-index="${i}" title="${esc(t('core.action.delete'))}">✕</button></td>
+        </tr>`).join('')}
+      </tbody></table>
+      <button class="btn btn-ghost btn-sm" data-action="add-pair" data-list="${list}">＋ ${esc(t(list === 'query' ? 'pairs.addQuery' : 'pairs.addHeader'))}</button>`;
+    }
+
+    function statusClass(status) {
+      if (status >= 500) return 'hc-st-5';
+      if (status >= 400) return 'hc-st-4';
+      if (status >= 300) return 'hc-st-3';
+      return 'hc-st-2';
+    }
+
+    function renderResponse() {
+      const el = $(ctx.root, 'response');
+      if (sending) {
+        el.innerHTML = `<div class="hc-resp-wait"><span class="hc-spinner"></span> ${esc(t(pendingLogin ? 'response.waitingLogin' : 'response.sending'))}
+          ${pendingLogin ? ` <a href="${esc(pendingLogin)}" target="_blank" rel="noopener noreferrer">${esc(t('response.openLogin'))}</a>` : ''}</div>`;
+        return;
+      }
+      if (!response) { el.innerHTML = `<p class="hc-muted hc-pad">${esc(t('response.none'))}</p>`; return; }
+      if (response.error) { el.innerHTML = `<div class="hc-resp-error">${esc(response.error)}</div>`; return; }
+      const r = response;
+      let body;
+      if (r.binary) body = `<p class="hc-muted hc-pad">${esc(t('response.binary', { size: fmt.bytes(r.size) }))}</p>`;
+      else if (!r.body) body = `<p class="hc-muted hc-pad">${esc(t('response.empty'))}</p>`;
+      else {
+        let text = r.body;
+        if (r.json) { try { text = JSON.stringify(JSON.parse(r.body), null, 2); } catch { /* lascia il testo */ } }
+        body = `<pre class="hc-resp-body ${r.json ? 'hc-json' : ''}">${r.json ? highlightJson(text) : esc(text)}</pre>`;
+      }
+      el.innerHTML = `<div class="hc-resp-meta">
+          <span class="hc-status ${statusClass(r.status)}">${esc(r.status)} ${esc(r.statusText)}</span>
+          <span>${esc(t('response.time', { ms: fmt.number(Math.round(r.ms)) }))}</span>
+          <span>${esc(fmt.bytes(r.size))}</span>
+          ${r.truncated ? `<span class="hc-warn">${esc(t('response.truncated'))}</span>` : ''}
+          ${r.user ? `<span class="hc-muted">👤 ${esc(activeSection()?.userTypes.find(u => u.id === r.user)?.label || r.user)}</span>` : ''}
+          <span class="hc-resp-url" title="${esc(r.url)}">${esc(r.url)}</span>
+          <div class="hc-tabs hc-resp-tabs">
+            <button class="hc-tab ${respTab === 'body' ? 'active' : ''}" data-resp-tab="body">${esc(t('response.body'))}</button>
+            <button class="hc-tab ${respTab === 'headers' ? 'active' : ''}" data-resp-tab="headers">${esc(t('response.headers'))} <span class="hc-tab-count">${esc(fmt.number(r.headers.length))}</span></button>
+            ${r.body ? `<button class="btn btn-ghost btn-sm" data-action="copy-body">${esc(t('response.copy'))}</button>` : ''}
+          </div>
+        </div>
+        ${respTab === 'body' ? body : `<table class="data-table hc-resp-headers"><tbody>${r.headers.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table>`}`;
+    }
+
+    // JSON già formattato → HTML colorato (chiavi, stringhe, numeri, letterali)
+    function highlightJson(text) {
+      return esc(text).replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g,
+        (m, str, colon, lit, num) => str ? `<span class="${colon ? 'hc-j-key' : 'hc-j-str'}">${str}</span>${colon || ''}`
+          : lit ? `<span class="hc-j-lit">${lit}</span>` : `<span class="hc-j-num">${num}</span>`);
+    }
+
+    // ---- invio e salvataggio ----
+
+    // Esegue fn; se il vault del DB client è bloccato chiede la master password e riprova
+    async function withVault(fn) {
+      try { return await fn(); } catch (e) {
+        if (e.code === 'db-client.vault_locked') { if (await unlockVault()) return fn(); throw Object.assign(new Error(t('vault.stillLocked')), { handled: true }); }
+        if (e.code === 'db-client.vault_missing') throw Object.assign(new Error(t('vault.missing')), { handled: false });
+        throw e;
+      }
+    }
+
+    function unlockVault() {
+      return new Promise(resolve => {
+        let done = false;
+        const finish = ok => { if (!done) { done = true; resolve(ok); } };
+        openModal(t('vault.title'), `
+          <p class="hc-muted">${esc(t('vault.text'))}</p>
+          <div class="form-row"><input class="form-input" type="password" id="f_hc_vault" autocomplete="off"
+            onkeydown="if(event.key==='Enter')Ext['http-client'].vaultSubmit()"></div>
+          <div class="hc-error" id="f_hc_vault_err"></div>`,
+          `<button class="btn btn-ghost" onclick="Ext['http-client'].vaultCancel()">${esc(t('core.action.cancel'))}</button>
+           <button class="btn btn-primary" onclick="Ext['http-client'].vaultSubmit()">${esc(t('vault.unlock'))}</button>`);
+        setTimeout(() => byId('f_hc_vault')?.focus(), 0);
+        vaultPrompt = {
+          async submit() {
+            try {
+              await ctx.apiFor('db-client').post('/vault/unlock', { password: val('f_hc_vault') });
+              closeModal(); finish(true);
+            } catch (e) { byId('f_hc_vault_err').textContent = e.message; }
+          },
+          cancel() { closeModal(); finish(false); },
+        };
+      });
+    }
+    let vaultPrompt = null;
+
+    async function send() {
+      if (!draft || sending) return;
+      readEditor();
+      sending = true;
+      pendingLogin = null;
+      $(ctx.root, 'send-btn').disabled = true;
+      renderResponse();
+      const s = activeSection();
+      const user = s.userTypes.find(u => u.id === draft.userType);
+      // durante un login OAuth nel browser l'invio resta in attesa: si mostra il link di riserva
+      const poll = user?.auth.type === 'oauth' ? setInterval(async () => {
+        try {
+          const st = (await ctx.api.get(`/sections/${encodeURIComponent(s.id)}/auth`)).users.find(u => u.id === user.id);
+          if (sending && st?.pendingLogin !== pendingLogin) { pendingLogin = st?.pendingLogin || null; renderResponse(); }
+        } catch { /* riprova al giro dopo */ }
+      }, 1200) : null;
+      try {
+        response = await withVault(() => ctx.api.post('/send', { section: s.id, request: draft }));
+        respTab = 'body';
+      } catch (e) {
+        response = { error: e.message };
+        if (e.code === 'http-client.token_missing' || e.code === 'http-client.token_expired') pasteToken(s.id, user.id);
+      } finally {
+        clearInterval(poll);
+        sending = false;
+        pendingLogin = null;
+        $(ctx.root, 'send-btn').disabled = false;
+        renderResponse();
+      }
+    }
+
+    function readEditor() {
+      draft.label = $(ctx.root, 'label').value.trim() || draft.label;
+      draft.url = $(ctx.root, 'url').value;
+      const body = $(ctx.root, 'body');
+      if (body) draft.body = body.value;
+    }
+
+    async function saveRequest() {
+      if (!draft) return;
+      readEditor();
+      try {
+        const r = await ctx.api.put(`/sections/${encodeURIComponent(active.section)}/requests/${encodeURIComponent(active.request)}`, draft);
+        const s = activeSection();
+        s.requests = s.requests.map(x => (x.id === r.id ? r : x));
+        dirty = false;
+        $(ctx.root, 'dirty').hidden = true;
+        renderSidebar();
+        toast(t('editor.saved', { name: r.label }), 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // Lasciare una richiesta con modifiche non salvate chiede prima
+    const canLeave = () => !dirty || confirm(t('editor.confirmLeave'));
+
+    async function createRequest(sectionId, data = {}) {
+      try {
+        const r = await ctx.api.post(`/sections/${encodeURIComponent(sectionId)}/requests`, {
+          label: t('editor.newLabel'), method: 'GET', url: '{{baseUrl}}/', ...data,
+        });
+        section(sectionId).requests.push(r);
+        const closed = collapsed(); closed.delete(sectionId); storeCollapsed(closed);
+        openRequest(sectionId, r.id);
+        setTimeout(() => $(ctx.root, data.url ? 'url' : 'label')?.focus(), 0);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ---- sezione: nome, progetto, URL di base, variabili ----
+
+    function variablesRows(list) {
+      return list.map((v, i) => `<tr>
+        <td><input class="form-input" data-var="name" value="${esc(v.name)}" placeholder="${esc(t('pairs.name'))}" spellcheck="false"></td>
+        <td><input class="form-input" data-var="value" value="${esc(v.value)}" placeholder="${esc(t('pairs.value'))}" spellcheck="false"></td>
+        <td class="hc-pair-check"><button class="sb-item-act hc-visible" onclick="this.closest('tr').remove()" title="${esc(t('core.action.delete'))}">✕</button></td>
+      </tr>`).join('');
+    }
+
+    function sectionDialog(id) {
+      const s = id ? section(id) : { label: '', projectId: '', baseUrl: 'http://localhost:3000', variables: [] };
+      openModal(t(id ? 'sectionDlg.editTitle' : 'sectionDlg.newTitle'), `
+        <div class="form-row"><label>${esc(t('sectionDlg.name'))}</label><input class="form-input" id="f_hc_label" value="${esc(s.label)}"></div>
+        <div class="form-row"><label>${esc(t('sectionDlg.project'))}</label>
+          <select class="form-input" id="f_hc_project" onchange="Ext['http-client'].proposeBase(false)">
+            <option value="">${esc(t('sectionDlg.noProject'))}</option>
+            ${projects.map(p => `<option value="${esc(p.id)}" ${p.id === s.projectId ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
+          </select>
+          <p class="hc-muted">${esc(t('sectionDlg.projectHint'))}</p></div>
+        <div class="form-row"><label>${esc(t('sectionDlg.baseUrl'))} <code>{{baseUrl}}</code></label>
+          <div class="hc-inline"><input class="form-input" id="f_hc_base" value="${esc(s.baseUrl || '')}" spellcheck="false">
+          <button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].proposeBase(true)" title="${esc(t('sectionDlg.proposeTitle'))}">${esc(t('sectionDlg.propose'))}</button></div>
+          <p class="hc-muted" id="f_hc_base_hint"></p></div>
+        <div class="form-row"><label>${esc(t('sectionDlg.variables'))}</label>
+          <table class="hc-pairs"><tbody id="f_hc_vars">${variablesRows(s.variables)}</tbody></table>
+          <button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].addVariable()">＋ ${esc(t('sectionDlg.addVariable'))}</button>
+          <p class="hc-muted">${esc(t('sectionDlg.variablesHint'))}</p></div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" onclick="Ext['http-client'].saveSection(${js(id || '')})">${esc(t(id ? 'core.action.save' : 'core.action.add'))}</button>`);
+      setTimeout(() => byId('f_hc_label')?.focus(), 0);
+    }
+
+    async function proposeBase(force) {
+      const project = val('f_hc_project');
+      const hint = byId('f_hc_base_hint');
+      if (!project) { if (hint) hint.textContent = ''; return; }
+      try {
+        const r = await ctx.api.get(`/base-url?project=${encodeURIComponent(project)}`);
+        const input = byId('f_hc_base');
+        if (force || !input.value || /^http:\/\/localhost:\d+\/?$/.test(input.value)) input.value = r.baseUrl;
+        hint.textContent = r.port ? t('sectionDlg.portFrom', { port: r.port, file: r.source }) : t('sectionDlg.portDefault');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function saveSection(id) {
+      const body = {
+        label: val('f_hc_label').trim(), projectId: val('f_hc_project'), baseUrl: val('f_hc_base').trim(),
+        variables: [...byId('f_hc_vars').querySelectorAll('tr')].map(tr => ({
+          name: tr.querySelector('[data-var="name"]').value.trim(), value: tr.querySelector('[data-var="value"]').value,
+        })).filter(v => v.name || v.value),
+      };
+      if (!body.label) { toast(t('sectionDlg.nameRequired'), 'error'); return; }
+      try {
+        const s = id ? await ctx.api.put(`/sections/${encodeURIComponent(id)}`, body) : await ctx.api.post('/sections', body);
+        if (id) sections = sections.map(x => (x.id === s.id ? s : x)); else sections.push(s);
+        closeModal();
+        renderSidebar();
+        if (active?.section === s.id) renderEditor();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function deleteSection(id) {
+      const s = section(id);
+      if (!confirm(t('sectionDlg.confirmDelete', { name: s.label, count: s.requests.length }))) return;
+      try {
+        await ctx.api.del(`/sections/${encodeURIComponent(id)}`);
+        sections = sections.filter(x => x.id !== id);
+        if (active?.section === id) { active = null; draft = null; dirty = false; }
+        renderSidebar();
+        renderEditor();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ---- tipologie di utenza ----
+
+    let usersSection = null;
+    let authStates = [];
+
+    async function usersDialog(sectionId) {
+      usersSection = sectionId;
+      try { authStates = (await ctx.api.get(`/sections/${encodeURIComponent(sectionId)}/auth`)).users; } catch (e) { toast(e.message, 'error'); authStates = []; }
+      const s = section(sectionId);
+      const tokenState = u => {
+        const st = authStates.find(x => x.id === u.id);
+        if (u.auth.type === 'none') return `<span class="hc-muted">${esc(t('users.noAuth'))}</span>`;
+        if (u.auth.type === 'basic') return `<span class="hc-muted">${esc(t(u.auth.hasPassword ? 'users.basicReady' : 'users.basicNoPassword'))}</span>`;
+        if (!st?.hasToken) return `<span class="hc-muted">${esc(t('users.noToken'))}</span>`;
+        if (st.expired) return `<span class="hc-warn">${esc(t('users.expired'))}</span>`;
+        return `<span class="hc-ok">${esc(st.expiresAt ? t('users.validUntil', { date: fmt.date(st.expiresAt, { dateStyle: 'short', timeStyle: 'short' }) }) : t('users.valid'))}</span>
+          ${st.vars.length ? `<span class="hc-muted"> · ${esc(t('users.vars', { list: fmt.list(st.vars) }))}</span>` : ''}`;
+      };
+      openModal(t('users.title', { section: s.label }), `
+        <p class="hc-muted">${esc(t('users.hint'))}</p>
+        ${s.userTypes.length ? `<table class="data-table hc-users"><tbody>${s.userTypes.map(u => `<tr>
+          <td><strong>👤 ${esc(u.label)}</strong><div class="hc-muted">${esc(t(`auth.${u.auth.type}`))}</div></td>
+          <td>${tokenState(u)}</td>
+          <td class="hc-users-actions">
+            ${['login', 'oauth'].includes(u.auth.type) ? `<button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].login(${js(u.id)})">${esc(t('users.login'))}</button>` : ''}
+            ${!['none', 'basic'].includes(u.auth.type) ? `<button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].pasteToken(${js(sectionId)},${js(u.id)})">${esc(t('users.paste'))}</button>` : ''}
+            ${authStates.find(x => x.id === u.id)?.hasToken ? `<button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].forgetToken(${js(u.id)})">${esc(t('users.forget'))}</button>` : ''}
+            <button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].editUser(${js(u.id)})">✎</button>
+            <button class="btn btn-ghost btn-sm hc-danger" onclick="Ext['http-client'].deleteUser(${js(u.id)})">🗑</button>
+          </td></tr>`).join('')}</tbody></table>` : `<p class="hc-muted">${esc(t('users.none'))}</p>`}`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>
+         <button class="btn btn-primary" onclick="Ext['http-client'].editUser('')">＋ ${esc(t('users.add'))}</button>`);
+      byId('modal').classList.add('modal-wide');
+    }
+
+    // Righe "Nome: valore" ↔ lista di coppie (header delle azioni dopo il token)
+    const linesOf = list => (list || []).map(p => `${p.name}: ${p.value}`).join('\n');
+    const pairsOf = text => text.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      const i = l.indexOf(':');
+      return i < 0 ? { name: l, value: '' } : { name: l.slice(0, i).trim(), value: l.slice(i + 1).trim() };
+    });
+    const extractLines = list => (list || []).map(x => `${x.name} = ${x.from}`).join('\n');
+    const extractOf = text => text.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      const i = l.indexOf('=');
+      return i < 0 ? { name: l, from: '' } : { name: l.slice(0, i).trim(), from: l.slice(i + 1).trim() };
+    });
+
+    let userDraft = null; // tipologia in modifica (con le azioni dopo il token)
+
+    function editUser(uid) {
+      const s = section(usersSection);
+      const u = uid ? s.userTypes.find(x => x.id === uid) : { label: '', auth: { type: 'none' }, afterToken: [] };
+      userDraft = JSON.parse(JSON.stringify({ ...u, afterToken: u.afterToken || [] }));
+      renderUserForm(uid);
+    }
+
+    function renderUserForm(uid) {
+      const u = userDraft;
+      const a = u.auth;
+      const vaultNote = info.vault === 'unavailable' ? `<p class="hc-warn">${esc(t('userDlg.noVault'))}</p>` : '';
+      const secretInput = (id, has) => `<input class="form-input" type="password" id="${id}" autocomplete="new-password" placeholder="${esc(t(has ? 'userDlg.secretKeep' : 'userDlg.secretNew'))}">
+        ${has ? `<label class="hc-check"><input type="checkbox" id="${id}_clear"> ${esc(t('userDlg.secretRemove'))}</label>` : ''}`;
+      const field = (label, html, hint) => `<div class="form-row"><label>${esc(label)}</label>${html}${hint ? `<p class="hc-muted">${esc(hint)}</p>` : ''}</div>`;
+      const input = (id, value, extra = '') => `<input class="form-input" id="${id}" value="${esc(value ?? '')}" spellcheck="false" ${extra}>`;
+      let fields = '';
+      if (a.type === 'basic') {
+        fields = vaultNote + field(t('userDlg.username'), input('f_u_username', a.username))
+          + field(t('userDlg.password'), secretInput('f_u_password', a.hasPassword), t('userDlg.secretHint'));
+      } else if (a.type === 'manual') {
+        fields = `<p class="hc-muted">${esc(t('userDlg.manualHint'))}</p>`;
+      } else if (a.type === 'login') {
+        fields = vaultNote + `<div class="hc-inline">
+            <select class="form-input hc-method" id="f_u_method">${['POST', 'GET', 'PUT', 'PATCH'].map(m => `<option ${m === (a.method || 'POST') ? 'selected' : ''}>${m}</option>`).join('')}</select>
+            ${input('f_u_url', a.url || '{{baseUrl}}/auth/login', 'placeholder="{{baseUrl}}/auth/login"')}</div>`
+          + field(t('userDlg.contentType'), `<select class="form-input" id="f_u_ctype">${['json', 'form', 'text'].map(c => `<option value="${c}" ${c === (a.contentType || 'json') ? 'selected' : ''}>${esc(t(`userDlg.ctype.${c}`))}</option>`).join('')}</select>`)
+          + field(t('userDlg.loginBody'), `<textarea class="form-input hc-code" id="f_u_body" rows="4" spellcheck="false">${esc(a.body ?? '{\n  "username": "{{username}}",\n  "password": "{{password}}"\n}')}</textarea>`, t('userDlg.loginBodyHint'))
+          + `<div class="hc-grid2">${field(t('userDlg.username'), input('f_u_username', a.username))}${field(t('userDlg.password'), secretInput('f_u_password', a.hasPassword))}</div>`
+          + `<div class="hc-grid2">${field(t('userDlg.tokenPath'), input('f_u_tpath', a.tokenPath || 'token'), t('userDlg.tokenPathHint'))}${field(t('userDlg.expiresPath'), input('f_u_epath', a.expiresPath || '', 'placeholder="expires_in"'), t('userDlg.expiresPathHint'))}</div>`;
+      } else if (a.type === 'oauth') {
+        fields = `<div class="form-row"><label>${esc(t('userDlg.issuer'))}</label><div class="hc-inline">${input('f_u_issuer', a.issuer, 'placeholder="https://keycloak.local/realms/dev"')}
+            <button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].readIssuer()">${esc(t('userDlg.readIssuer'))}</button></div>
+            <p class="hc-muted">${esc(t('userDlg.issuerHint'))}</p></div>`
+          + `<div class="hc-grid2">${field(t('userDlg.authEndpoint'), input('f_u_authep', a.authorizationEndpoint))}${field(t('userDlg.tokenEndpoint'), input('f_u_tokenep', a.tokenEndpoint))}</div>`
+          + `<div class="hc-grid2">${field(t('userDlg.clientId'), input('f_u_client', a.clientId))}${field(t('userDlg.scope'), input('f_u_scope', a.scope ?? 'openid'))}</div>`
+          + field(t('userDlg.flow'), `<select class="form-input" id="f_u_flow" onchange="Ext['http-client'].userTypeChanged()">${['pkce', 'code', 'implicit'].map(f => `<option value="${f}" ${f === (a.flow || 'pkce') ? 'selected' : ''}>${esc(t(`userDlg.flows.${f}`))}</option>`).join('')}</select>`)
+          + (a.flow === 'code' ? vaultNote + field(t('userDlg.clientSecret'), secretInput('f_u_secret', a.hasClientSecret)) : '')
+          + `<div class="hc-grid2">${field(t('userDlg.redirectUri'), input('f_u_redirect', a.redirectUri || 'http://localhost:8765/callback'), t('userDlg.redirectHint'))}
+             ${field(t('userDlg.container'), input('f_u_container', a.container, `placeholder="${esc(t('userDlg.containerPlaceholder'))}"`), t('userDlg.containerHint'))}</div>`;
+      }
+      const tokenTypes = !['none', 'basic'].includes(a.type);
+      const header = tokenTypes || a.type === 'basic'
+        ? `<div class="hc-grid2">${field(t('userDlg.header'), input('f_u_header', u.header || 'Authorization'))}
+           ${tokenTypes ? field(t('userDlg.format'), input('f_u_format', u.format || 'Bearer {token}'), t('userDlg.formatHint')) : ''}</div>` : '';
+      const steps = tokenTypes ? `<fieldset class="hc-fieldset"><legend>${esc(t('after.title'))}</legend>
+          <p class="hc-muted">${esc(t('after.hint'))}</p>
+          ${u.afterToken.map((st, i) => `<div class="hc-step" data-step="${i}">
+            <div class="hc-inline"><span class="hc-step-n">${i + 1}</span>
+              <select class="form-input hc-method" data-sf="method">${info.methods.map(m => `<option ${m === st.method ? 'selected' : ''}>${m}</option>`).join('')}</select>
+              <input class="form-input" data-sf="url" value="${esc(st.url)}" placeholder="{{baseUrl}}/me" spellcheck="false">
+              <button class="sb-item-act hc-visible" onclick="Ext['http-client'].removeStep(${i})" title="${esc(t('core.action.delete'))}">✕</button></div>
+            <div class="hc-grid2">
+              <div class="form-row"><label>${esc(t('after.headers'))}</label><textarea class="form-input hc-code" data-sf="headers" rows="2" spellcheck="false" placeholder="X-Tenant: {{tenant}}">${esc(linesOf(st.headers))}</textarea></div>
+              <div class="form-row"><label>${esc(t('after.extract'))}</label><textarea class="form-input hc-code" data-sf="extract" rows="2" spellcheck="false" placeholder="tenant = data.tenantId&#10;csrf = header:X-CSRF-Token">${esc(extractLines(st.extract))}</textarea></div>
+            </div>
+            <div class="form-row"><label>${esc(t('after.body'))}</label>
+              <div class="hc-inline"><select class="form-input hc-method" data-sf="bodyType">${['none', 'json', 'text'].map(bt => `<option value="${bt}" ${bt === (st.bodyType || 'none') ? 'selected' : ''}>${esc(t(`body.${bt}`))}</option>`).join('')}</select>
+              <textarea class="form-input hc-code" data-sf="body" rows="2" spellcheck="false">${esc(st.body || '')}</textarea></div></div>
+          </div>`).join('')}
+          ${u.afterToken.length < info.maxAfterSteps ? `<button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].addStep()">＋ ${esc(t('after.add'))}</button>` : ''}
+          <p class="hc-muted">${esc(t('after.extractHint'))}</p>
+        </fieldset>` : '';
+      openModal(t(uid ? 'userDlg.editTitle' : 'userDlg.newTitle'), `<div class="hc-scroll">
+        <div class="hc-grid2">${field(t('userDlg.name'), input('f_u_label', u.label, `placeholder="${esc(t('userDlg.namePlaceholder'))}"`))}
+          ${field(t('userDlg.type'), `<select class="form-input" id="f_u_type" onchange="Ext['http-client'].userTypeChanged()">${AUTH_TYPES.map(x => `<option value="${x}" ${x === a.type ? 'selected' : ''}>${esc(t(`auth.${x}`))}</option>`).join('')}</select>`)}</div>
+        ${fields}${header}${steps}</div>`,
+        `<button class="btn btn-ghost" onclick="Ext['http-client'].users(${js(usersSection)})">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" onclick="Ext['http-client'].saveUser(${js(uid || '')})">${esc(t('core.action.save'))}</button>`);
+      byId('modal').classList.add('modal-wide');
+      userForm.uid = uid;
+    }
+    const userForm = { uid: '' };
+
+    // Legge il modulo nella bozza (prima di ridisegnarlo o di salvarlo)
+    function readUserForm() {
+      const u = userDraft;
+      const a = u.auth;
+      if (byId('f_u_label')) u.label = val('f_u_label').trim();
+      const get = (id, key) => { if (byId(id)) a[key] = val(id).trim(); };
+      get('f_u_username', 'username'); get('f_u_url', 'url'); get('f_u_method', 'method'); get('f_u_ctype', 'contentType');
+      get('f_u_tpath', 'tokenPath'); get('f_u_epath', 'expiresPath'); get('f_u_issuer', 'issuer'); get('f_u_authep', 'authorizationEndpoint');
+      get('f_u_tokenep', 'tokenEndpoint'); get('f_u_client', 'clientId'); get('f_u_scope', 'scope'); get('f_u_flow', 'flow');
+      get('f_u_redirect', 'redirectUri'); get('f_u_container', 'container');
+      if (byId('f_u_body')) a.body = val('f_u_body');
+      for (const [id, key] of [['f_u_password', 'password'], ['f_u_secret', 'clientSecret']]) {
+        if (!byId(id)) continue;
+        if (byId(`${id}_clear`)?.checked) a[key] = null;
+        else if (val(id)) a[key] = val(id);
+      }
+      if (byId('f_u_header')) u.header = val('f_u_header').trim();
+      if (byId('f_u_format')) u.format = val('f_u_format').trim();
+      document.querySelectorAll('.hc-step').forEach(el => {
+        const st = u.afterToken[Number(el.dataset.step)];
+        const f = name => el.querySelector(`[data-sf="${name}"]`).value;
+        Object.assign(st, { method: f('method'), url: f('url').trim(), bodyType: f('bodyType'), body: f('body'), headers: pairsOf(f('headers')), extract: extractOf(f('extract')) });
+      });
+    }
+
+    async function saveUser(uid) {
+      readUserForm();
+      const u = userDraft;
+      if (!u.label) { toast(t('userDlg.nameRequired'), 'error'); return; }
+      const body = { label: u.label, header: u.header, format: u.format, auth: { ...u.auth }, afterToken: u.afterToken };
+      for (const k of ['password', 'clientSecret']) if (body.auth[k] === undefined) delete body.auth[k];
+      const base = `/sections/${encodeURIComponent(usersSection)}/users`;
+      try {
+        const saved = await withVault(() => (uid ? ctx.api.put(`${base}/${encodeURIComponent(uid)}`, body) : ctx.api.post(base, body)));
+        const s = section(usersSection);
+        s.userTypes = uid ? s.userTypes.map(x => (x.id === saved.id ? saved : x)) : [...s.userTypes, saved];
+        toast(t('userDlg.saved', { name: saved.label }), 'success');
+        if (active?.section === usersSection) renderEditor();
+        usersDialog(usersSection);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function deleteUser(uid) {
+      const s = section(usersSection);
+      const u = s.userTypes.find(x => x.id === uid);
+      const used = s.requests.filter(r => r.userType === uid).length;
+      if (!confirm(t('users.confirmDelete', { name: u.label, count: used }))) return;
+      try {
+        await ctx.api.del(`/sections/${encodeURIComponent(s.id)}/users/${encodeURIComponent(uid)}`);
+        s.userTypes = s.userTypes.filter(x => x.id !== uid);
+        s.requests.forEach(r => { if (r.userType === uid) delete r.userType; });
+        if (draft && active.section === s.id && draft.userType === uid) delete draft.userType;
+        if (active?.section === s.id) renderEditor();
+        usersDialog(s.id);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function login(uid) {
+      const base = `/sections/${encodeURIComponent(usersSection)}/users/${encodeURIComponent(uid)}`;
+      try {
+        const st = await withVault(() => ctx.api.post(`${base}/login`, {}));
+        if (st.pendingLogin) {
+          toast(t('users.loginOpened'), 'info');
+          waitLogin(usersSection, uid, st.pendingLogin);
+        } else toast(t('users.loggedIn'), 'success');
+        usersDialog(usersSection);
+      } catch (e) { if (!e.handled) toast(e.message, 'error'); }
+    }
+
+    // Login OAuth avviato dal dialog: si aggiorna lo stato quando il token arriva
+    function waitLogin(sectionId, uid, authUrl) {
+      const started = Date.now();
+      const timer = setInterval(async () => {
+        try {
+          const st = (await ctx.api.get(`/sections/${encodeURIComponent(sectionId)}/auth`)).users.find(x => x.id === uid);
+          if (st?.pendingLogin && Date.now() - started < 5 * 60000) return;
+          clearInterval(timer);
+          if (st?.hasToken) toast(t('users.loggedIn'), 'success');
+          if (byId('modal')?.classList.contains('modal-wide') && usersSection === sectionId && byId('modalTitle')?.textContent === t('users.title', { section: section(sectionId)?.label })) usersDialog(sectionId);
+        } catch { clearInterval(timer); }
+      }, 1500);
+      return authUrl;
+    }
+
+    function pasteToken(sectionId, uid) {
+      usersSection = sectionId;
+      const u = section(sectionId).userTypes.find(x => x.id === uid);
+      openModal(t('token.title', { name: u.label }), `
+        <div class="form-row"><label>${esc(t('token.token'))}</label><textarea class="form-input hc-code" id="f_hc_token" rows="4" spellcheck="false"></textarea>
+          <p class="hc-muted">${esc(t('token.hint'))}</p></div>
+        <div class="form-row"><label>${esc(t('token.expires'))}</label><input class="form-input" type="datetime-local" id="f_hc_expires">
+          <p class="hc-muted">${esc(t('token.expiresHint'))}</p></div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" onclick="Ext['http-client'].saveToken(${js(uid)})">${esc(t('core.action.save'))}</button>`);
+      setTimeout(() => byId('f_hc_token')?.focus(), 0);
+    }
+
+    async function saveToken(uid) {
+      const token = val('f_hc_token').trim();
+      if (!token) { toast(t('token.required'), 'error'); return; }
+      const expires = val('f_hc_expires');
+      try {
+        await ctx.api.post(`/sections/${encodeURIComponent(usersSection)}/users/${encodeURIComponent(uid)}/token`, {
+          token, ...(expires ? { expiresAt: new Date(expires).toISOString() } : {}),
+        });
+        toast(t('token.saved'), 'success');
+        usersDialog(usersSection);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ---- rotte Express del progetto ----
+
+    let routesData = null;
+
+    async function routesDialog(sectionId) {
+      const s = section(sectionId);
+      try { routesData = await ctx.api.get(`/sections/${encodeURIComponent(sectionId)}/routes`); } catch (e) { toast(e.message, 'error'); return; }
+      routesData.section = sectionId;
+      const existing = new Set(s.requests.map(r => `${r.method} ${r.url.replace(/^\{\{\s*baseUrl\s*\}\}/, '')}`));
+      const d = routesData;
+      openModal(t('routes.title', { section: s.label }), `<div class="hc-scroll">
+        <p class="hc-muted">${esc(d.entry ? t('routes.entry', { file: d.entry.file, from: d.entry.from, count: d.files }) : t('routes.noEntry', { count: d.files }))}</p>
+        ${d.autoloaders.length ? `<p class="hc-warn">${esc(t('routes.autoloaders', { list: fmt.list(d.autoloaders) }))}</p>` : ''}
+        ${d.routes.length ? `<table class="data-table hc-routes"><thead><tr><th>${esc(t('routes.method'))}</th><th>${esc(t('routes.path'))}</th><th>${esc(t('routes.file'))}</th><th></th></tr></thead><tbody>
+          ${d.routes.map((r, i) => `<tr>
+            <td>${methodBadge(r.method)}</td>
+            <td><code>${esc(r.path)}</code>${r.complete ? '' : ` <span class="hc-warn">${esc(t('routes.incomplete'))}</span>`}</td>
+            <td class="hc-muted">${esc(r.file)}:${esc(r.line)}</td>
+            <td>${existing.has(`${r.method} ${r.path}`) ? `<span class="hc-muted">${esc(t('routes.imported'))}</span>`
+              : `<button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].importRoute(${i})">${esc(t('routes.import'))}</button>`}</td>
+          </tr>`).join('')}</tbody></table>` : `<p class="hc-muted">${esc(t('routes.none'))}</p>`}
+        <p class="hc-muted">${esc(t('routes.hint'))}</p></div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>`);
+      byId('modal').classList.add('modal-wide');
+    }
+
+    // Import di una rotta: percorso modificabile (le parti «…» vanno completate), poi la richiesta
+    function importRoute(i) {
+      const r = routesData.routes[i];
+      routesData.importing = i;
+      const method = r.method === 'ALL' ? 'GET' : r.method;
+      openModal(t('routes.importTitle'), `
+        <div class="form-row"><label>${esc(t('editor.label'))}</label><input class="form-input" id="f_hc_rlabel" value="${esc(`${r.method} ${r.path}`)}"></div>
+        <div class="hc-inline"><select class="form-input hc-method" id="f_hc_rmethod">${info.methods.map(m => `<option ${m === method ? 'selected' : ''}>${m}</option>`).join('')}</select>
+          <input class="form-input" id="f_hc_rpath" value="${esc(r.path)}" spellcheck="false"></div>
+        <p class="hc-muted">${esc(r.complete ? t('routes.importHint') : t('routes.completeHint', { list: fmt.list(r.unresolved) }))}</p>`,
+        `<button class="btn btn-ghost" onclick="Ext['http-client'].routes(${js(routesData.section)})">${esc(t('core.action.cancel'))}</button>
+         <button class="btn btn-primary" onclick="Ext['http-client'].confirmImport()">${esc(t('routes.import'))}</button>`);
+      setTimeout(() => byId('f_hc_rpath')?.focus(), 0);
+    }
+
+    async function confirmImport() {
+      const path = val('f_hc_rpath').trim();
+      if (/[«»]/.test(path)) { toast(t('routes.stillIncomplete'), 'error'); return; }
+      const r = routesData.routes[routesData.importing];
+      const label = val('f_hc_rlabel').trim();
+      closeModal();
+      await createRequest(routesData.section, {
+        // nome proposto non toccato: segue il percorso completato
+        label: !label || label === `${r.method} ${r.path}` ? `${val('f_hc_rmethod')} ${path}` : label, method: val('f_hc_rmethod'),
+        url: `{{baseUrl}}${path.startsWith('/') ? '' : '/'}${path}`,
+        ...(['POST', 'PUT', 'PATCH'].includes(val('f_hc_rmethod')) ? { bodyType: 'json', body: '{\n  \n}' } : {}),
+      });
+    }
+
+    // ---- eventi ----
+
+    ctx.sidebar.addEventListener('click', e => {
+      const a = e.target.closest('[data-action]')?.dataset.action;
+      if (a === 'reload') this.refresh();
+      if (a === 'new-section') sectionDialog('');
+    });
+
+    ctx.root.addEventListener('click', e => {
+      const tabBtn = e.target.closest('[data-tab]');
+      if (tabBtn) { readEditor(); tab = tabBtn.dataset.tab; renderTabs(); return; }
+      const respBtn = e.target.closest('[data-resp-tab]');
+      if (respBtn) { respTab = respBtn.dataset.respTab; renderResponse(); return; }
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      const a = el.dataset.action;
+      if (a === 'send') send();
+      else if (a === 'save') saveRequest();
+      else if (a === 'users') usersDialog(active.section);
+      else if (a === 'add-pair') { (draft[el.dataset.list] ||= []).push({ name: '', value: '' }); markDirty(); renderTabs(); ctx.root.querySelector(`[data-list="${el.dataset.list}"][data-index="${draft[el.dataset.list].length - 1}"][data-field="name"]`)?.focus(); }
+      else if (a === 'remove-pair') { draft[el.dataset.list].splice(Number(el.dataset.index), 1); markDirty(); renderTabs(); }
+      else if (a === 'format-json') {
+        const ta = $(ctx.root, 'body');
+        try { ta.value = JSON.stringify(JSON.parse(ta.value), null, 2); draft.body = ta.value; markDirty(); } catch (err) { toast(t('body.invalidJson', { error: err.message }), 'error'); }
+      } else if (a === 'copy-body') {
+        navigator.clipboard?.writeText(response?.body || '').then(() => toast(t('response.copied'), 'success'), () => {});
+      }
+    });
+
+    ctx.root.addEventListener('input', e => {
+      const el = e.target;
+      if (!draft) return;
+      if (el.dataset.list) {
+        const item = draft[el.dataset.list][Number(el.dataset.index)];
+        if (el.dataset.field === 'enabled') { if (el.checked) delete item.enabled; else item.enabled = false; } else item[el.dataset.field] = el.value;
+        markDirty();
+        if (el.dataset.field !== 'value') renderTabsCounts();
+        return;
+      }
+      if (el.name === 'hc_body_type') { readEditor(); draft.bodyType = el.value; markDirty(); renderTabs(); return; }
+      if (['label', 'url', 'body'].includes(el.dataset.role)) markDirty();
+    });
+
+    ctx.root.addEventListener('change', e => {
+      const role = e.target.dataset.role;
+      if (!draft) return;
+      if (role === 'method') { draft.method = e.target.value; e.target.style.color = ctx.ui.cssColor(METHOD_COLORS[draft.method]); markDirty(); }
+      if (role === 'user') { draft.userType = e.target.value || null; if (!draft.userType) delete draft.userType; markDirty(); }
+    });
+
+    ctx.root.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveRequest(); }
+      else if (e.key === 'Enter' && e.target.dataset.role === 'url') { e.preventDefault(); send(); }
+    });
+
+    function renderTabsCounts() {
+      $(ctx.root, 'tab-query').querySelector('.hc-tab-count')?.remove();
+      $(ctx.root, 'tab-headers').querySelector('.hc-tab-count')?.remove();
+      for (const k of ['query', 'headers']) {
+        const n = count(draft[k]);
+        if (n) $(ctx.root, `tab-${k}`).insertAdjacentHTML('beforeend', ` <span class="hc-tab-count">${esc(fmt.number(n))}</span>`);
+      }
+    }
+
+    ctx.expose({
+      toggle(id) {
+        const closed = collapsed();
+        if (closed.has(id)) closed.delete(id); else closed.add(id);
+        storeCollapsed(closed);
+        renderSidebar();
+      },
+      open(sectionId, requestId) { if (active?.request === requestId && active?.section === sectionId) return; if (canLeave()) openRequest(sectionId, requestId); },
+      newRequest(sectionId) { if (canLeave()) createRequest(sectionId); },
+      sectionMenu(event, id) {
+        const s = section(id);
+        menuAt(event, [
+          { label: t('sidebar.newRequest'), icon: '＋', action: () => { if (canLeave()) createRequest(id); } },
+          { label: t('sidebar.discover'), icon: '🔎', disabled: !s.projectId, action: () => routesDialog(id) },
+          { label: t('editor.users'), icon: '👤', action: () => usersDialog(id) },
+          { label: t('sidebar.editSection'), icon: '✎', action: () => sectionDialog(id) },
+          'separator',
+          { label: t('sidebar.deleteSection'), icon: '🗑', danger: true, action: () => deleteSection(id) },
+        ]);
+      },
+      requestMenu(event, sectionId, requestId) {
+        const r = section(sectionId).requests.find(x => x.id === requestId);
+        menuAt(event, [
+          { label: t('sidebar.openRequest'), icon: '↗', action: () => { if (canLeave()) openRequest(sectionId, requestId); } },
+          { label: t('sidebar.duplicate'), icon: '⧉', action: () => { if (canLeave()) createRequest(sectionId, { ...r, id: undefined, label: t('sidebar.copyOf', { name: r.label }) }); } },
+          'separator',
+          { label: t('core.action.delete'), icon: '🗑', danger: true, action: async () => {
+            if (!confirm(t('sidebar.confirmDeleteRequest', { name: r.label }))) return;
+            try {
+              await ctx.api.del(`/sections/${encodeURIComponent(sectionId)}/requests/${encodeURIComponent(requestId)}`);
+              section(sectionId).requests = section(sectionId).requests.filter(x => x.id !== requestId);
+              if (active?.request === requestId) { active = null; draft = null; dirty = false; }
+              renderSidebar(); renderEditor();
+            } catch (e) { toast(e.message, 'error'); }
+          } },
+        ]);
+      },
+      editSection: sectionDialog,
+      proposeBase,
+      addVariable() { byId('f_hc_vars').insertAdjacentHTML('beforeend', variablesRows([{ name: '', value: '' }])); byId('f_hc_vars').lastElementChild.querySelector('input').focus(); },
+      saveSection,
+      users: usersDialog,
+      editUser,
+      userTypeChanged() {
+        readUserForm();
+        const type = val('f_u_type');
+        if (type !== userDraft.auth.type) userDraft.auth = { type };
+        if (byId('f_u_flow')) userDraft.auth.flow = val('f_u_flow');
+        renderUserForm(userForm.uid);
+      },
+      async readIssuer() {
+        readUserForm();
+        try {
+          const r = await ctx.api.post('/oidc-discovery', { issuer: userDraft.auth.issuer });
+          Object.assign(userDraft.auth, { authorizationEndpoint: r.authorizationEndpoint || '', tokenEndpoint: r.tokenEndpoint || '' });
+          renderUserForm(userForm.uid);
+          toast(t('userDlg.issuerRead'), 'success');
+        } catch (e) { toast(e.message, 'error'); }
+      },
+      addStep() { readUserForm(); userDraft.afterToken.push({ method: 'GET', url: '{{baseUrl}}/', headers: [], bodyType: 'none', body: '', extract: [] }); renderUserForm(userForm.uid); },
+      removeStep(i) { readUserForm(); userDraft.afterToken.splice(i, 1); renderUserForm(userForm.uid); },
+      saveUser,
+      deleteUser,
+      login,
+      pasteToken,
+      saveToken,
+      async forgetToken(uid) {
+        try { await ctx.api.del(`/sections/${encodeURIComponent(usersSection)}/users/${encodeURIComponent(uid)}/token`); usersDialog(usersSection); } catch (e) { toast(e.message, 'error'); }
+      },
+      routes: routesDialog,
+      importRoute,
+      confirmImport,
+      vaultSubmit() { vaultPrompt?.submit(); },
+      vaultCancel() { vaultPrompt?.cancel(); },
+    });
+
+    ctx.bus.on('core:projects-changed', load);
+    window.addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
+    await load();
+
+    this.refresh = load;
+    this.languageChanged = () => { renderSidebar(); renderEditor(); };
+  },
+};
