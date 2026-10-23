@@ -1,0 +1,62 @@
+{
+  "name": { "it": "Mock", "en": "Mock" },
+  "code": "mock-server",
+  "version": "1.0.0",
+  "description": {
+    "it": "Mock server locali: risposte predefinite per rotta, CORS, registro delle chiamate in arrivo con il payload",
+    "en": "Local mock servers: predefined responses per route, CORS, log of the incoming calls with their payload"
+  },
+  "color": "#39c5cf",
+  "icon": "🎭",
+  "position": "tab",
+  "order": 39,
+  "config": ["mockServers"],
+  "export": [
+    {
+      "id": "mocks",
+      "label": { "it": "Mock server", "en": "Mock servers" },
+      "description": { "it": "Mock server e le loro rotte (il registro delle chiamate non viene esportato)", "en": "Mock servers and their routes (the call log is not exported)" },
+      "sections": ["mockServers"]
+    }
+  ],
+  "backend": {
+    "module": "server.js",
+    "routes": [
+      { "method": "GET",    "path": "/mocks",                  "handler": "list" },
+      { "method": "POST",   "path": "/mocks",                  "handler": "create" },
+      { "method": "PUT",    "path": "/mocks/:id",              "handler": "update" },
+      { "method": "DELETE", "path": "/mocks/:id",              "handler": "remove" },
+      { "method": "POST",   "path": "/mocks/:id/start",        "handler": "start" },
+      { "method": "POST",   "path": "/mocks/:id/stop",         "handler": "stop" },
+      { "method": "POST",   "path": "/mocks/:id/routes",       "handler": "createRoute" },
+      { "method": "PUT",    "path": "/mocks/:id/routes/:rid",  "handler": "updateRoute" },
+      { "method": "DELETE", "path": "/mocks/:id/routes/:rid",  "handler": "deleteRoute" },
+      { "method": "PUT",    "path": "/mocks/:id/order",        "handler": "reorder" },
+      { "method": "GET",    "path": "/mocks/:id/calls",        "handler": "calls" },
+      { "method": "DELETE", "path": "/mocks/:id/calls",        "handler": "clearCalls" },
+      { "method": "GET",    "path": "/mocks/:id/events",       "handler": "events", "stream": true }
+    ]
+  },
+  "mcp": {
+    "tools": [
+      { "name": "list", "handler": "list", "readOnly": true,
+        "description": "Mock servers configured in DevDock: id, name, port, whether they are running, number of routes and of logged calls.",
+        "inputSchema": { "type": "object", "properties": {} } },
+      { "name": "requests", "handler": "requests", "readOnly": true,
+        "description": "Calls received by a mock server (newest first): time, method, path, query, headers (credentials redacted), body, matched route (or null when no route matched) and response status. Filters: method, path (substring), unmatched only.",
+        "inputSchema": { "type": "object", "properties": {
+          "mock": { "type": "string", "description": "Mock server id (see mock_server_list)" },
+          "method": { "type": "string", "description": "Only calls with this HTTP method" },
+          "path": { "type": "string", "description": "Only calls whose path contains this text" },
+          "unmatched": { "type": "boolean", "description": "Only calls that matched no route" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 500, "description": "Maximum number of calls (default 50)" }
+        }, "required": ["mock"] } }
+    ]
+  },
+  "frontend": {
+    "html": "view.html",
+    "sidebar": "sidebar.html",
+    "js": "view.js",
+    "css": "style.css"
+  }
+}
