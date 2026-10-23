@@ -12,13 +12,13 @@ after(() => srv?.stop());
 const call = (m, p, body) => srv.request(m, `/api/core${p}`, body !== undefined ? { body } : {});
 
 test('ordine predefinito: lista vuota', async () => {
-  assert.deepEqual((await call('GET', '/layout')).json, { tabs: [] });
+  assert.deepEqual((await call('GET', '/layout')).json, { tabs: [], positions: {} });
 });
 
 test('salvataggio: duplicati e codici sconosciuti o non di tab scartati', async () => {
   const r = await call('PUT', '/layout/tabs', { tabs: ['third', 'nope', 'sample', 'third', 'panel', 'second'] });
   assert.equal(r.status, 200, r.text);
-  assert.deepEqual(r.json, { tabs: ['third', 'sample', 'second'] }); // panel è un pulsante dell'header
+  assert.deepEqual(r.json.tabs, ['third', 'sample', 'second']); // panel è un pulsante dell'header
   assert.deepEqual(srv.readConfig().layout, { tabs: ['third', 'sample', 'second'] });
   assert.deepEqual((await call('GET', '/layout')).json.tabs, ['third', 'sample', 'second']);
 });
@@ -42,6 +42,29 @@ test('validazione della lista', async () => {
 
 test('ripristino dell\'ordine predefinito', async () => {
   const r = await call('DELETE', '/layout/tabs');
-  assert.deepEqual(r.json, { tabs: [] });
+  assert.deepEqual(r.json.tabs, []);
   assert.deepEqual(srv.readConfig().layout, {});
+});
+
+test('posizione: tab o header diversa dal manifest, ripristinabile; le tab spostate contano nell\'ordine', async () => {
+  const ext = async code => (await call('GET', '/extensions')).json.find(e => e.code === code);
+  assert.deepEqual([(await ext('panel')).position, (await ext('panel')).manifestPosition], ['header', 'header']);
+  let r = await call('PUT', '/layout/positions/panel', { position: 'tab' });
+  assert.equal(r.status, 200, r.text);
+  assert.deepEqual(r.json.positions, { panel: 'tab' });
+  assert.equal((await ext('panel')).position, 'tab');
+  // ora è una tab: entra nell'ordine salvato
+  r = await call('PUT', '/layout/tabs', { tabs: ['panel', 'sample'] });
+  assert.deepEqual(r.json.tabs, ['panel', 'sample']);
+  await call('PUT', '/layout/positions/second', { position: 'header' });
+  assert.deepEqual(srv.readConfig().layout.positions, { panel: 'tab', second: 'header' });
+  // la posizione del manifest o null tolgono l'override
+  await call('PUT', '/layout/positions/panel', { position: 'header' });
+  await call('PUT', '/layout/positions/second', { position: null });
+  assert.equal(srv.readConfig().layout.positions, undefined);
+  assert.equal((await ext('second')).position, 'tab');
+  assert.equal((await call('PUT', '/layout/positions/second', { position: 'sidebar' })).json.code, 'core.layout_positions');
+  assert.equal((await call('PUT', '/layout/positions/nope', { position: 'tab' })).json.code, 'core.layout_no_ui');
+  r = await call('POST', '/config/import', { mode: 'replace', config: { layout: { positions: { second: 'altrove' } } } });
+  assert.equal(r.json.code, 'core.layout_positions');
 });

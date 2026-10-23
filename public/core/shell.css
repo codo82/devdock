@@ -83,6 +83,7 @@
   .ext-preview-actions{display:flex;justify-content:flex-end;gap:8px}
   .ext-steps{margin:0;padding-inline-start:18px;font-size:12px}
   .ext-version{max-width:280px}
+  .ext-position{width:auto;padding:3px 6px;font-size:11px}
   .vault-text{font-size:12px;color:var(--muted);line-height:1.5}
   .vault-error{min-height:16px;font-size:12px;color:var(--danger)}
   .section-tab-icon{font-size:16px}

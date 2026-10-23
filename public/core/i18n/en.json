@@ -256,5 +256,11 @@
   "core.ext.confirmRemove": "Remove {name}? Its data in config.json stay: reinstalling it brings everything back.",
   "core.ext.owner": "Extensions",
   "core.ext.exportLabel": "Installed extensions",
-  "core.ext.exportDescription": "Source and version of the installed ones, catalogs, switched-off extensions (no code)"
+  "core.ext.exportDescription": "Source and version of the installed ones, catalogs, switched-off extensions (no code)",
+  "core.errors.layout_positions": "Invalid position: tab or header",
+  "core.errors.layout_no_ui": "{code} has no interface to move",
+  "core.ext.positionTitle": "Where it opens: tab in the section bar or button in the header",
+  "core.ext.position.tab": "Tab",
+  "core.ext.position.header": "Header",
+  "core.ext.position.default": "(manifest)"
 }

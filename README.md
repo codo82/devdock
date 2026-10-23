@@ -102,7 +102,7 @@ claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Auth
 
 Every section of DevDock is an extension. Some are **built in** (they come with DevDock and are updated with it); others are **installed** from git repositories into `~/.devdock/extensions`. The 🧩 button in the header opens the Extensions panel:
 
-- **Installed**: every extension with version, source and state; the switch turns one off or on (also the built-in ones; those that require it are switched off too), and installed ones can be **updated**, taken back to the **previous version** (kept after every update) or **removed**. The badge on 🧩 counts the available updates and the extensions to install.
+- **Installed**: every extension with version, source and state; the **Tab / Header** selector moves an extension between the section bar and a button in the header (the manifest gives the default); the switch turns one off or on (also the built-in ones; those that require it are switched off too), and installed ones can be **updated**, taken back to the **previous version** (kept after every update) or **removed**. The badge on 🧩 counts the available updates and the extensions to install.
 - **Catalog**: the extensions listed by the configured catalogs (the official `devdock-extensions` catalog by default), with a search.
 - **From URL**: any git repository (GitHub, GitLab, a company server, a local folder), with an optional folder for repositories that hold several extensions (`…/tools.git#path=my-extension`). Private repositories work with your own git credentials (SSH keys, credential helper).
 - **Catalogs**: the list of catalog URLs.

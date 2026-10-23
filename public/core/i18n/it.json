@@ -256,5 +256,11 @@
   "core.ext.confirmRemove": "Rimuovere {name}? I suoi dati in config.json restano: reinstallandola ritorna tutto.",
   "core.ext.owner": "Estensioni",
   "core.ext.exportLabel": "Estensioni installate",
-  "core.ext.exportDescription": "Sorgente e versione delle installate, cataloghi, estensioni spente (niente codice)"
+  "core.ext.exportDescription": "Sorgente e versione delle installate, cataloghi, estensioni spente (niente codice)",
+  "core.errors.layout_positions": "Posizione non valida: tab o header",
+  "core.errors.layout_no_ui": "{code} non ha un'interfaccia da spostare",
+  "core.ext.positionTitle": "Dove si apre: tab nella barra delle sezioni o pulsante nell'header",
+  "core.ext.position.tab": "Tab",
+  "core.ext.position.header": "Header",
+  "core.ext.position.default": "(manifest)"
 }

@@ -62,6 +62,11 @@ module.exports = function coreRoutes(extensions) {
   router.get('/layout', (req, res) => { res.json(layout.get()); });
   router.put('/layout/tabs', (req, res) => { res.json(layout.setTabs(req.body?.tabs, tabCodes())); });
   router.delete('/layout/tabs', (req, res) => { res.json(layout.resetTabs()); });
+  // Tab o pulsante dell'header, anche diversamente dal manifest ({ position: 'tab'|'header'|null })
+  router.put('/layout/positions/:code', (req, res) => {
+    const ext = extensions.list().find(e => e.code === req.params.code && !e.duplicate);
+    res.json(layout.setPosition(req.params.code, req.body?.position ?? null, ext?.frontend?.js ? ext.manifestPosition : null));
+  });
 
   // Vault della master password (segreti di db-client, http-client e delle altre estensioni)
   router.get('/vault', (req, res) => { res.json(vault.status()); });

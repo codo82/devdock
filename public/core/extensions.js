@@ -89,6 +89,10 @@ window.Extensions = (() => {
           ${e.warnings?.length ? `<div class="ext-warn">${esc(e.warnings.join(' · '))}</div>` : ''}
         </div>
         <div class="ext-actions">
+          ${!duplicate && e.frontend?.js && e.manifestPosition ? `<select class="form-input ext-position" title="${esc(t('core.ext.positionTitle'))}" ${busy ? 'disabled' : ''}
+              onchange="Extensions.position(${js(e.code)}, this.value)">
+            ${['tab', 'header'].map(p => `<option value="${p}" ${p === e.position ? 'selected' : ''}>${esc(t(`core.ext.position.${p}`))}${p === e.manifestPosition ? ` ${esc(t('core.ext.position.default'))}` : ''}</option>`).join('')}
+            </select>` : ''}
           ${duplicate ? '' : `
             <label class="ext-switch" title="${esc(t(e.state === 'off' ? 'core.ext.enable' : 'core.ext.disable'))}">
               <input type="checkbox" ${e.state === 'off' ? '' : 'checked'} ${busy ? 'disabled' : ''} onchange="Extensions.toggle(${js(e.code)}, this.checked)"><span></span></label>`}
@@ -272,6 +276,7 @@ window.Extensions = (() => {
     tab(x) { tab = x; render(); },
     search(v) { search = v; const el = root(); const pos = el?.querySelector('input[type=search]')?.selectionStart; render(); const input = root()?.querySelector('input[type=search]'); input?.focus(); if (pos != null) input?.setSelectionRange(pos, pos); },
     reloadCatalog() { catalog = null; render(); loadCatalog(true); },
+    position(code, position) { act(() => api.put(`/layout/positions/${encodeURIComponent(code)}`, { position })); },
     toggle(code, enabled) { act(() => api.post(`/extensions-admin/${encodeURIComponent(code)}/enabled`, { enabled })); },
     restore(code) {
       const e = data.extensions.find(x => x.code === code && x.source === 'installed');

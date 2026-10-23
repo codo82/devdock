@@ -84,7 +84,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) 
 | `description` | no | One line; a string or a map by language tag |
 | `color` | yes | Accent colour (`#rrggbb`) for tab, badges, pills and `--ext-color` |
 | `icon` | no | Emoji or short text for the tab / header button |
-| `position` | yes | `"tab"`: entry in the section bar with its own panel · `"header"`: button in the header bar that opens its panel |
+| `position` | yes | `"tab"`: entry in the section bar with its own panel · `"header"`: button in the header bar that opens its panel. It is the default: the user can move the extension from the Extensions panel (saved in `layout.positions`), so the UI must work in both places; `GET /api/core/extensions` reports the `position` in use and the `manifestPosition` |
 | `order` | no | Sort order among tabs and among header buttons (default 100); it is the default order: the user can reorder the tabs (saved in `layout.tabs`), and extensions not in that list go after the others in `order`. The first tab opens at startup |
 | `dependencies` | no | `required: true` → the extension is not loaded if the dependency is missing or disabled · `required: false` → it loads with a warning icon and must cope with the dependency being absent |
 | `config` | no | Top-level keys of `config.json` owned by the extension (see *Configuration*) |
@@ -435,6 +435,7 @@ Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i1
 | `POST /api/core/extensions-admin/preview` | `{ source, folder?, tag? }` or `{ code }` of a catalog: shallow, sparse clone in a staging folder; versions, chosen tag, manifest data, compatibility, dependencies, changelog; `id` for the install |
 | `POST /api/core/extensions-admin/install` | `{ id }` of a preview; Server-Sent Events `step`, `log`, `done` (`{ code, version, previous, restartRequired, state }`) or `error` |
 | `POST /api/core/extensions-admin/:code/update` · `/:code/restore` · `DELETE /api/core/extensions-admin/:code` · `POST /api/core/extensions-admin/updates` | Preview of the newest (or `{ tag }`) version · back to the previous version · remove an installed extension · check the updates now |
+| `PUT /api/core/layout/positions/:code` | `{ position: "tab" \| "header" \| null }`: where an extension with a UI opens; `null` or the manifest position remove the override |
 | `GET /api/core/layout` · `PUT /api/core/layout/tabs` · `DELETE /api/core/layout/tabs` | Tab order chosen by the user (`{ tabs: [codes] }`; unknown codes and codes of header extensions are dropped, duplicates removed) · save it · back to the manifest order |
 | `GET /api/core/system` | Platform and external tools (`?refresh=1` checks again) |
 | `GET /api/core/config/sections` | Config sections and their owner |

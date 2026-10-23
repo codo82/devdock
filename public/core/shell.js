@@ -74,6 +74,7 @@ window.Shell = (() => {
     for (const [code, entry] of [...exts]) {
       const meta = wanted.get(code);
       if (!meta || meta.loadId !== entry.meta.loadId || meta.dir !== entry.meta.dir) { removeEntry(code); changed.push(code); }
+      else if (meta.position !== entry.meta.position) removeEntry(code); // spostata tra tab e header: stesso modulo, nuovo posto
     }
     extList = list;
     await window.I18n.setExtensions(list.filter(usable), [...changed, ...[...wanted.keys()].filter(c => !exts.has(c))]);
