@@ -1492,7 +1492,7 @@ export default {
         });
         const data = await res.json().catch(() => ({}));
         const record = (ok, summary) => addHistory({ sql, connId: c.id, db: body.database, at: Date.now(), ok, summary });
-        if (res.status === 422 && data.needsParams) needParams(c, sql, data.params);
+        if (res.status === 422 && data.needsParams) await needParams(c, sql, data.params);
         else if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token, paramInfo: opts?.paramInfo }));
         else if (!res.ok) { renderError(ctx.ui.errorText(data, `HTTP ${res.status}`), sql); showParamsUsed(opts?.paramInfo); record(false); }
         else {
@@ -1512,23 +1512,17 @@ export default {
     }
 
     // ---- query parametriche: un campo per parametro ----
-    // I valori restano nel browser (localStorage): per query (connessione + testo) e per nome.
-    // Una query già eseguita riparte con i suoi valori senza chiederli; "Cambia" li riapre.
-    const PARAMS_KEY = 'devdock.db.queryParams', NAMES_KEY = 'devdock.db.paramNames', MAX_SAVED = 200;
-    const readStore = key => { try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { return {}; } };
-    const writeStore = (key, obj) => { try { localStorage.setItem(key, JSON.stringify(obj)); } catch { /* solo per questa sessione */ } };
-    const queryKey = (c, sql) => `${c.id}|${sql.trim()}`;
-    // values: { chiave: { value, type } } — l'ultima query usata va in fondo, le più vecchie escono
+    // I valori restano nella memoria di DevDock (persi al riavvio), per query (connessione +
+    // testo) e per nome. Una query già eseguita riparte con i suoi valori senza chiederli;
+    // "Cambia" li riapre. Nel browser non resta nulla (le versioni 1.20.0 usavano localStorage).
+    try { localStorage.removeItem('devdock.db.queryParams'); localStorage.removeItem('devdock.db.paramNames'); } catch { /* niente da togliere */ }
+    async function savedParams(c, sql, list) {
+      try { return await ctx.api.post('/param-values', { connection: c.id, sql, names: list.map(p => p.name) }); }
+      catch { return { query: null, byName: {} }; }
+    }
+    // values: { chiave: { value, type } }
     function rememberParams(c, sql, list, values) {
-      const queries = readStore(PARAMS_KEY);
-      delete queries[queryKey(c, sql)];
-      queries[queryKey(c, sql)] = values;
-      const keys = Object.keys(queries);
-      for (const k of keys.slice(0, Math.max(0, keys.length - MAX_SAVED))) delete queries[k];
-      writeStore(PARAMS_KEY, queries);
-      const names = readStore(NAMES_KEY);
-      for (const p of list) names[p.name] = values[p.key];
-      writeStore(NAMES_KEY, names);
+      ctx.api.put('/param-values', { connection: c.id, sql, params: list.map(p => ({ key: p.key, name: p.name })), values }).catch(() => {});
     }
     // Valori da inviare, o null se un valore salvato non è più valido
     function paramsFrom(list, values) {
@@ -1542,23 +1536,20 @@ export default {
     }
 
     // Risposta 422: valori salvati per questa query → si riparte subito, altrimenti la modale
-    function needParams(c, sql, list) {
-      const saved = readStore(PARAMS_KEY)[queryKey(c, sql)];
+    async function needParams(c, sql, list) {
+      const { query: saved, byName } = await savedParams(c, sql, list);
       const params = saved && list.every(p => saved[p.key]) ? paramsFrom(list, saved) : null;
       if (params) {
-        const paramInfo = { sql, list, values: saved };
-        rememberParams(c, sql, list, saved);
-        setTimeout(() => run({ sql, params, paramInfo }), 0); // dopo la fine di questa esecuzione
+        setTimeout(() => run({ sql, params, paramInfo: { sql, list, values: saved } }), 0); // dopo la fine di questa esecuzione
         return;
       }
-      askParams(c, sql, list, saved || {});
+      askParams(c, sql, list, saved || {}, byName);
     }
 
     let pendingParams = null; // { c, sql, list }
-    function askParams(c, sql, list, saved) {
+    function askParams(c, sql, list, saved, byName = {}) {
       pendingParams = { c, sql, list };
       $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('params.waiting'))}</div>`;
-      const byName = readStore(NAMES_KEY);
       const types = ['auto', 'text', 'number', 'null'];
       const rows = list.map((p, i) => {
         const v = saved[p.key] || byName[p.name] || { value: '', type: 'auto' };

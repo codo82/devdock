@@ -152,6 +152,16 @@
         "handler": "query"
       },
       {
+        "method": "POST",
+        "path": "/param-values",
+        "handler": "paramValues"
+      },
+      {
+        "method": "PUT",
+        "path": "/param-values",
+        "handler": "saveParamValues"
+      },
+      {
         "method": "GET",
         "path": "/migrations/repos",
         "handler": "migrationRepos"

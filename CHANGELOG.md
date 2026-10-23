@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.20.1] - 2026-10-23
+
+### Changed
+- Database, parametric queries: the saved values are kept in DevDock's memory (lost when it restarts) instead of the browser's `localStorage`; values left there by 1.20.0 are removed when the Database section opens. API: `POST`/`PUT /api/ext/db-client/param-values`.
+
 ## [1.20.0] - 2026-10-23
 
 ### Changed

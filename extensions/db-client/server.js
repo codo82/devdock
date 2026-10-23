@@ -350,6 +350,20 @@ module.exports = function createDbClient(ctx) {
 
   const pendingExports = new Map(); // id → { connId, format, spec, filename, expires }
 
+  // Valori dei parametri delle query (? e :nome) usati dall'editor: solo in memoria,
+  // persi al riavvio. Per query ("connessione\0testo") e per nome del parametro.
+  const MAX_SAVED_QUERIES = 200, MAX_SAVED_NAMES = 500;
+  const savedQueryParams = new Map(); // → { chiave: { value, type } }
+  const savedParamNames = new Map();  // nome → { value, type }
+  const PARAM_TYPES = new Set(['auto', 'text', 'number', 'null']);
+  const isSavedValue = v => v && typeof v === 'object' && typeof v.value === 'string' && v.value.length <= 10000 && PARAM_TYPES.has(v.type);
+  // Inserimento in fondo (più recente) e taglio dei più vecchi
+  const remember = (map, key, value, max) => {
+    map.delete(key);
+    map.set(key, value);
+    while (map.size > max) map.delete(map.keys().next().value);
+  };
+
   // Scrive su res rispettando il backpressure (attende 'drain' se il buffer è pieno)
   const writeOut = (res, text) => res.write(text) ? null : new Promise(r => res.once('drain', r));
 
@@ -530,6 +544,30 @@ module.exports = function createDbClient(ctx) {
           driver: 'mysql2', version: require('mysql2/package.json').version, ready: typeof mysql.createPool === 'function',
           ddl: { types: ddl.TYPES, fkActions: ddl.FK_ACTIONS, engines: ddl.ENGINES },
         });
+      },
+
+      // ---- valori dei parametri delle query (in memoria) ----
+
+      // { connection, sql, names } → { query: valori salvati per quella query | null, byName }
+      paramValues(req, res) {
+        const { connection, sql, names } = req.body;
+        if (typeof connection !== 'string' || typeof sql !== 'string') throw ctx.error(400, 'params_invalid');
+        const byName = Object.fromEntries((Array.isArray(names) ? names : [])
+          .filter(n => typeof n === 'string' && savedParamNames.has(n)).map(n => [n, savedParamNames.get(n)]));
+        res.json({ query: savedQueryParams.get(`${connection}\0${sql.trim()}`) || null, byName });
+      },
+
+      // { connection, sql, params: [{ key, name }], values: { chiave: { value, type } } }
+      saveParamValues(req, res) {
+        const { connection, sql, params, values } = req.body;
+        if (typeof connection !== 'string' || typeof sql !== 'string' || !Array.isArray(params) || !values || typeof values !== 'object'
+            || !params.every(p => typeof p?.key === 'string' && typeof p?.name === 'string' && isSavedValue(values[p.key]))) {
+          throw ctx.error(400, 'params_invalid');
+        }
+        const clean = Object.fromEntries(params.map(p => [p.key, { value: values[p.key].value, type: values[p.key].type }]));
+        remember(savedQueryParams, `${connection}\0${sql.trim()}`, clean, MAX_SAVED_QUERIES);
+        for (const p of params) remember(savedParamNames, p.name, clean[p.key], MAX_SAVED_NAMES);
+        res.json({ ok: true });
       },
 
       // ---- connessioni ----

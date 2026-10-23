@@ -632,6 +632,27 @@ test('cartelle delle connessioni: creazione, spostamento, eliminazione, import',
   }
 });
 
+test('valori dei parametri delle query: solo in memoria, per query e per nome', async () => {
+  const s = await startServer();
+  try {
+    const api = (m, body) => s.request(m, '/api/ext/db-client/param-values', { body });
+    const sql = 'SELECT * FROM t WHERE id = :id LIMIT ?';
+    let r = await api('POST', { connection: 'c', sql, names: ['id', 'limit'] });
+    assert.deepEqual(r.json, { query: null, byName: {} });
+    const values = { id: { value: '7', type: 'auto' }, '#1': { value: '10', type: 'number' } };
+    r = await api('PUT', { connection: 'c', sql: ` ${sql} `, params: [{ key: 'id', name: 'id' }, { key: '#1', name: 'limit' }], values });
+    assert.equal(r.status, 200, r.text);
+    r = await api('POST', { connection: 'c', sql, names: ['id', 'limit', 'altro'] });
+    assert.deepEqual(r.json.query, values);
+    assert.deepEqual(r.json.byName, { id: values.id, limit: values['#1'] });
+    // altra connessione: la query non ha valori, i nomi sì
+    assert.equal((await api('POST', { connection: 'd', sql, names: ['id'] })).json.query, null);
+    assert.equal((await api('PUT', { connection: 'c', sql, params: [{ key: 'id', name: 'id' }], values: { id: { value: 1, type: 'auto' } } })).status, 400);
+    assert.equal((await api('PUT', { connection: 'c', sql, params: [{ key: 'id', name: 'id' }], values: { id: { value: '1', type: 'boh' } } })).status, 400);
+    assert.doesNotMatch(require('fs').readFileSync(s.configPath, 'utf8'), /"10"/); // niente in config.json
+  } finally { await s.stop(); }
+});
+
 test('connessione con un tunnel eliminato: segnalata, errore chiaro', async () => {
   const s = await startServer({
     groups: [], projects: [],
