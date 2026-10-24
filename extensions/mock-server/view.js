@@ -3,6 +3,7 @@
 // con il dettaglio del payload e "crea rotta da questa chiamata".
 
 const METHOD_COLORS = { ANY: '#8b949e', GET: '#3fb950', POST: '#d29922', PUT: '#58a6ff', PATCH: '#a371f7', DELETE: '#f85149', HEAD: '#8b949e', OPTIONS: '#8b949e' };
+const POLL_MS = 10000;
 const METHODS = ['ANY', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 export default {
@@ -41,6 +42,30 @@ export default {
             <button class="sb-item-act ms-visible" onclick="event.stopPropagation();Ext['mock-server'].toggle(${js(m.id)})" title="${esc(t(m.running ? 'header.stop' : 'header.start'))}">${m.running ? '■' : '▶'}</button>
           </div>`).join('');
       ctx.setBadge(mocks.filter(m => m.running).length || null);
+      renderPills();
+    }
+
+    // ---- header: una pill per mock avviato (clic: apre il mock, ✕: lo ferma) ----
+    function renderPills() {
+      ctx.setPills(mocks.filter(m => m.running).map(m => `
+        <span class="pill pill-mock" onclick="Ext['mock-server'].openMock(${js(m.id)})" title="${esc(t('pill.title', { name: m.label, url: `http://127.0.0.1:${m.port}` }))}">
+          <span class="pill-dot"></span>
+          ${esc(m.label)}<span class="pill-port">:${esc(m.port)}</span>
+          <span class="pill-close" onclick="event.stopPropagation();Ext['mock-server'].toggle(${js(m.id)})" title="${esc(t('header.stop'))}">✕</span>
+        </span>`).join(''));
+    }
+
+    // Stato dei mock ogni tanto (pill e sidebar aggiornate anche con la sezione chiusa); il
+    // pannello si ridisegna solo se cambia qualcosa
+    const stateKey = list => list.map(m => `${m.id}:${m.running}:${m.port}`).join('|');
+    async function poll() {
+      let next;
+      try { next = await ctx.api.get('/mocks'); } catch { return; }
+      if (stateKey(next) === stateKey(mocks)) return;
+      mocks = next;
+      if (activeId && !active()) select(null);
+      renderSidebar();
+      renderMain();
     }
 
     function renderMain() {
@@ -254,6 +279,7 @@ export default {
 
     ctx.expose({
       select(id) { if (id !== activeId) select(id); },
+      openMock(id) { ctx.open('mock-server'); if (id !== activeId) select(id); },
       async toggle(id) {
         const m = mocks.find(x => x.id === id);
         try {
@@ -301,7 +327,9 @@ export default {
     });
 
     await load();
+    const pollTimer = setInterval(poll, POLL_MS);
     this.refresh = load;
+    this.unmount = () => { clearInterval(pollTimer); closeStream?.(); closeStream = null; };
     this.show = () => { if (activeId && !closeStream) openStream(); };
     this.hide = () => { closeStream?.(); closeStream = null; };
     this.languageChanged = () => { renderSidebar(); renderMain(); };

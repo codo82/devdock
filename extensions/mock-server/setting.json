@@ -58,6 +58,7 @@
     "html": "view.html",
     "sidebar": "sidebar.html",
     "js": "view.js",
-    "css": "style.css"
+    "css": "style.css",
+    "preload": true
   }
 }

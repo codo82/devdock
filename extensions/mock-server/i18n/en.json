@@ -99,5 +99,6 @@
   "errors.route_delay": "Invalid delay (0-60000 ms)",
   "errors.route_body": "Invalid or too large body (at most 1 MB)",
   "errors.route_headers": "Invalid headers (name without spaces, value on one line)",
-  "errors.route_label": "Note too long"
+  "errors.route_label": "Note too long",
+  "pill.title": "Mock {name} listening on {url}"
 }

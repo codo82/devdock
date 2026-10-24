@@ -1,3 +1,6 @@
+.pill-mock{color:var(--ext-color);border-color:color-mix(in srgb,var(--ext-color) 50%,transparent);background:color-mix(in srgb,var(--ext-color) 8%,transparent)}
+.pill-mock .pill-dot{background:var(--ext-color);box-shadow:0 0 4px var(--ext-color);animation:pulse 2s infinite}
+.pill-mock .pill-port{opacity:.7}
 .ms-muted{color:var(--muted);font-size:12px}
 .ms-pad{padding:12px 14px}
 .ms-warn{color:var(--warning)}
