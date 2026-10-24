@@ -365,6 +365,8 @@ export default {
     let authStates = [];
 
     async function usersDialog(sectionId) {
+      // utenze, password e token solo con la master password: chiesta prima di aprire il dialog
+      if (!(await ctx.vault.ensure())) return;
       usersSection = sectionId;
       try { authStates = (await ctx.api.get(`/sections/${encodeURIComponent(sectionId)}/auth`)).users; } catch (e) { toast(e.message, 'error'); authStates = []; }
       const s = section(sectionId);

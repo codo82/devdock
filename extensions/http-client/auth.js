@@ -148,6 +148,12 @@ function createAuth({ ctx, vault, pageText, varsOf }) {
     }
   }
 
+  // Vault bloccato: i token in memoria non restano disponibili senza la master password
+  function forgetAll() {
+    tokens.clear();
+    for (const p of logins.values()) p.cancel();
+  }
+
   function state(section, user) {
     const entry = tokens.get(keyOf(section, user));
     const pending = logins.get(keyOf(section, user));
@@ -409,7 +415,7 @@ function createAuth({ ctx, vault, pageText, varsOf }) {
 
   function shutdown() { for (const p of [...logins.values()]) p.cancel(); }
 
-  return { headersFor, state, store, forget, forgetSection, login, discover, shutdown };
+  return { headersFor, state, store, forget, forgetSection, forgetAll, login, discover, shutdown };
 }
 
 module.exports = { createAuth, jwtExpiry, atPath, AUTH_TYPES, OAUTH_FLOWS, MAX_AFTER_STEPS, openBrowser };

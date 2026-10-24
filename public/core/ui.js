@@ -110,9 +110,35 @@ window.UI = (() => {
     document.getElementById('modalBody').innerHTML = bodyHtml;
     document.getElementById('modalFooter').innerHTML = footerHtml;
     document.getElementById('modalOverlay').classList.add('open');
+    document.dispatchEvent(new CustomEvent('ui:modal', { detail: { open: true } }));
   }
   function closeModal() {
     document.getElementById('modalOverlay').classList.remove('open');
+    document.dispatchEvent(new CustomEvent('ui:modal', { detail: { open: false } }));
+  }
+
+  // Aggiornamento di un contenitore che si ridisegna da solo (polling, blur, change): niente se
+  // l'HTML è lo stesso dell'ultima volta; rimandato a dopo il clic se il mouse è premuto dentro il
+  // contenitore, perché sostituire il pulsante fra mousedown e click farebbe perdere il clic
+  let pressed = null;
+  const deferred = new Map();
+  document.addEventListener('pointerdown', e => { pressed = e.target; }, true);
+  const release = () => {
+    pressed = null;
+    // dopo i gestori del click (stesso task di pointerup)
+    setTimeout(() => { for (const [el, html] of [...deferred]) { deferred.delete(el); patch(el, html); } }, 0);
+  };
+  document.addEventListener('pointerup', release, true);
+  document.addEventListener('pointercancel', release, true);
+  const normalizer = document.createElement('template'); // HTML serializzato come lo fa il browser
+  function patch(el, html) {
+    if (!el) return;
+    html = html ?? '';
+    if (pressed && el.contains(pressed)) { deferred.set(el, html); return; }
+    deferred.delete(el);
+    normalizer.innerHTML = html;
+    if (normalizer.innerHTML === el.innerHTML) return;
+    el.innerHTML = html;
   }
 
   // Client JSON per un prefisso di API (es. '/api/ext/git'); gli errori diventano Error con il messaggio del server
@@ -191,5 +217,5 @@ window.UI = (() => {
   // click fuori dal modal lo chiude
   document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
-  return { t: I18n.t, fmt: I18n.fmt, errorText: I18n.errorText, esc, js, cssColor, ansiToHtml, ansiState, toast, openModal, closeModal, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
+  return { t: I18n.t, fmt: I18n.fmt, errorText: I18n.errorText, esc, js, cssColor, ansiToHtml, ansiState, toast, openModal, closeModal, patch, apiClient, formatUptime, toolNotice, contextMenu, closeContextMenu };
 })();

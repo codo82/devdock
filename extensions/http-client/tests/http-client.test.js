@@ -260,6 +260,10 @@ const sendAs = (userType, url = '{{baseUrl}}/me') => call('POST', '/send', { sec
 const state = async uid => (await call('GET', `/sections/${sectionId}/auth`)).json.users.find(u => u.id === uid);
 
 test('nessuna autorizzazione e token incollato con scadenza', async () => {
+  // utenze e token solo con la master password, anche senza segreti
+  let r0 = await call('POST', userBase(), { label: 'Anonimo', auth: { type: 'none' } });
+  assert.deepEqual([r0.status, r0.json.code], [423, 'core.vault_missing']);
+  await srv.request('POST', '/api/core/vault/init', { body: { password: 'master-password-1' } });
   const none = (await call('POST', userBase(), { label: 'Anonimo', auth: { type: 'none' } })).json;
   let r = await sendAs(none.id);
   assert.equal(r.json.status, 401);
@@ -282,12 +286,19 @@ test('nessuna autorizzazione e token incollato con scadenza', async () => {
   await call('POST', `${userBase(manual.id)}/token`, { token: 'k1' });
   r = await sendAs(manual.id, '{{baseUrl}}/echo');
   assert.equal(JSON.parse(r.json.body).headers['x-api-key'], 'Key k1');
+  // vault bloccato: i token in memoria vengono dimenticati e non se ne incollano altri
+  await srv.request('POST', '/api/core/vault/lock', { body: {} });
+  assert.equal((await state(manual.id)).hasToken, false);
+  r = await call('POST', `${userBase(manual.id)}/token`, { token: 'k2' });
+  assert.deepEqual([r.status, r.json.code], [423, 'core.vault_locked']);
+  await srv.request('POST', '/api/core/vault/unlock', { body: { password: 'master-password-1' } });
 });
 
 test('segreti: senza master password rifiutati, poi cifrati e mai in chiaro nel config', async () => {
+  await srv.request('POST', '/api/core/vault/lock', { body: {} });
   let r = await call('POST', userBase(), { label: 'Basic', auth: { type: 'basic', username: 'mario', password: 'pw-segreta' } });
-  assert.deepEqual([r.status, r.json.code], [423, 'core.vault_missing']);
-  await srv.request('POST', '/api/core/vault/init', { body: { password: 'master-password-1' } });
+  assert.deepEqual([r.status, r.json.code], [423, 'core.vault_locked']);
+  await srv.request('POST', '/api/core/vault/unlock', { body: { password: 'master-password-1' } });
   r = await call('POST', userBase(), { label: 'Basic', auth: { type: 'basic', username: 'mario', password: 'pw-segreta' } });
   assert.equal(r.status, 200, r.text);
   assert.equal(r.json.auth.hasPassword, true);

@@ -386,7 +386,7 @@ window.Shell = (() => {
         pick,
         apply: (root) => window.I18n.apply(root, meta.code),
       },
-      ui: { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, output, formatUptime, toolNotice, notify, contextMenu, t, fmt, errorText: window.I18n.errorText },
+      ui: { esc, js, cssColor, ansiToHtml, toast, openModal, closeModal, patch: UI.patch, output, formatUptime, toolNotice, notify, contextMenu, t, fmt, errorText: window.I18n.errorText },
       bus: {
         on(name, fn) { const h = e => fn(e.detail); bus.addEventListener(name, h); return () => bus.removeEventListener(name, h); },
         emit(name, detail) { bus.dispatchEvent(new CustomEvent(name, { detail })); },
@@ -403,7 +403,7 @@ window.Shell = (() => {
         badge.textContent = empty ? '' : String(value);
       },
       // HTML delle pill nell'header per questa estensione ('' le rimuove)
-      setPills(html) { pillsContainer(meta.code).innerHTML = html || ''; },
+      setPills(html) { UI.patch(pillsContainer(meta.code), html || ''); },
       open,
       isActive: () => active === meta.code,
       // Un'altra estensione è caricata e attiva? (per funzioni che si appoggiano a lei)

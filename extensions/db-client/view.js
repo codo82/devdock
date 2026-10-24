@@ -496,7 +496,7 @@ export default {
       const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
       const el = $(ctx.root, 'results');
       const hadFocus = document.activeElement?.dataset?.grid === 'search';
-      el.innerHTML = `
+      ctx.ui.patch(el, `
         <div class="db-grid-bar">
           <strong class="db-grid-title">${esc(grid.db)}.${esc(grid.table)}</strong>
           <input class="form-input db-grid-search" data-grid="search" placeholder="${esc(t('grid.search'))}" value="${esc(grid.search)}">
@@ -527,7 +527,7 @@ export default {
             ${canInsert ? `<tr class="db-new-row">${editable ? `<td class="db-row-actions"><button data-grid="insert-inline" title="${esc(t('grid.insertTitle'))}">＋</button></td>` : ''}${data.columns.map(col =>
               `<td><input class="db-cell-input" data-new="${esc(col.name)}" placeholder="${isAuto(col) ? esc(t('grid.auto')) : esc(col.default ?? (col.nullable ? 'NULL' : ''))}"></td>`).join('')}
               ${editable ? '' : `<td><button class="btn btn-ghost btn-sm" data-grid="insert-inline">${esc(t('grid.insert'))}</button></td>`}</tr>` : ''}</tbody>
-        </table></div>`;
+        </table></div>`);
       if (hadFocus) { const i = el.querySelector('[data-grid="search"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
     }
 
@@ -608,7 +608,7 @@ export default {
       const tables = (cache.get(nodeKey('d', designer.connId, db)) || []).map?.(tb => tb.name) || [];
       const conn = connections.find(x => x.id === designer.connId);
       const linked = migStatus.get(conn?.id)?.linked;
-      $(ctx.root, 'results').innerHTML = `
+      ctx.ui.patch($(ctx.root, 'results'), `
         <div class="db-designer">
           <div class="db-designer-head">
             <strong>${esc(mode === 'alter' ? t('designer.editTitle', { table: `${db}.${designer.table}` }) : t('designer.title', { db }))}</strong>
@@ -640,7 +640,7 @@ export default {
             <button class="btn btn-primary btn-sm" data-dz-act="apply">${esc(t(mode === 'alter' ? 'designer.applyAlter' : 'designer.create'))}</button>
             <button class="btn btn-ghost btn-sm" data-dz-act="cancel">${esc(t('core.action.cancel'))}</button>
           </div>
-        </div>`;
+        </div>`);
     }
 
     // Aggiorna la definizione dal campo modificato
@@ -1721,7 +1721,7 @@ export default {
       }
       const target = resultTarget(data);
       const editable = i => !!target?.colOf[i];
-      el.innerHTML = `
+      ctx.ui.patch(el, `
         ${paramsUsed(data.paramInfo)}
         <div class="db-result-meta">${esc(t('result.rows', { count: data.rowCount }))}${data.truncated ? ` ${esc(t('result.truncated', { limit: data.limit }))}` : ''} · ${esc(t('result.ms', { ms: data.ms }))}
           ${target ? `<span class="db-badge" title="${esc(t('result.editableHint'))}">✎ ${esc(t('result.editable', { table: target.table }))}</span>` : ''}
@@ -1733,7 +1733,7 @@ export default {
             const cls = [v === null ? 'db-null' : '', editable(i) ? 'db-editable' : '', /^json$/i.test(data.columns[i].type) ? 'db-json-cell' : '', dirty ? 'db-dirty' : ''].filter(Boolean).join(' ');
             return `<td data-c="${i}" class="${cls}" title="${esc(dirty ? t('edits.was', { value: data.rows[r][i] ?? 'NULL' }) : v ?? 'NULL')}">${v === null ? 'NULL' : esc(v)}</td>`;
           }).join('')}</tr>`).join('')}</tbody>
-        </table></div>`;
+        </table></div>`);
     }
 
     const modalButtons = (label, call) =>
