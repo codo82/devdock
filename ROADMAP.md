@@ -303,17 +303,17 @@ Goal: DevDock ships with a set of built-in extensions and can install others fro
 - [x] **M15.11** Tests (incompatible version refused, duplicate code, catalog read, install from a local git repo with plain tags and from a folder with prefixed tags, preview, failed install leaves nothing, hot load and reload with dependents, update and restore of the previous version, moved tag, remove, export/import of the installed list, vault migration with existing passwords), README, CHANGELOG
 
 
-## M13 — MongoDB client — new external extension `mongo-client`
+## M13 — MongoDB client — new external extension `mongo-client` ✅ (`mongo-client@1.0.0`)
 
 Goal: browse and edit MongoDB databases like the MySQL client does, with the same safety rules. Minimal version.
 
-- [ ] **M13.1** Connections (host and port, or a `mongodb://` / `mongodb+srv://` URI, user, authentication database, TLS) in their own config section, optionally through an SSH tunnel of the Tunnels extension; passwords encrypted with the core master password vault (M15.3), never shown or exported in clear; read-only option; connection test. Driver: official `mongodb` package (dependency of the extension repository)
-- [ ] **M13.2** Sidebar tree connection ▸ databases ▸ collections (with estimated document count); context menu on collections (open, count, indexes, export, drop through confirmation)
-- [ ] **M13.3** Document browser: filter as a JSON query, sort, projection, pagination; documents shown as JSON (Extended JSON for ObjectId, dates, decimals)
-- [ ] **M13.4** Insert, edit (full JSON document) and delete documents, single and multiple; like every change in the DB client, **never run automatically**: the server returns the exact operation and runs it only after the user confirms it (token bound to the operation); read-only connections refuse writes
-- [ ] **M13.5** Indexes of a collection (read-only list); export of a collection or of a filtered result as JSON
-- [ ] **M13.6** MCP tools (read-only, only with the vault unlocked): connections without credentials, databases, collections, `find` with filter and limit, count
-- [ ] **M13.7** Tests against a disposable `mongod` (skipped when not installed), README, CHANGELOG
+- [x] **M13.1** Connections (host and port, or a `mongodb://` / `mongodb+srv://` URI, user, authentication database, TLS) in their own config section, optionally through an SSH tunnel of the Tunnels extension; passwords encrypted with the core master password vault (M15.3), never shown or exported in clear; read-only option; connection test. Driver: official `mongodb` package (dependency of the extension repository)
+- [x] **M13.2** Sidebar tree connection ▸ databases ▸ collections (with estimated document count); context menu on collections (open, count, indexes, export, drop through confirmation)
+- [x] **M13.3** Document browser: filter as a JSON query, sort, projection, pagination; documents shown as JSON (Extended JSON for ObjectId, dates, decimals)
+- [x] **M13.4** Insert, edit (full JSON document) and delete documents, single and multiple; like every change in the DB client, **never run automatically**: the server returns the exact operation and runs it only after the user confirms it (token bound to the operation); read-only connections refuse writes
+- [x] **M13.5** Indexes of a collection (read-only list); export of a collection or of a filtered result as JSON
+- [x] **M13.6** MCP tools (read-only, only with the vault unlocked): connections without credentials, databases, collections, `find` with filter and limit, count
+- [x] **M13.7** Tests against a disposable `mongod` (skipped when not installed), README, CHANGELOG
 
 
 ## M16 — DB client: PostgreSQL and SQL Server — inside the `db-client` extension
