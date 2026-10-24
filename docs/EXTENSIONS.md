@@ -377,6 +377,8 @@ export default {
 
 Inline handlers call the functions published with `ctx.expose`, always escaping arguments with `ctx.ui.js(value)` and text with `ctx.ui.esc(value)` — values coming from repositories, `package.json` files or processes may contain quotes and markup.
 
+Requests to `/api/…` started by a click (within 400 ms) put the clicked button on hold automatically: class `ui-busy` (spinner, no further clicks) and a busy cursor until the answer arrives; extensions get it for free with `ctx.api` or `fetch`.
+
 Inside the panel, the sidebar and the pills the CSS variable `--ext-color` holds the extension colour; the `hidden` attribute always hides an element; elements with `data-uptime="<ISO date>"` show an elapsed time that updates every second. Shared classes (`btn`, `sidebar-head`, `sb-item`, `empty-state`, `data-table`, `form-row`, `pill`, `tool-notice`, …) are defined in `public/core/shell.css`.
 
 The header (language, notifications, Export/Import dialogs built from the extensions' checkboxes, 🤖 MCP server, ↻) belongs to the core.

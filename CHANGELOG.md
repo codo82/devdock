@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-10-24
+
+### Fixed
+- Clicks that seemed lost all over the interface (e.g. *Install…* in the Extensions panel needing two or three clicks): the click arrived, but slow actions (reading a git repository, creating or unlocking the master password, connecting to a database) showed no sign of work and ignored the following clicks. Now every request to the server started by a click puts that button on hold (spinner, no further clicks) and the cursor in "busy" until the answer arrives; quick answers show nothing.
+
 ## [2.3.0] - 2026-10-24
 
 ### Added

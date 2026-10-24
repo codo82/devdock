@@ -130,6 +130,47 @@ window.UI = (() => {
   };
   document.addEventListener('pointerup', release, true);
   document.addEventListener('pointercancel', release, true);
+  // Attesa dopo un clic: le richieste al server (/api/…) partite entro poco da un clic su un
+  // pulsante lo mettono in attesa (spinner, niente altri clic) e il cursore in "occupato" fino
+  // alla risposta. Senza questo un'azione lenta (clone git, master password, connessione a un
+  // database) sembra un clic andato a vuoto, e i clic ripetuti vengono ignorati dall'azione in corso.
+  const CLICK_WINDOW_MS = 400;  // richieste considerate partite dal clic
+  const BUSY_DELAY_MS = 150;    // le risposte rapide non fanno lampeggiare nulla
+  let lastClick = null;
+  const busyCount = new Map();  // elemento → richieste in corso
+  let pendingTotal = 0;
+  document.addEventListener('click', e => {
+    const el = e.target?.closest?.('button, .btn, .pill, .sb-item, .ctx-item, [role="button"], a[onclick]');
+    lastClick = el ? { el, at: Date.now() } : null;
+  }, true);
+  function busyStart(el) {
+    busyCount.set(el, (busyCount.get(el) || 0) + 1);
+    pendingTotal++;
+    setTimeout(() => {
+      if (busyCount.get(el)) el.classList.add('ui-busy');
+      if (pendingTotal) document.body.classList.add('ui-loading');
+    }, BUSY_DELAY_MS);
+  }
+  function busyEnd(el) {
+    const n = (busyCount.get(el) || 1) - 1;
+    if (n) busyCount.set(el, n); else { busyCount.delete(el); el.classList.remove('ui-busy'); }
+    if (--pendingTotal <= 0) { pendingTotal = 0; document.body.classList.remove('ui-loading'); }
+  }
+  if (typeof window.fetch === 'function') {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input?.url || '';
+      const api = /^\/api\//.test(url) || url.startsWith(`${location.origin}/api/`);
+      const el = api && lastClick && Date.now() - lastClick.at < CLICK_WINDOW_MS ? lastClick.el : null;
+      if (!el) return nativeFetch(input, init);
+      busyStart(el);
+      const p = nativeFetch(input, init);
+      // fine dell'attesa all'arrivo della risposta (le risposte in streaming hanno la loro UI)
+      p.then(() => busyEnd(el), () => busyEnd(el));
+      return p;
+    };
+  }
+
   let normalizer = null; // <template>: HTML serializzato come lo fa il browser (creato al primo uso)
   function patch(el, html) {
     if (!el) return;
