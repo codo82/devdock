@@ -6,6 +6,7 @@
 //   devdock ext update <codice> [--tag tag] [--yes]
 //   devdock ext remove <codice> [--yes]
 //   devdock ext check               aggiornamenti disponibili
+//   devdock mcp                     ponte stdio verso il server MCP (per Claude Desktop e simili)
 // Con DevDock in esecuzione passa dalle sue API (l'estensione si carica subito); altrimenti
 // lavora sui file e la modifica vale dal prossimo avvio.
 const http = require('http');
@@ -16,6 +17,10 @@ const [, , command, sub, ...rest] = process.argv;
 
 if (!command || command === 'start') {
   require(path.join(__dirname, '..', 'server.js'));
+  return;
+}
+if (command === 'mcp') {
+  require(path.join(__dirname, 'devdock-mcp.js')).main().catch(e => { process.stderr.write(`devdock-mcp: ${e.message}\n`); process.exit(1); });
   return;
 }
 if (command !== 'ext') usage(1);
@@ -36,7 +41,8 @@ function usage(code = 0) {
   devdock ext install <url|codice> [--path cartella] [--tag tag] [--yes]
   devdock ext update <codice> [--tag tag] [--yes]
   devdock ext remove <codice> [--yes]
-  devdock ext check                    aggiornamenti disponibili`);
+  devdock ext check                    aggiornamenti disponibili
+  devdock mcp                          ponte stdio verso il server MCP (Claude Desktop)`);
   process.exit(code);
 }
 

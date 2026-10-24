@@ -59,6 +59,9 @@
   "core.errors.mcp_token": "Token MCP mancante o non valido",
   "core.errors.mcp_method": "Il server MCP accetta solo POST",
   "core.errors.mcp_tool_unknown": "Strumento MCP sconosciuto: {name}",
+  "core.errors.mcp_bridge_unreachable": "DevDock non è in esecuzione su {url}: avvialo (npm start) e riprova",
+  "core.errors.mcp_bridge_token": "Il server MCP di DevDock ha rifiutato il token letto da {file}: controlla che il ponte usi la stessa configurazione dell'istanza (DEVDOCK_CONFIG, DEVDOCK_PORT)",
+  "core.errors.mcp_bridge_failed": "Errore nel collegamento a DevDock: {error}",
   "core.mcp.title": "Server MCP",
   "core.mcp.intro": "Gli agenti AI (Claude Code, Claude Desktop o qualsiasi client MCP) possono leggere lo stato di DevDock e avviare gli script npm. Il server risponde solo su questo computer e richiede il token.",
   "core.mcp.endpoint": "Endpoint",
@@ -70,7 +73,7 @@
   "core.mcp.tokenHint": "Il token è salvato accanto a config.json (.devdock-mcp-token), non viene esportato. Rigenerarlo scollega i client configurati con quello vecchio.",
   "core.mcp.claudeCode": "Claude Code",
   "core.mcp.claudeDesktop": "Claude Desktop",
-  "core.mcp.claudeDesktopHint": "In claude_desktop_config.json (richiede Node.js: mcp-remote collega il client al server HTTP):",
+  "core.mcp.claudeDesktopHint": "In claude_desktop_config.json: il ponte stdio di DevDock legge il token da solo, nella configurazione non c'è nessun segreto e continua a funzionare se rigeneri il token. Se aggiorni Node.js o sposti DevDock, copia di nuovo questa configurazione.",
   "core.mcp.otherClients": "Altri client: trasporto Streamable HTTP all'endpoint qui sopra, con l'header Authorization: Bearer <token>.",
   "core.mcp.tools": {
     "one": "{count} strumento",

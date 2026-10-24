@@ -1,6 +1,6 @@
 {
   "name": "devdock",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Dashboard locale per sviluppatori: tunnel SSH, script npm, Git, database, file .env, client HTTP e mock server, con estensioni installabili",
   "private": true,
   "workspaces": [
@@ -13,7 +13,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "devdock": "bin/devdock.js"
+    "devdock": "bin/devdock.js",
+    "devdock-mcp": "bin/devdock-mcp.js"
   },
   "scripts": {
     "start": "node server.js",

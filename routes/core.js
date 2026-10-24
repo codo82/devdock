@@ -35,10 +35,21 @@ module.exports = function coreRoutes(extensions) {
   // Server MCP: endpoint, token e strumenti (per il pannello MCP)
   router.get('/mcp', (req, res) => {
     const { getToken } = require('../lib/mcp');
-    const { PORT } = require('../lib/env');
+    const { PORT, CONFIG_PATH, ROOT: root } = require('../lib/env');
     res.json({
       url: `http://127.0.0.1:${PORT}/mcp`,
       token: getToken(),
+      // ponte stdio per i client che avviano i server come processi: node con il percorso
+      // assoluto (le app grafiche non vedono il PATH della shell) e l'ambiente dell'istanza
+      // solo quando non è quello predefinito
+      bridge: {
+        command: process.execPath,
+        args: [path.join(root, 'bin', 'devdock-mcp.js')],
+        env: {
+          ...(PORT !== 3500 ? { DEVDOCK_PORT: String(PORT) } : {}),
+          ...(CONFIG_PATH !== path.join(root, 'config.json') ? { DEVDOCK_CONFIG: CONFIG_PATH } : {}),
+        },
+      },
       tools: extensions.mcpTools().map(t => ({ name: t.name, extension: t.extension, description: t.description, readOnly: t.readOnly })),
     });
   });

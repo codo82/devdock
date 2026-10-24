@@ -539,7 +539,8 @@ window.Shell = (() => {
       url: mcpData.url,
       token: mcpData.token,
       claudeCode: `claude mcp add --transport http devdock ${mcpData.url} --header "Authorization: ${auth}"`,
-      desktop: JSON.stringify({ mcpServers: { devdock: { command: 'npx', args: ['-y', 'mcp-remote', mcpData.url, '--header', `Authorization:${auth}`] } } }, null, 2),
+      // ponte stdio di DevDock: nessun token nella configurazione del client
+      desktop: JSON.stringify({ mcpServers: { devdock: { command: mcpData.bridge.command, args: mcpData.bridge.args, ...(Object.keys(mcpData.bridge.env).length ? { env: mcpData.bridge.env } : {}) } } }, null, 2),
     };
   }
 
