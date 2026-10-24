@@ -224,14 +224,14 @@ export default {
     function renderHeader() {
       const r = repo();
       if (!r) return;
-      $('header').innerHTML = `
+      ctx.ui.patch($('header'), `
         <h3>🌿 ${esc(r.label)}</h3>
         ${status ? `<button class="git-branch-badge git-branch-btn" data-action="branches" title="${esc(t('header.branchTitle'))}">⎇ ${esc(status.branch)} ▾</button>
           ${status.merging ? `<span class="git-sync-badge git-sync-merge">${esc(t('header.merging'))}</span>` : ''}
           ${status.ahead ? `<span class="git-sync-badge git-sync-ahead">${esc(t('header.ahead', { count: status.ahead }))}</span>` : ''}
           ${status.behind ? `<span class="git-sync-badge git-sync-behind">${esc(t('header.behind', { count: status.behind }))}</span>` : ''}
           ${status.stashCount ? `<span class="git-sync-badge git-sync-stash">${esc(t('header.stash', { count: status.stashCount }))}</span>` : ''}` : ''}
-        <span class="git-path">${esc(r.path)}</span>`;
+        <span class="git-path">${esc(r.path)}</span>`);
     }
 
     function renderMergeBanner() {
@@ -257,13 +257,13 @@ export default {
       const toggle = $('toggle-all');
       renderMergeBanner();
       const allLabel = t('files.all');
-      if (!status) { el.innerHTML = `<div class="git-muted git-pad">${esc(t('files.noData'))}</div>`; toggle.textContent = `☐ ${allLabel}`; return; }
+      if (!status) { ctx.ui.patch(el, `<div class="git-muted git-pad">${esc(t('files.noData'))}</div>`); toggle.textContent = `☐ ${allLabel}`; return; }
       if (!status.files.length) {
-        el.innerHTML = `<div class="git-clean"><div class="git-clean-icon">✓</div>${esc(t('files.clean'))}</div>`;
+        ctx.ui.patch(el, `<div class="git-clean"><div class="git-clean-icon">✓</div>${esc(t('files.clean'))}</div>`);
         toggle.textContent = `☐ ${allLabel}`;
         return;
       }
-      el.innerHTML = status.files.map(f => {
+      ctx.ui.patch(el, status.files.map(f => {
         const sel = selected.has(f.name);
         const parts = f.name.split('/');
         const label = xyLabel(f.xy);
@@ -273,7 +273,7 @@ export default {
           <span class="git-file-name">${esc(parts[parts.length - 1])}</span>
           ${parts.length > 1 ? `<span class="git-file-dir">${esc(parts.slice(0, -1).join('/'))}/</span>` : ''}
         </div>`;
-      }).join('');
+      }).join(''));
       toggle.textContent = `${status.files.every(f => selected.has(f.name)) ? '☑' : '☐'} ${allLabel}`;
     }
 
@@ -286,13 +286,15 @@ export default {
     async function loadLog() {
       const wrap = $('log');
       if (!activeRepo) return;
-      wrap.innerHTML = `<div class="git-muted git-pad">${esc(t('log.loading'))}</div>`;
+      // "caricamento" solo per un repository nuovo: l'aggiornamento automatico lascia la tabella
+      if (wrap.dataset.repo !== activeRepo) ctx.ui.patch(wrap, `<div class="git-muted git-pad">${esc(t('log.loading'))}</div>`);
+      wrap.dataset.repo = activeRepo;
       try {
         const data = await ctx.api.get(repoUrl(`/log?limit=${encodeURIComponent($('limit').value)}`));
         const entries = data.entries || [];
         const allRefs = data.refs || {};
         logEntries = entries;
-        if (!entries.length) { wrap.innerHTML = `<div class="git-muted git-pad">${esc(t('log.none'))}</div>`; $('legend').hidden = true; return; }
+        if (!entries.length) { ctx.ui.patch(wrap, `<div class="git-muted git-pad">${esc(t('log.none'))}</div>`); $('legend').hidden = true; return; }
 
         const { svgs, width, legend } = buildGraph(entries, allRefs);
         const local = new Set(data.localBranches || []);
@@ -307,7 +309,7 @@ export default {
           return `<span class="git-legend-item ${anon ? 'anon' : ''}" style="--lane:${color}">${icon} ${esc(label)}</span>`;
         }).join('');
 
-        wrap.innerHTML = `<table class="git-log-table" style="--graph-w:${width}px">
+        ctx.ui.patch(wrap, `<table class="git-log-table" style="--graph-w:${width}px">
           <colgroup><col class="col-graph"><col class="col-hash"><col class="col-msg"><col class="col-author"><col class="col-date"></colgroup>
           <thead><tr><th></th><th>${esc(t('log.sha'))}</th><th>${esc(t('log.message'))}</th><th>${esc(t('log.author'))}</th><th>${esc(t('log.date'))}</th></tr></thead>
           <tbody>${entries.map((e, i) => `
@@ -318,7 +320,7 @@ export default {
               <td class="git-author">${esc(e.author)}</td>
               <td class="git-date">${when(e.date)}</td>
             </tr>`).join('')}</tbody>
-        </table>`;
+        </table>`);
       } catch (e) {
         wrap.innerHTML = `<div class="git-error git-pad">${esc(t('log.error', { error: e.message }))}</div>`;
       }

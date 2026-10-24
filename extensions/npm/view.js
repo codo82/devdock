@@ -51,10 +51,10 @@ export default {
     function renderProjects() {
       const el = $(ctx.sidebar, 'projects');
       if (!projects.length && !folders.length) {
-        el.innerHTML = `<p class="npm-muted npm-pad">${esc(t('sidebar.none'))}<br><br><button class="btn btn-npm btn-sm" onclick="Ext.npm.addProject()">${esc(t('sidebar.add'))}</button></p>`;
+        ctx.ui.patch(el, `<p class="npm-muted npm-pad">${esc(t('sidebar.none'))}<br><br><button class="btn btn-npm btn-sm" onclick="Ext.npm.addProject()">${esc(t('sidebar.add'))}</button></p>`);
         return;
       }
-      el.innerHTML = ctx.projects.tree(folders, projects, p => {
+      ctx.ui.patch(el, ctx.projects.tree(folders, projects, p => {
         const n = running(p.id);
         return `<div class="sb-proj ${activeProject === p.id ? 'active' : ''}" onclick="Ext.npm.select(${js(p.id)})">
           <span class="sb-proj-icon">${n ? '🟠' : '📦'}</span>
@@ -65,7 +65,7 @@ export default {
           <button class="sb-proj-del" onclick="event.stopPropagation();Projects.form(${js(p.id)})" title="${esc(t('core.projects.edit'))}">✎</button>
           <button class="sb-proj-del" onclick="event.stopPropagation();Ext.npm.deleteProject(${js(p.id)})" title="${esc(t('core.projects.remove'))}">✕</button>
         </div>`;
-      });
+      }));
     }
 
     // ---- pannello ----
@@ -128,11 +128,11 @@ export default {
       };
 
       const scripts = Object.entries(pkg.scripts || {});
-      content.innerHTML = `<div class="scripts-grid">
+      ctx.ui.patch(content, `<div class="scripts-grid">
         ${row('install', 'npm install')}
         ${scripts.map(([name, cmd]) => row(name, cmd)).join('')}
         ${scripts.length ? '' : `<p class="npm-muted">${esc(t('script.none'))}</p>`}
-      </div>`;
+      </div>`);
     }
 
     async function renderPackages() {
@@ -158,7 +158,7 @@ export default {
           </table>
         </div>`;
 
-      content.innerHTML = `
+      ctx.ui.patch(content, `
         <div class="pkg-toolbar">
           <button class="btn btn-npm btn-sm" onclick="Ext.npm.run(${js(p.id)},'install')">↓ npm install</button>
           <button class="btn btn-ghost btn-sm" onclick="Ext.npm.outdated(${js(p.id)})">${esc(t('packages.checkUpdates'))}</button>
@@ -166,7 +166,7 @@ export default {
         </div>
         ${table(deps, 'dependencies')}
         ${table(devDeps, 'devDependencies')}
-        ${deps.length || devDeps.length ? '' : `<p class="npm-muted">${esc(t('packages.none'))}</p>`}`;
+        ${deps.length || devDeps.length ? '' : `<p class="npm-muted">${esc(t('packages.none'))}</p>`}`);
 
       const names = [...deps, ...devDeps].map(([n]) => n);
       if (!names.length) return;

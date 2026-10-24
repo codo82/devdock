@@ -199,7 +199,11 @@ module.exports = function createHttpClient(ctx) {
       return { sections: { httpSections: next }, count };
     },
     reset: cfg => ({ httpSections: mapSecrets(cfg.httpSections || [], () => null) }),
+    lock: () => auth.forgetAll(),
   });
+
+  // Utenze, password e token solo con il vault sbloccato (423 del core: da sbloccare o da creare)
+  const requireVault = () => { if (vault.state() !== 'unlocked') vault.encrypt(''); };
 
   // ---- dati per il frontend: mai i segreti, solo se ci sono ----
 
@@ -391,6 +395,7 @@ module.exports = function createHttpClient(ctx) {
       // ---- tipologie di utenza ----
 
       createUserType(req, res) {
+        requireVault();
         const s = sectionOr404(req.params.id);
         const u = buildUser(req.body || {}, { id: newId() });
         replaceSection({ ...s, userTypes: [...(s.userTypes || []), u] });
@@ -398,6 +403,7 @@ module.exports = function createHttpClient(ctx) {
       },
 
       updateUserType(req, res) {
+        requireVault();
         const s = sectionOr404(req.params.id);
         const u = buildUser(req.body || {}, userOr404(s, req.params.uid));
         replaceSection({ ...s, userTypes: s.userTypes.map(x => (x.id === u.id ? u : x)) });
@@ -427,6 +433,7 @@ module.exports = function createHttpClient(ctx) {
 
       // Token incollato a mano { token, expiresAt? (ISO) }
       async setToken(req, res) {
+        requireVault();
         const s = sectionOr404(req.params.id);
         const u = userOr404(s, req.params.uid);
         if (u.auth.type === 'none' || u.auth.type === 'basic') throw ctx.error(400, 'token_not_used');
@@ -449,6 +456,7 @@ module.exports = function createHttpClient(ctx) {
       },
 
       async login(req, res) {
+        requireVault();
         const s = sectionOr404(req.params.id);
         res.json(await auth.login(s, userOr404(s, req.params.uid)));
       },

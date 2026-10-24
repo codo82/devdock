@@ -73,7 +73,7 @@ export default {
 
     function renderGroups() {
       const list = $(ctx.sidebar, 'groups');
-      list.innerHTML = !state.groups.length
+      ctx.ui.patch(list, !state.groups.length
         ? `<p class="tn-muted tn-pad">${esc(t('groups.none'))}</p>`
         : state.groups.map(g => {
             const cnt = tunnelsOf(g).length, color = cssColor(g.color);
@@ -83,14 +83,14 @@ export default {
               ${cnt ? `<span class="sb-count" style="color:${color};border-color:${color}">${fmt.number(cnt)}</span>`
                     : `<span class="sb-count">${fmt.number(g.servers.length)}</span>`}
             </button>`;
-          }).join('');
+          }).join(''));
     }
 
     function renderMain() {
       const main = $(ctx.root, 'main');
       const g = state.groups.find(x => x.key === activeGroup);
       if (!g) {
-        main.innerHTML = `<div class="empty-state"><div class="icon">🔗</div><p>${esc(t('main.selectGroup'))}</p></div>`;
+        ctx.ui.patch(main, `<div class="empty-state"><div class="icon">🔗</div><p>${esc(t('main.selectGroup'))}</p></div>`);
         return;
       }
       const color = cssColor(g.color), cnt = tunnelsOf(g).length;
@@ -99,7 +99,7 @@ export default {
             system.platform === 'darwin' ? 'brew install autossh' : system.platform === 'win32' ? '' : 'sudo apt install autossh',
             'Ext.tunnels.recheck()')
         : '';
-      main.innerHTML = `
+      ctx.ui.patch(main, `
         <div class="section-banner" style="border-inline-start:3px solid ${color}">
           <span class="section-banner-dot" style="background:${color}"></span>
           <h2>${esc(g.label)}</h2>
@@ -112,7 +112,7 @@ export default {
         <div class="server-area">
           <div class="server-grid">${g.servers.map(serverCard).join('')}</div>
           ${g.servers.length ? '' : `<div class="empty-state tn-empty-inline"><div class="icon">🖥</div><p>${esc(t('main.noServers'))}</p></div>`}
-        </div>`;
+        </div>`);
     }
 
     function serverCard(s) {
@@ -156,7 +156,7 @@ export default {
             <span class="gli-label">${esc(t('settings.orphans'))}</span>
             <span class="gli-cnt">${fmt.number(orphans.length)}</span>
           </div>` : '';
-      el.innerHTML = (!state.groups.length
+      ctx.ui.patch(el, (!state.groups.length
         ? `<p class="tn-muted tn-pad">${esc(t('settings.noGroups'))}<br><br><button class="btn btn-ghost btn-sm" onclick="Ext.tunnels.addGroup()">${esc(t('settings.add'))}</button></p>`
         : state.groups.map(g => `
           <div class="gli ${settingsGroup === g.key ? 'active' : ''}" onclick="Ext.tunnels.selectSettingsGroup(${js(g.key)})">
@@ -165,14 +165,14 @@ export default {
             <span class="gli-cnt">${fmt.number(g.servers.length)}</span>
             <button class="gli-edit" onclick="event.stopPropagation();Ext.tunnels.editGroup(${js(g.key)})" title="${esc(t('core.action.edit'))}">✏️</button>
             <button class="gli-del" onclick="event.stopPropagation();Ext.tunnels.deleteGroup(${js(g.key)})" title="${esc(t('core.action.delete'))}">🗑</button>
-          </div>`).join('')) + orphanItem;
+          </div>`).join('')) + orphanItem);
     }
 
     function renderSettingsDetail() {
       const el = $(ctx.root, 'settings-detail');
       if (settingsGroup === ORPHANS) {
         const orphans = orphanServers();
-        el.innerHTML = `
+        ctx.ui.patch(el, `
           <div class="settings-detail-header"><h3>${esc(t('settings.orphans'))}</h3></div>
           <div class="settings-detail-body">
             <p class="tn-muted tn-pad-v">${esc(t(orphans.length ? 'settings.orphansHint' : 'settings.noOrphans'))}</p>
@@ -188,16 +188,16 @@ export default {
                   <button class="sli-btn danger" onclick="Ext.tunnels.deleteServer(${js(s.key)})" title="${esc(t('settings.deleteForever'))}">🗑</button>
                 </div>
               </div>`).join('')}
-          </div>`;
+          </div>`);
         return;
       }
       const g = state.groups.find(x => x.key === settingsGroup);
       if (!g) {
-        el.innerHTML = `<div class="settings-detail-empty"><div class="icon">←</div><p>${esc(t('main.selectGroup'))}</p></div>`;
+        ctx.ui.patch(el, `<div class="settings-detail-empty"><div class="icon">←</div><p>${esc(t('main.selectGroup'))}</p></div>`);
         return;
       }
       const available = state.servers.filter(s => !g.servers.some(x => x.key === s.key));
-      el.innerHTML = `
+      ctx.ui.patch(el, `
         <div class="settings-detail-header">
           <span class="settings-detail-dot" style="background:${cssColor(g.color)}"></span>
           <h3>${esc(g.label)}</h3>
@@ -220,7 +220,7 @@ export default {
                   <button class="sli-btn danger" onclick="Ext.tunnels.deleteServer(${js(s.key)})" title="${esc(t('settings.deleteForever'))}">🗑</button>
                 </div>
               </div>`).join('')}
-        </div>`;
+        </div>`);
     }
 
     // ---- form ----

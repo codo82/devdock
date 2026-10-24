@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-24
+
+### Added
+- `ctx.ui.patch(el, html)` for extensions: updates a container that is redrawn on its own only when its HTML changes, and after the click when the mouse is pressed inside it (see `docs/EXTENSIONS.md`).
+
+### Changed
+- **HTTP client**: the 👤 Users dialog asks for the master password before opening; user types, pasted tokens and logins need the vault unlocked, and the tokens in memory are forgotten when it is locked.
+
+### Fixed
+- Buttons that sometimes needed a second click: the header pills, SSH tunnels, NPM and Git were redrawn by their periodic refresh even when nothing had changed, replacing the button between mousedown and click; the same happened in the Database grid when a cell being edited lost the focus. They are now redrawn only when something changes, and never under a pressed mouse button.
+- Closing the master password dialog by clicking outside it left every later action that needed the vault doing nothing until the page was reloaded.
+- Git: the automatic refresh no longer replaces the log with "loading" every 30 seconds.
+
 ## [2.2.0] - 2026-10-24
 
 ### Added

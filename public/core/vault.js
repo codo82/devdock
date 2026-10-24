@@ -43,11 +43,20 @@ window.Vault = (() => {
           } catch (e) { err.textContent = e.message; }
         },
         cancel() { current = null; closeModal(); finish(false); },
+        abandon() { finish(false); },
       };
     });
     return pending;
   }
   let current = null;
+  // dialogo chiuso o sostituito da un altro (clic fuori, un altro openModal): rinuncia, così le
+  // azioni che aspettano il vault non restano sospese
+  document.addEventListener('ui:modal', () => {
+    if (!current) return;
+    const c = current;
+    current = null;
+    c.abandon();
+  });
 
   // Errori del vault (423 bloccato o non creato): true se l'errore è del vault
   const isVaultError = e => e?.code === 'core.vault_locked' || e?.code === 'core.vault_missing';
