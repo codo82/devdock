@@ -1,6 +1,6 @@
 # DevDock — Roadmap history (1.0 → 2.1)
 
-> Archive of the milestones closed up to DevDock 2.1.0, with their original numbering, used by `CHANGELOG.md` and by the commit messages of that period. The open items of this file (M8.11–M8.14, M16) moved to the new [ROADMAP.md](../ROADMAP.md), which starts again from M1.
+> Archive of the milestones closed up to DevDock 2.1.0, with their original numbering, used by `CHANGELOG.md` and by the commit messages of that period. Of the open items of this file, M16 became M1 of the new [ROADMAP.md](../ROADMAP.md), which starts again from M1; M8.11–M8.14 (MCP server) are parked there, not planned for now.
 
 Milestones are ordered by dependency (M5 is done before M4 by choice): first secure and stabilise the existing code, then refactor, and only then build new features on the new structure (so they don't have to be rewritten twice).
 
