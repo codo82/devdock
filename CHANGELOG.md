@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-24
+
+### Added
+- **MCP stdio bridge** (`bin/devdock-mcp.js`, also `devdock mcp`): Claude Desktop and the other clients that start MCP servers as processes connect to DevDock without the token in their configuration and without `npx mcp-remote`. The bridge reads port and token of the instance by itself, keeps working after the token is regenerated and reports clearly when DevDock is not running. The 🤖 dialog proposes the new `claude_desktop_config.json` entry (M1).
+
+### Fixed
+- The MCP token is created on the first access to `/mcp` also for requests without an `Authorization` header.
+
 ## [2.1.0] - 2026-10-24
 
 ### Changed

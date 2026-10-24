@@ -90,6 +90,14 @@ DevDock is also an **MCP server**, so AI agents (Claude Code, Claude Desktop, an
 claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"
 ```
 
+Clients that start MCP servers as processes (Claude Desktop and similar) use DevDock's **stdio bridge**, `bin/devdock-mcp.js` (also `devdock mcp`, or `devdock-mcp` after `npm link`). The 🤖 dialog gives the ready-to-copy `claude_desktop_config.json` entry, with the absolute paths of Node.js and of the bridge:
+
+```json
+{ "mcpServers": { "devdock": { "command": "/usr/local/bin/node", "args": ["/path/to/devdock/bin/devdock-mcp.js"] } } }
+```
+
+The bridge reads the port and the token of the instance by itself (the same `DEVDOCK_PORT` and `DEVDOCK_CONFIG` as the server, added to the entry as `env` only when they are not the default ones), so the client configuration holds no secret and keeps working after the token is regenerated; when DevDock is not running the client gets a clear error. Copy the entry again if you update Node.js or move the DevDock folder.
+
 - **What an agent can do**: read tunnels and their status, which `.env` keys are missing (never the values), Git repositories (branch, ahead/behind, status, log), npm projects and scripts, the output of npm processes; **start and stop npm scripts**; on databases list connections (without credentials), databases, tables and table structures, and run read-only queries (row limit, run in a `READ ONLY` transaction); list the mock servers and read the calls they received (credential headers such as `Authorization`, `Cookie` and API keys are redacted). Installed extensions add their own tools (PM2 processes and logs, listening ports…). Nothing else changes state.
 - **Databases need the vault unlocked from the DevDock UI**: the master password never goes through the agent. When the vault is locked the tools answer with a clear error asking you to unlock it.
 - **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.devdock-mcp-token` next to `config.json` (not exported, regenerable from the 🤖 dialog). Requests coming from a browser are rejected.
