@@ -130,12 +130,13 @@ window.UI = (() => {
   };
   document.addEventListener('pointerup', release, true);
   document.addEventListener('pointercancel', release, true);
-  const normalizer = document.createElement('template'); // HTML serializzato come lo fa il browser
+  let normalizer = null; // <template>: HTML serializzato come lo fa il browser (creato al primo uso)
   function patch(el, html) {
     if (!el) return;
     html = html ?? '';
     if (pressed && el.contains(pressed)) { deferred.set(el, html); return; }
     deferred.delete(el);
+    normalizer ??= document.createElement('template');
     normalizer.innerHTML = html;
     if (normalizer.innerHTML === el.innerHTML) return;
     el.innerHTML = html;
