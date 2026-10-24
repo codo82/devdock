@@ -4,24 +4,24 @@ This document is the **public API** of DevDock for extensions: manifest, backend
 
 Every feature that can be added or removed is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, the projects shared by the extensions, a few shared services and the UI shell (navigation, header, dialogs).
 
-## Existing extensions
+## Built-in extensions
 
 | Code | Position | Order | Owns in `config.json` | Export/import checkboxes | Dependencies | Preload |
 |---|---|---|---|---|---|---|
 | `tunnels` | tab | 10 | `groups`, `servers` | Tunnel SSH | — | yes |
-| `pm2` | header | 10 | — | — | `npm` (optional) | no |
 | `npm` | tab | 20 | — | — | — | yes |
 | `env` | tab | 22 | — | — | — | no |
 | `db-client` | tab | 25 | `dbConnections`, `dbFolders` | Connessioni database | `tunnels`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | — | no |
-| `ports` | tab | 35 | — | — | `npm`, `pm2`, `tunnels` (optional) | no |
 | `http-client` | tab | 38 | `httpSections` | Richieste HTTP | — | no |
 | `mock-server` | tab | 39 | `mockServers` | Mock server | — | no |
 | `swagger` | tab | 40 | — | — | — | no |
 
+The official installable extensions (`pm2`, `ports`) are in the [devdock-extensions](https://github.com/codo82/devdock-extensions) repository, which is also an example of a repository holding several extensions (one folder each, prefixed tags, catalog, release script, CI).
+
 The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox, `layout` (the tab order chosen by the user, not exported) and `vault` (the master password, see *Secrets*).
 
-Services offered to other extensions (`ctx.require(code)`): `npm` → `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `pm2` → `processes()`, `stop(name)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
+Services offered by the built-in extensions to the others (`ctx.require(code)`): `npm` → `readPackage(project)`, `processes()`, `stopProcess(id)`; `tunnels` → `getServer(key)`, `ensureTunnel(key)`, `activeTunnels()`, `stopTunnel(id)`; `git` → `repos()`; `db-client` → `decryptPassword(connection)`.
 
 
 ## Folder layout
@@ -211,7 +211,7 @@ Steps to enable MCP for an extension:
 3. Restart DevDock: the tools appear in the 🤖 *MCP server* dialog of the header and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
 4. Try them from a client: copy the setup from the panel (for Claude Code `claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"`), or in a test with the SDK client as in `tests/mcp.test.js`.
 
-The extensions shipped with DevDock expose: `tunnels_list`; `ports_list`; `env_check`; `pm2_list`, `pm2_logs`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI); `mock_server_list`, `mock_server_requests` (credential headers redacted).
+The built-in extensions expose: `tunnels_list`; `env_check`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI); `mock_server_list`, `mock_server_requests` (credential headers redacted). The official installable ones add `pm2_list`, `pm2_logs` and `ports_list`.
 
 Keep tools read-only unless the user asked otherwise, never return secrets (passwords, tokens, vault data), and limit long outputs with a parameter (`limit`, `lines`) and a `truncated` flag. A missing handler disables the extension like a missing route handler.
 
@@ -501,6 +501,7 @@ Each extension keeps its tests in its own `tests/` folder (`*.test.js`, `node:te
 | `manifest(code, extra)`, `writeExtension(root, code, files)` | Minimal valid manifest and fixture extensions written to disk |
 | `i18nProblems(extDir)` | The translation checks for one extension: catalogs valid and consistent with the source language, keys used in the code present in `i18n/it.json`, no UI text written in the code (exceptions in `tests/i18n-allowlist.txt`); `[]` when everything is fine |
 | `parseSse(text)` | Events of a Server-Sent Events response |
+| `validateManifest(json)`, `coreVersion()` | The loader's manifest checks (throws with the reason) and the DevDock version of the kit, for the scripts of an extensions repository (e.g. generating its catalog) |
 
 ```js
 // extensions/hello/tests/hello.test.js

@@ -1,6 +1,6 @@
 # DevDock
 
-Local web dashboard for everyday development: SSH tunnels, npm scripts, PM2, Git, databases, `.env` files, ports, an HTTP client, mock servers and Swagger preview in a single interface.
+Local web dashboard for everyday development: SSH tunnels, npm scripts, Git, databases, `.env` files, an HTTP client, mock servers and Swagger preview in a single interface, extended by installable extensions (PM2, ports in use…).
 
 It runs on your own machine and only answers on `http://127.0.0.1:3500`. The user interface is available in Italian and English, and new languages can be added with JSON files (see *Languages*).
 
@@ -12,8 +12,8 @@ It runs on your own machine and only answers on `http://127.0.0.1:3500`. The use
 | `ssh` | for tunnels | `-L` port forwarding (uses the aliases in `~/.ssh/config`) |
 | `git` | for the Git section | |
 | `autossh` | no | used for tunnels when available; otherwise `ssh` with reconnection handled by DevDock |
-| `pm2` | no | PM2 section |
-| `lsof` (macOS/Linux) or `ss` (Linux) | no | shows the listening ports of npm processes |
+| `pm2` | no | PM2 extension (installable) |
+| `lsof` (macOS/Linux) or `ss` (Linux) | no | shows the listening ports of npm processes (and the Ports extension) |
 | Firefox with the "Open external links in a container" add-on | no | OAuth logins of the HTTP client in a Firefox container (otherwise the default browser) |
 
 The UI reports missing optional tools and shows how to install them.
@@ -40,11 +40,9 @@ Each section is an extension (see [Writing an extension](#writing-an-extension))
 - **🌿 Git** (`git`) — repositories derived from the projects (walking up to the `.git` folder); projects can be added here too. Status, file selection and commit, commit graph with branch legend, pull/push/merge/checkout/stash/fetch. Branch panel on the branch badge: search, local and remote branches, switch (with "stash and switch" when there are uncommitted changes, `--track` for remote branches), new branch from any start point, merge with a preview of incoming commits and files (fast-forward, `--no-ff`, `--squash`) and conflict handling (abort / conclude), deletion of local branches (unmerged ones only after confirmation). Only one git operation at a time runs on each repository.
 - **🗄️ Database** (`db-client`) — MySQL/MariaDB client. Connections (direct or through an SSH tunnel of the Tunnels section) with passwords encrypted by a **master password** asked once per session; sidebar tree connection ▸ database ▸ tables ▸ columns with a context menu on tables, with connections grouped in **folders** of their own (one level; 📁+ to create one, the Folder field of the connection to move it, ⋯ or right click on a folder to rename or delete it); SQL editor with highlighting and **parametric queries** (`?` and `:name` placeholders: a dialog asks for the values, with the names of the `?` guessed from the query where possible, e.g. `nome = ?`, `id IN (?, ?)`, `BETWEEN ? AND ?`, `LIMIT ?`, `INSERT … VALUES (?, ?)`; values are escaped into the statement and kept in DevDock's memory until it restarts (never on disk or in the browser): a query already run runs again at once with its values, shown above the results with **✎ Change** to edit them; a new query asks, prefilled with the last values of the same names); data browser with pagination, search, filters and sorting; row insert/edit/delete inline or through a dialog, multiple deletion; several cells, also of different rows, can be edited before saving (changed cells are highlighted, Tab moves to the next cell, Enter or **Save** writes them all with one confirmation and in a single transaction), in the table data view and in the editable results of a SELECT; table designer; export of tables and queries as CSV, JSON or SQL; session query history. **Every statement that changes data or schema is shown and must be confirmed before it runs**; read-only connections refuse them.
 - **🔑 Env** (`env`) — the `.env*` files of each project compared with the template (`.env.example`, `.env.sample`…): keys missing, extra or empty. Values are hidden and shown one at a time; edit, add, rename or delete keys, add the missing keys from the template, create a `.env` from the template. Files are rewritten keeping comments, blank lines and order; a file changed outside DevDock in the meantime is not overwritten. Values never go into the DevDock configuration, its exports or the MCP tools.
-- **🔌 Ports** (`ports`) — listening TCP ports of the machine with process, PID, user and command line, linked to what DevDock started (npm script, PM2 process, SSH tunnel); search, "only my processes" filter, and stop of the process that holds a port after a confirmation: **Stop** (SIGTERM) or **Force stop** (SIGKILL, `taskkill /F` on Windows); processes started by DevDock are stopped through their section, also when forced, and if the port is still in use after a normal stop DevDock offers to force it. Only processes of the current user can be stopped. macOS/Linux (`lsof` or `ss`) and Windows (`netstat`).
 - **📮 HTTP** (`http-client`) — HTTP client for the projects' local APIs: sections of requests with a base URL and variables, requests sent by the DevDock backend (no CORS limits), Express routes found in the code of the linked project, an authorization per user type with the token obtained automatically. See *HTTP client*.
 - **🎭 Mock** (`mock-server`) — local mock servers that answer with predefined responses and log every incoming call with its payload. See *Mock server*.
 - **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
-- **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs. Opened from the ⚙️ button in the header.
 
 The section tabs can be put in any order by dragging them (or with Alt+←/→ on a focused tab); the order is saved in `config.json` and the first tab is the one opened at startup. Right click on the tab bar → *Restore the default order*. New extensions go after the others.
 
@@ -93,14 +91,21 @@ DevDock is also an **MCP server**, so AI agents (Claude Code, Claude Desktop, an
 claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"
 ```
 
-- **What an agent can do**: read tunnels and their status, listening ports and their processes, which `.env` keys are missing (never the values), PM2 processes and logs, Git repositories (branch, ahead/behind, status, log), npm projects and scripts, the output of npm processes; **start and stop npm scripts**; on databases list connections (without credentials), databases, tables and table structures, and run read-only queries (row limit, run in a `READ ONLY` transaction); list the mock servers and read the calls they received (credential headers such as `Authorization`, `Cookie` and API keys are redacted). Nothing else changes state.
+- **What an agent can do**: read tunnels and their status, which `.env` keys are missing (never the values), Git repositories (branch, ahead/behind, status, log), npm projects and scripts, the output of npm processes; **start and stop npm scripts**; on databases list connections (without credentials), databases, tables and table structures, and run read-only queries (row limit, run in a `READ ONLY` transaction); list the mock servers and read the calls they received (credential headers such as `Authorization`, `Cookie` and API keys are redacted). Installed extensions add their own tools (PM2 processes and logs, listening ports…). Nothing else changes state.
 - **Databases need the vault unlocked from the DevDock UI**: the master password never goes through the agent. When the vault is locked the tools answer with a clear error asking you to unlock it.
 - **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.devdock-mcp-token` next to `config.json` (not exported, regenerable from the 🤖 dialog). Requests coming from a browser are rejected.
 - Tool names are prefixed with the extension (`git_status`, `npm_run`, `db_client_query`); errors carry the same codes as the API.
 
 ## Extensions
 
-Every section of DevDock is an extension. Some are **built in** (they come with DevDock and are updated with it); others are **installed** from git repositories into `~/.devdock/extensions`. The 🧩 button in the header opens the Extensions panel:
+Every section of DevDock is an extension. Some are **built in** (they come with DevDock and are updated with it); others are **installed** from git repositories into `~/.devdock/extensions`.
+
+The official extensions live in [devdock-extensions](https://github.com/codo82/devdock-extensions), whose catalog is the default one of the panel:
+
+- **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs; npm scripts can be started under PM2 from the NPM section. Opened from a header button.
+- **🔌 Ports** (`ports`) — listening TCP ports of the machine with process, PID, user and command line, linked to what DevDock started (npm script, PM2 process, SSH tunnel); search, "only my processes" filter, and stop of the process that holds a port after a confirmation (**Stop** or **Force stop**). macOS/Linux (`lsof` or `ss`) and Windows (`netstat`).
+
+Both were built in up to DevDock 1.23: after updating to 2.0, install them from the 🧩 panel (catalog) or with `npm run ext -- install pm2` and `npm run ext -- install ports`. The 🧩 button in the header opens the Extensions panel:
 
 - **Installed**: every extension with version, source and state; the **Tab / Header** selector moves an extension between the section bar and a button in the header (the manifest gives the default); the switch turns one off or on (also the built-in ones; those that require it are switched off too), and installed ones can be **updated**, taken back to the **previous version** (kept after every update) or **removed**. The badge on 🧩 counts the available updates and the extensions to install.
 - **Catalog**: the extensions listed by the configured catalogs (the official `devdock-extensions` catalog by default), with a search.
