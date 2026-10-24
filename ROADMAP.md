@@ -303,7 +303,7 @@ Goal: DevDock ships with a set of built-in extensions and can install others fro
 - [x] **M15.11** Tests (incompatible version refused, duplicate code, catalog read, install from a local git repo with plain tags and from a folder with prefixed tags, preview, failed install leaves nothing, hot load and reload with dependents, update and restore of the previous version, moved tag, remove, export/import of the installed list, vault migration with existing passwords), README, CHANGELOG
 
 
-## M13 — MongoDB client — new external extension `mongo-client` ✅ (`mongo-client@1.0.0`)
+## M13 — MongoDB client — new external extension `mongo-client` ✅ (`mongo-client@1.1.0`)
 
 Goal: browse and edit MongoDB databases like the MySQL client does, with the same safety rules. Minimal version.
 
@@ -314,6 +314,15 @@ Goal: browse and edit MongoDB databases like the MySQL client does, with the sam
 - [x] **M13.5** Indexes of a collection (read-only list); export of a collection or of a filtered result as JSON
 - [x] **M13.6** MCP tools (read-only, only with the vault unlocked): connections without credentials, databases, collections, `find` with filter and limit, count
 - [x] **M13.7** Tests against a disposable `mongod` (skipped when not installed), README, CHANGELOG
+
+Parity with the Database section (DB client), `mongo-client@1.1.0` (not ported: parametric queries and migrations, which are specific to SQL):
+
+- [x] **M13.8** Sidebar and connections like the DB client: connections grouped in folders of their own (`mongoFolders`, one level), tree filter, vault menu (change master password, lock timeout, lock now), import of connections from a file encrypted with another master password (re-encrypted with the current one); connection workspace with a header (user@host / database, read-only, no password, missing tunnel; test, edit, delete) and an active database selector
+- [x] **M13.9** Shell editor in mongosh syntax (`db.coll.find({…}).sort({…}).limit(n)`, `aggregate([…])`, `countDocuments`, `distinct`, `getIndexes`, `show dbs`/`collections`, `use`, `db.runCommand`, …; `ObjectId()`, `ISODate()`, `NumberLong()`, regular expressions, unquoted keys): highlighting, run with Ctrl/Cmd+Enter (the selection or the whole text), result limit, session history. Reads run at once; every write (insert/update/replace/delete, `bulkWrite`, `findOneAnd…`, aggregations with `$out`/`$merge`, index and collection commands, `runCommand` outside a list of read commands) is shown with the number of documents it matches and runs only after confirmation (token bound to the statement); read-only connections refuse it
+- [x] **M13.10** Data browser like the table grid: JSON view and Table view (top-level fields as columns), sort by clicking a column, inline edit of cells of several documents saved with one confirmation (`bulkWrite` of `$set`), field edit in a JSON dialog; `find` results of the shell editable the same way
+- [x] **M13.11** Export as JSON, CSV (top-level fields; nested values as JSON) or mongosh script (`insertMany`): of a collection, of the filtered documents and of a `find`/`aggregate` of the editor
+- [x] **M13.12** Collection designer: new collection (and so new database) with capped size, JSON Schema validator, validation level and action; rename; indexes: create (keys, unique, sparse, TTL, partial filter, name) and drop; all through the confirmation. Collection structure: statistics (documents, sizes, indexes) and the schema inferred from a sample (field paths, types, presence)
+- [x] **M13.13** MCP tool `aggregate` (read-only pipelines, no `$out`/`$merge`); tests, README, CHANGELOG
 
 
 ## M16 — DB client: PostgreSQL and SQL Server — inside the `db-client` extension

@@ -7,7 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [Unreleased]
 
 ### Added
-- MongoDB client (M13), born as an installable extension in [devdock-extensions](https://github.com/codo82/devdock-extensions) (`mongo-client@1.0.0`): install it from 🧩 → Catalog or with `npm run ext -- install mongo-client`. Nothing changes in the core.
+- MongoDB client (M13), born as an installable extension in [devdock-extensions](https://github.com/codo82/devdock-extensions) (`mongo-client@1.1.0`) with the features of the Database section: folders, mongosh editor with history, documents as JSON or table with inline edit, every change confirmed, collections and indexes, structure, JSON/CSV/script export, read-only MCP tools. Install it from 🧩 → Catalog or with `npm run ext -- install mongo-client`. Nothing changes in the core.
 
 ## [2.0.0] - 2026-10-24
 
