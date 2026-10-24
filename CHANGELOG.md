@@ -2,7 +2,7 @@
 
 All notable changes to DevDock are documented in this file.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Every closed milestone of the [roadmap](ROADMAP.md) is a minor version.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Every closed milestone of the [roadmap](ROADMAP.md) is a minor version. Milestone numbers up to 2.1.0 refer to the archived [roadmap history](docs/ROADMAP-HISTORY.md); the current roadmap starts again from M1.
 
 ## [Unreleased]
 

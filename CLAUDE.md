@@ -6,7 +6,7 @@ Local developer dashboard (Express backend + vanilla JS frontend, no build step)
 Read before changing code:
 - [README.md](README.md) — what DevDock does, how to run it, configuration
 - [docs/EXTENSIONS.md](docs/EXTENSIONS.md) — extension contract (manifest, backend `ctx`, frontend `ctx`, config sections, export/import checkboxes)
-- [ROADMAP.md](ROADMAP.md) — milestones and task status
+- [ROADMAP.md](ROADMAP.md) — open milestones and task status (numbered from M1 again after 2.1.0; the closed ones, with their original numbers, are in [docs/ROADMAP-HISTORY.md](docs/ROADMAP-HISTORY.md))
 
 ## Working rules
 
