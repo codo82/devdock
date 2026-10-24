@@ -20,6 +20,16 @@ Goal: Claude Desktop and the other clients that start MCP servers as processes r
 - [x] **M1.3** 🤖 dialog: the Claude Desktop entry uses the bridge (absolute paths of Node.js and of the bridge, `env` only when the instance is not the default one) instead of `npx mcp-remote` with the token in clear
 - [x] **M1.4** Tests (SDK stdio client through the bridge: tools listed and called, token regenerated while connected, DevDock not running, token of another instance), README
 
+## M2 — Secrets behind the master password, lost clicks — core and extensions ✅ (2.3.0, 2.3.1)
+
+Goal: no secret is typed or kept without the master password, and a click on a button always lands — or visibly works.
+
+- [x] **M2.1** HTTP client: the 👤 Users dialog asks for the master password (or creates it) before opening; creating or editing a user type, pasting a token and logging in are refused by the server with the vault locked (`423`); the tokens kept in memory are forgotten when the vault is locked
+- [x] **M2.2** MongoDB (`mongo-client@1.2.0`): the whole section needs the master password, like the Database section; locked, the sidebar shows *Unlock* and every route answers `423`
+- [x] **M2.3** Core `ctx.ui.patch(el, html)`: containers redrawn on their own are updated only when their HTML changes, and after the click when the mouse is pressed inside them (a button replaced between mousedown and click lost the click); used by the header pills, SSH tunnels and NPM (polling every 5 s), Git (automatic refresh, which no longer shows "loading" over the log), Database (data grid, results, table designer) and MongoDB
+- [x] **M2.4** Master password dialog closed by clicking outside it or replaced by another dialog: the waiting action gives up instead of staying suspended (before, every later action needing the vault did nothing until the page was reloaded)
+- [x] **M2.5** *(2.3.1)* Feedback after a click: a request to the server started by a click puts the button on hold (spinner, no further clicks) and the cursor in "busy" until the answer, so slow actions (reading an extension's repository, the master password, connecting to a database) no longer look like lost clicks
+
 ## M3 — DB client: PostgreSQL and SQL Server — extension `db-client`
 
 Goal: the Database section works with PostgreSQL and Microsoft SQL Server as well as MySQL/MariaDB, with the same features and the same safety rules (every change shown and confirmed before it runs, read-only connections, passwords in the core vault). *(Formerly M16; replaces the even older M5.7 and M7.15.)*
