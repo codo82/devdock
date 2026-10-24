@@ -14,10 +14,9 @@ Every feature that can be added or removed is an **extension**: a folder under `
 | `db-client` | tab | 25 | `dbConnections`, `dbFolders` | Connessioni database | `tunnels`, `git` (optional) | no |
 | `git` | tab | 30 | — | — | — | no |
 | `http-client` | tab | 38 | `httpSections` | Richieste HTTP | — | no |
-| `mock-server` | tab | 39 | `mockServers` | Mock server | — | no |
-| `swagger` | tab | 40 | — | — | — | no |
+| `mock-server` | tab | 39 | `mockServers` | Mock server | — | yes |
 
-The official installable extensions (`pm2`, `ports`) are in the [devdock-extensions](https://github.com/codo82/devdock-extensions) repository, which is also an example of a repository holding several extensions (one folder each, prefixed tags, catalog, release script, CI).
+The official installable extensions (`pm2`, `ports`, `mongo-client`, `swagger`) are in the [devdock-extensions](https://github.com/codo82/devdock-extensions) repository, which is also an example of a repository holding several extensions (one folder each, prefixed tags, catalog, release script, CI).
 
 The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox, `layout` (the tab order chosen by the user, not exported) and `vault` (the master password, see *Secrets*).
 
@@ -40,7 +39,7 @@ extensions/
     tests/           the extension's tests (node:test, *.test.js), run by npm test
 ```
 
-Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`) or backend-only (a service used by other extensions).
+Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`, in devdock-extensions) or backend-only (a service used by other extensions).
 
 ## `setting.json`
 

@@ -137,7 +137,7 @@ Built as an extension on the M3 architecture.
 
 # Future developments
 
-Planned after M0–M5, in the order of the sections below (M11 before M14 before M12; then M15 → M13 → M16).
+Planned after M0–M5, in the order of the sections below (M11 before M14 before M12; then M15 → M13 → M17 → M16).
 
 ## M6 — Internationalization (i18n) ✅ (1.7.0)
 
@@ -287,7 +287,7 @@ Goal: let the user put the extension tabs in the order they prefer. It is part o
 
 ## M15 — Installable extensions — core ✅ (2.0.0)
 
-Goal: DevDock ships with a set of built-in extensions and can install others from git repositories: the official `devdock-extensions` repository (one folder per extension, also the official catalog) or any third-party repository. Built-in: `git`, `npm`, `tunnels`, `env`, `db-client`, `swagger`, `http-client`, `mock-server` (M14). External, in `devdock-extensions`: `pm2` (moved out: of little use locally), `ports` (moved out; `lib/ports.js` stays in the core, other extensions use it) and `mongo-client` (M13), which is created directly as an external extension.
+Goal: DevDock ships with a set of built-in extensions and can install others from git repositories: the official `devdock-extensions` repository (one folder per extension, also the official catalog) or any third-party repository. Built-in: `git`, `npm`, `tunnels`, `env`, `db-client`, `swagger`, `http-client`, `mock-server` (M14). External, in `devdock-extensions`: `pm2` (moved out: of little use locally), `swagger` (moved out in M17), `ports` (moved out; `lib/ports.js` stays in the core, other extensions use it) and `mongo-client` (M13), which is created directly as an external extension.
 
 - [x] **M15.1** Versioned contract: the manifest declares the compatible core versions (`"devdock": "^2.0"`); the loader refuses an incompatible extension with a clear error. `docs/EXTENSIONS.md` becomes the public API, breaking changes marked in the CHANGELOG
 - [x] **M15.2** Self-contained extensions: tests move into `extensions/<code>/tests/` and use a test kit exported by the core (today's `tests/helpers.js`); the i18n check runs per extension; removing an extension folder leaves the core suite green
@@ -324,6 +324,13 @@ Parity with the Database section (DB client), `mongo-client@1.1.0` (not ported: 
 - [x] **M13.12** Collection designer: new collection (and so new database) with capped size, JSON Schema validator, validation level and action; rename; indexes: create (keys, unique, sparse, TTL, partial filter, name) and drop; all through the confirmation. Collection structure: statistics (documents, sizes, indexes) and the schema inferred from a sample (field paths, types, presence)
 - [x] **M13.13** MCP tool `aggregate` (read-only pipelines, no `$out`/`$merge`); tests, README, CHANGELOG
 
+
+## M17 — Built-in extensions review ✅ (2.1.0)
+
+Goal: built-in extensions that show their state like the others, and a core that ships only what is used every day.
+
+- [x] **M17.1** Mock: a pill in the header for every running mock server, like NPM and SSH Tunnels (name and port, click to open the mock, ✕ to stop it); the module is preloaded and refreshes the state every 10 seconds
+- [x] **M17.2** Swagger moved, with its history, to `devdock-extensions` (`swagger@1.0.0`): frontend-only, nothing in the core or in the other extensions depends on it. DevDock stays at 2.x because the extension contract does not change: installed extensions with `"devdock": "^2.0"` keep working
 
 ## M16 — DB client: PostgreSQL and SQL Server — inside the `db-client` extension
 
@@ -362,4 +369,5 @@ Goal: the Database section works with PostgreSQL and Microsoft SQL Server as wel
 | M12 Tab order | S | core; drag and drop, saved in `config.json` |
 | M15 Installable extensions | L | core; versioned contract, self-contained extensions, vault in the core, install and update from the UI (catalogs, git tags, hot reload); official `devdock-extensions` repository, third-party repositories supported; `pm2` and `ports` moved out, M13 born external |
 | M13 MongoDB client | L | born external (after M15); core vault and the DB client's confirmation rules; read-only MCP tools |
+| M17 Built-in extensions review | S | Mock pill in the header; Swagger moved to `devdock-extensions` |
 | M16 DB client: PostgreSQL and SQL Server | L | not urgent; engine layer first (MySQL moved onto it with no change), then one dialect at a time through classification, browser, designer, migrations and MCP |

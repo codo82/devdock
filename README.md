@@ -1,6 +1,6 @@
 # DevDock
 
-Local web dashboard for everyday development: SSH tunnels, npm scripts, Git, databases, `.env` files, an HTTP client, mock servers and Swagger preview in a single interface, extended by installable extensions (PM2, ports in use…).
+Local web dashboard for everyday development: SSH tunnels, npm scripts, Git, databases, `.env` files, an HTTP client and mock servers in a single interface, extended by installable extensions (MongoDB, Swagger preview, PM2, ports in use…).
 
 It runs on your own machine and only answers on `http://127.0.0.1:3500`. The user interface is available in Italian and English, and new languages can be added with JSON files (see *Languages*).
 
@@ -41,8 +41,7 @@ Each section is an extension (see [Writing an extension](#writing-an-extension))
 - **🗄️ Database** (`db-client`) — MySQL/MariaDB client. Connections (direct or through an SSH tunnel of the Tunnels section) with passwords encrypted by a **master password** asked once per session; sidebar tree connection ▸ database ▸ tables ▸ columns with a context menu on tables, with connections grouped in **folders** of their own (one level; 📁+ to create one, the Folder field of the connection to move it, ⋯ or right click on a folder to rename or delete it); SQL editor with highlighting and **parametric queries** (`?` and `:name` placeholders: a dialog asks for the values, with the names of the `?` guessed from the query where possible, e.g. `nome = ?`, `id IN (?, ?)`, `BETWEEN ? AND ?`, `LIMIT ?`, `INSERT … VALUES (?, ?)`; values are escaped into the statement and kept in DevDock's memory until it restarts (never on disk or in the browser): a query already run runs again at once with its values, shown above the results with **✎ Change** to edit them; a new query asks, prefilled with the last values of the same names); data browser with pagination, search, filters and sorting; row insert/edit/delete inline or through a dialog, multiple deletion; several cells, also of different rows, can be edited before saving (changed cells are highlighted, Tab moves to the next cell, Enter or **Save** writes them all with one confirmation and in a single transaction), in the table data view and in the editable results of a SELECT; table designer; export of tables and queries as CSV, JSON or SQL; session query history. **Every statement that changes data or schema is shown and must be confirmed before it runs**; read-only connections refuse them.
 - **🔑 Env** (`env`) — the `.env*` files of each project compared with the template (`.env.example`, `.env.sample`…): keys missing, extra or empty. Values are hidden and shown one at a time; edit, add, rename or delete keys, add the missing keys from the template, create a `.env` from the template. Files are rewritten keeping comments, blank lines and order; a file changed outside DevDock in the meantime is not overwritten. Values never go into the DevDock configuration, its exports or the MCP tools.
 - **📮 HTTP** (`http-client`) — HTTP client for the projects' local APIs: sections of requests with a base URL and variables, requests sent by the DevDock backend (no CORS limits), Express routes found in the code of the linked project, an authorization per user type with the token obtained automatically. See *HTTP client*.
-- **🎭 Mock** (`mock-server`) — local mock servers that answer with predefined responses and log every incoming call with its payload. See *Mock server*.
-- **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
+- **🎭 Mock** (`mock-server`) — local mock servers that answer with predefined responses and log every incoming call with its payload; a pill in the header for every running mock (click to open it, ✕ to stop it). See *Mock server*.
 
 The section tabs can be put in any order by dragging them (or with Alt+←/→ on a focused tab); the order is saved in `config.json` and the first tab is the one opened at startup. Right click on the tab bar → *Restore the default order*. New extensions go after the others.
 
@@ -104,10 +103,10 @@ The official extensions live in [devdock-extensions](https://github.com/codo82/d
 
 - **⚙️ PM2** (`pm2`) — process list, start/stop/restart/delete, streaming logs; npm scripts can be started under PM2 from the NPM section. Opened from a header button.
 - **🔌 Ports** (`ports`) — listening TCP ports of the machine with process, PID, user and command line, linked to what DevDock started (npm script, PM2 process, SSH tunnel); search, "only my processes" filter, and stop of the process that holds a port after a confirmation (**Stop** or **Force stop**). macOS/Linux (`lsof` or `ss`) and Windows (`netstat`).
-
 - **🍃 MongoDB** (`mongo-client`) — the Database section for MongoDB: connections by host, `mongodb://`/`mongodb+srv://` URI or SSH tunnel, grouped in folders, with passwords in the master password vault (import from a file with another master password); tree connection ▸ databases ▸ collections with a filter; editor in mongosh syntax with suggestions and session history; documents as JSON or table with filter, sort, projection, pages and inline edit of several documents; every insert, update, delete, index or collection change is shown and confirmed, and refused on read-only connections; new collections with JSON Schema validation, indexes, structure (statistics and inferred schema); export as JSON, CSV or mongosh script; read-only MCP tools.
+- **📄 Swagger** (`swagger`) — preview of an OpenAPI `.yaml`/`.json` file loaded from disk (Swagger UI from CDN).
 
-PM2 and Ports were built in up to DevDock 1.23: after updating to 2.0, install them from the 🧩 panel (catalog) or with `npm run ext -- install pm2` and `npm run ext -- install ports` (MongoDB: `npm run ext -- install mongo-client`). The 🧩 button in the header opens the Extensions panel:
+PM2 and Ports were built in up to DevDock 1.23, Swagger up to 2.0: after updating, install them from the 🧩 panel (catalog) or with `npm run ext -- install <code>` (`pm2`, `ports`, `swagger`, `mongo-client`). The 🧩 button in the header opens the Extensions panel:
 
 - **Installed**: every extension with version, source and state; the **Tab / Header** selector moves an extension between the section bar and a button in the header (the manifest gives the default); the switch turns one off or on (also the built-in ones; those that require it are switched off too), and installed ones can be **updated**, taken back to the **previous version** (kept after every update) or **removed**. The badge on 🧩 counts the available updates and the extensions to install.
 - **Catalog**: the extensions listed by the configured catalogs (the official `devdock-extensions` catalog by default), with a search.
@@ -169,7 +168,7 @@ Active protections:
 - the API only accepts requests from its own UI (`Origin`/`Referer` and `Host` checks), so other pages open in the browser cannot use it;
 - every parameter that ends up in a command (branch, remote, file, script, package, SSH alias) is validated;
 - `config.json` is validated on every save and import;
-- external libraries (Swagger UI) are loaded with Subresource Integrity;
+- external libraries (e.g. Swagger UI in the Swagger extension) are loaded with Subresource Integrity;
 - installed extensions run with your rights: the panel shows a preview of what is installed and warns about it, git runs without terminal prompts and with the `ext::` protocol off, npm dependencies are installed with `--ignore-scripts`.
 
 Local command-line clients (curl, scripts) that send no `Origin` header are allowed, like any other local program.

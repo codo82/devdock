@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-24
+
+### Changed
+- **Swagger** is no longer built in: it moved, with its history, to the official [devdock-extensions](https://github.com/codo82/devdock-extensions) repository (`swagger@1.0.0`). After updating, install it from 🧩 → Catalog or with `npm run ext -- install swagger`; it needs no configuration. The extension contract does not change, so DevDock stays at 2.x and installed extensions keep working.
+
 ### Added
 - **Mock** shows a pill in the header for every running mock server, like NPM and SSH Tunnels: name and port, a click opens the mock, ✕ stops it; the module is loaded at startup (`preload`) and refreshes the state every 10 seconds.
 - MongoDB client (M13), born as an installable extension in [devdock-extensions](https://github.com/codo82/devdock-extensions) (`mongo-client@1.1.0`) with the features of the Database section: folders, mongosh editor with history, documents as JSON or table with inline edit, every change confirmed, collections and indexes, structure, JSON/CSV/script export, read-only MCP tools. Install it from 🧩 → Catalog or with `npm run ext -- install mongo-client`. Nothing changes in the core.
