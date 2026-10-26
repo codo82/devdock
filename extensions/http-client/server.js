@@ -370,7 +370,7 @@ module.exports = function createHttpClient(ctx) {
         body = file.data;
         if (!hasHeader(headers, 'content-type')) headers['Content-Type'] = typeOfFile(file.name);
       } else if (r.bodyType === 'form') {
-        const boundary = `----DevDockForm${crypto.randomBytes(12).toString('hex')}`;
+        const boundary = `----KelboForm${crypto.randomBytes(12).toString('hex')}`;
         const q = v => String(v).replace(/"/g, '%22').replace(/[\r\n]/g, ' ');
         const parts = [];
         for (const f of r.form || []) {

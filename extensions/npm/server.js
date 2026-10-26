@@ -91,7 +91,7 @@ module.exports = function createNpm(ctx) {
   return {
     services: {
       readPackage,
-      // per l'estensione ports: processi avviati da DevDock (pid = process group) e arresto
+      // per l'estensione ports: processi avviati da Kelbo (pid = process group) e arresto
       processes: () => [...processes.values()].filter(pd => pd.running).map(pd => ({ id: pd.id, pid: pd.pid, project: pd.projectLabel, script: pd.script })),
       stopProcess(id, { force = false } = {}) {
         const pd = processes.get(id);

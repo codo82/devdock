@@ -125,7 +125,7 @@ function writeExclusive(dirAbs, name, content) {
 
 // Contenuto del file di migration: intestazione e istruzioni separate da ";"
 function migrationContent(name, { connection, database, date = new Date() }, statements) {
-  const header = [`-- ${name}`, `-- DevDock · ${connection} · ${database} · ${date.toISOString()}`, ''];
+  const header = [`-- ${name}`, `-- Kelbo · ${connection} · ${database} · ${date.toISOString()}`, ''];
   return header.join('\n') + '\n' + statements.map(s => `${s};`).join('\n\n') + '\n';
 }
 

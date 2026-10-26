@@ -1,10 +1,10 @@
-# DevDock — notes for Claude Code
+# Kelbo — notes for Claude Code
 
 
 Local developer dashboard (Express backend + vanilla JS frontend, no build step). Every feature is an extension.
 
 Read before changing code:
-- [README.md](README.md) — what DevDock does, how to run it, configuration
+- [README.md](README.md) — what Kelbo does, how to run it, configuration
 - [docs/EXTENSIONS.md](docs/EXTENSIONS.md) — extension contract (manifest, backend `ctx`, frontend `ctx`, config sections, export/import checkboxes)
 - [ROADMAP.md](ROADMAP.md) — open milestones and task status (numbered from M1 again after 2.1.0; the closed ones, with their original numbers, are in [docs/ROADMAP-HISTORY.md](docs/ROADMAP-HISTORY.md))
 
@@ -19,6 +19,6 @@ Read before changing code:
 
 ## Running and testing
 
-- `npm test` — integration tests (`node:test`); each test file starts DevDock as a separate process with a temporary config (`tests/helpers.js`).
+- `npm test` — integration tests (`node:test`); each test file starts Kelbo as a separate process with a temporary config (`tests/helpers.js`).
 - Manual checks: start an instance with `DEVDOCK_PORT=<port> DEVDOCK_CONFIG=<tmp file>` and temporary git repos/projects. Never modify the user's `config.json`, and never start tunnels towards the user's real servers (use aliases on `.invalid` domains).
 - `npm run dev` restarts on backend changes; a new extension folder needs a restart.

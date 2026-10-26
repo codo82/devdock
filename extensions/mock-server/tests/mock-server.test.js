@@ -28,7 +28,7 @@ test('percorsi: parametri, * e ordine delle rotte', () => {
 let srv, port;
 before(async () => {
   srv = await startServer();
-  port = await freePort(); // dopo l'avvio: la porta libera trovata prima poteva toccare a DevDock
+  port = await freePort(); // dopo l'avvio: la porta libera trovata prima poteva toccare a Kelbo
 });
 after(() => srv?.stop());
 
@@ -181,7 +181,7 @@ test('porta occupata con il proprietario, cambio porta a mock avviato, arresto',
   assert.equal((await call('GET', `/mocks/${id}/calls`)).json.calls.length, 0);
 });
 
-test('i mock avviati si fermano con DevDock', async () => {
+test('i mock avviati si fermano con Kelbo', async () => {
   await call('POST', `/mocks/${id}/start`);
   assert.equal((await fetch(mockUrl('/users/1'))).status, 201);
   await srv.stop();

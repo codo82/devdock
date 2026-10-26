@@ -7,15 +7,15 @@ const { startServer, tmpDir } = require('../../../lib/testkit');
 const dotenv = require('../dotenv');
 
 test('parser: commenti, export, virgolette, valori su più righe', () => {
-  const text = '# app\nAPP=DevDock # nome\nexport HOST=localhost\n\nQ="a\\"b\\nc"\nM="riga1\nriga2"\nS=\'x # y\'\nE=\nDUP=1\nDUP=2\n';
+  const text = '# app\nAPP=Kelbo # nome\nexport HOST=localhost\n\nQ="a\\"b\\nc"\nM="riga1\nriga2"\nS=\'x # y\'\nE=\nDUP=1\nDUP=2\n';
   const { entries } = dotenv.parse(text);
   const v = Object.fromEntries(entries.map(e => [e.key, e.value]));
-  assert.deepEqual(v, { APP: 'DevDock', HOST: 'localhost', Q: 'a"b\nc', M: 'riga1\nriga2', S: 'x # y', E: '', DUP: '2' });
+  assert.deepEqual(v, { APP: 'Kelbo', HOST: 'localhost', Q: 'a"b\nc', M: 'riga1\nriga2', S: 'x # y', E: '', DUP: '2' });
   assert.equal(entries.find(e => e.key === 'HOST').exported, true);
 });
 
 test('modifica: solo le righe toccate, commenti e ordine restano', () => {
-  const text = '# app\nAPP=DevDock # nome\n\nM="riga1\nriga2"\nexport HOST=localhost\n';
+  const text = '# app\nAPP=Kelbo # nome\n\nM="riga1\nriga2"\nexport HOST=localhost\n';
   const out = dotenv.apply(text, [
     { op: 'set', key: 'APP', value: 'con spazi' },
     { op: 'delete', key: 'M' },

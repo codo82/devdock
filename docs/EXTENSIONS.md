@@ -1,6 +1,6 @@
-# DevDock extensions
+# Kelbo extensions
 
-This document is the **public API** of DevDock for extensions: manifest, backend and frontend `ctx`, configuration sections, routes and the core API they may use. It follows the core version (SemVer): additions come with a minor version, and any change that can break an existing extension comes with a new major version and is marked **Breaking** in the [CHANGELOG](../CHANGELOG.md). Every extension declares in its manifest the core versions it works with (`devdock`).
+This document is the **public API** of Kelbo for extensions: manifest, backend and frontend `ctx`, configuration sections, routes and the core API they may use. It follows the core version (SemVer): additions come with a minor version, and any change that can break an existing extension comes with a new major version and is marked **Breaking** in the [CHANGELOG](../CHANGELOG.md). Every extension declares in its manifest the core versions it works with (`devdock`).
 
 Every feature that can be added or removed is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, the projects shared by the extensions, a few shared services and the UI shell (navigation, header, dialogs).
 
@@ -16,7 +16,7 @@ Every feature that can be added or removed is an **extension**: a folder under `
 | `http-client` | tab | 38 | `httpSections` | Richieste HTTP | — | no |
 | `mock-server` | tab | 39 | `mockServers` | Mock server | — | yes |
 
-The official installable extensions (`pm2`, `ports`, `mongo-client`, `swagger`) are in the [devdock-extensions](https://github.com/codo82/devdock-extensions) repository, which is also an example of a repository holding several extensions (one folder each, prefixed tags, catalog, release script, CI).
+The official installable extensions (`pm2`, `ports`, `mongo-client`, `swagger`) are in the [kelbo-extensions](https://github.com/kelbodev/kelbo-extensions) repository, which is also an example of a repository holding several extensions (one folder each, prefixed tags, catalog, release script, CI).
 
 The core owns `projects` and `projectFolders` (see *Projects and folders*) and their **Progetti e cartelle** export checkbox, `layout` (the tab order chosen by the user, not exported) and `vault` (the master password, see *Secrets*).
 
@@ -39,7 +39,7 @@ extensions/
     tests/           the extension's tests (node:test, *.test.js), run by npm test
 ```
 
-Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`, in devdock-extensions) or backend-only (a service used by other extensions).
+Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`, in kelbo-extensions) or backend-only (a service used by other extensions).
 
 ## `setting.json`
 
@@ -79,7 +79,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`, 
 | `name` | yes | Label shown in the UI: a string or a map by language tag (`{ "it": "Database", "en": "Database" }`) |
 | `code` | yes | Unique id, `[a-z0-9-]`, equal to the folder name (`core` is reserved); used in URLs (`/api/ext/<code>`, `/ext/<code>`), in `dependencies` and as `window.Ext.<code>` |
 | `version` | yes | Extension version (SemVer, `1.2.0`) |
-| `devdock` | yes | DevDock versions the extension works with, as an npm range (`^2.0`, `>=2.1 <3`, `^2.0 \|\| ^3.0`). The loader refuses an extension whose range does not include the running core version: it is listed as disabled with the reason (`richiede DevDock ^3.0, questa è la 2.0.0`) |
+| `devdock` | yes | Kelbo versions the extension works with, as an npm range (`^2.0`, `>=2.1 <3`, `^2.0 \|\| ^3.0`). The loader refuses an extension whose range does not include the running core version: it is listed as disabled with the reason (`richiede Kelbo ^3.0, questa è la 2.0.0`) |
 | `description` | no | One line; a string or a map by language tag |
 | `color` | yes | Accent colour (`#rrggbb`) for tab, badges, pills and `--ext-color` |
 | `icon` | no | Emoji or short text for the tab / header button |
@@ -92,12 +92,12 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`, 
 | `backend.routes` | no | Routes mounted under `/api/ext/<code>`; each one names a handler of the backend |
 | `frontend.html` / `sidebar` / `js` / `css` | no | Files served under `/ext/<code>/…`; only the files listed here are served (never `server.js` or `setting.json`) |
 | `mcp.tools` | no | Tools the extension exposes to AI agents through the MCP server (see *MCP tools*); requires a backend |
-| `reloadable` | no | `false` for an extension that can't be stopped and started again while DevDock runs: installing an update or removing it then asks for a restart (default `true`) |
+| `reloadable` | no | `false` for an extension that can't be stopped and started again while Kelbo runs: installing an update or removing it then asks for a restart (default `true`) |
 | `frontend.preload` | no | `true`: the module is mounted at startup (hidden) instead of on first open — for extensions that keep header pills, badges or notifications up to date in the background |
 
 ### Loading and states
 
-Extensions come from two folders: the **built-in** ones in `extensions/` of the DevDock repository (updated with DevDock itself) and the **installed** ones in `~/.devdock/extensions` (the DevDock home: `DEVDOCK_HOME` changes it), outside the repository, where the Extensions panel installs them. Folders whose name starts with `.` are ignored (staging and backups). Two extensions with the same `code` are an error, never a silent choice: the built-in one is used and the other is listed as disabled with the folder of the one already loaded.
+Extensions come from two folders: the **built-in** ones in `extensions/` of the Kelbo repository (updated with Kelbo itself) and the **installed** ones in `~/.devdock/extensions` (the Kelbo home: `DEVDOCK_HOME` changes it), outside the repository, where the Extensions panel installs them. Folders whose name starts with `.` are ignored (staging and backups). Two extensions with the same `code` are an error, never a silent choice: the built-in one is used and the other is listed as disabled with the folder of the one already loaded.
 
 At startup the loader reads every `setting.json` of both folders and gives each extension a state, shown by `GET /api/core/extensions` (with `source`: `builtin` or `installed`):
 
@@ -207,7 +207,7 @@ Steps to enable MCP for an extension:
 
 1. Add the `mcp.tools` block to `setting.json` (the extension needs a `backend`).
 2. Implement each `handler` in `instance.mcp` of `server.js`, reusing the same services and validation as the HTTP routes; errors are thrown with `ctx.error`, so their messages go in `i18n/<lang>.json` under `errors.<name>`.
-3. Restart DevDock: the tools appear in the 🤖 *MCP server* dialog of the header and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
+3. Restart Kelbo: the tools appear in the 🤖 *MCP server* dialog of the header and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
 4. Try them from a client: copy the setup from the panel (for Claude Code `claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"`), or in a test with the SDK client as in `tests/mcp.test.js`.
 
 The built-in extensions expose: `tunnels_list`; `env_check`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI); `mock_server_list`, `mock_server_requests` (credential headers redacted). The official installable ones add `pm2_list`, `pm2_logs` and `ports_list`.
@@ -226,9 +226,9 @@ Error responses have one shape for the core and every extension:
 - `error` is the message in the source language, built by the server from the extension's `i18n/it.json`, key `errors.<name>` (with `{param}` placeholders and plurals on `params.count`). The server never picks a language and contains no message text: handlers only throw `ctx.error(status, name, params)`.
 - The frontend translates `code` with the key `<code>.errors.<name>` of the active language and falls back to `error`; `ctx.api` errors carry `status`, `code`, `data` and the translated `message`. For bodies read by hand use `ctx.ui.errorText(data)`.
 - Output of external commands (`git`, `npm`, `pm2`, `ssh`, MySQL errors) is not translated: it travels as a parameter (e.g. `git.command_failed` with `{ output }`) and is shown as is.
-- SSE events that carry a DevDock message use the same `{ error, code, params }` object (e.g. the Git `notice` event).
+- SSE events that carry a Kelbo message use the same `{ error, code, params }` object (e.g. the Git `notice` event).
 
-Errors and warnings of the extension state (`GET /api/core/extensions` → `error`, `warnings`) are in the source language; the state ones (dependencies, incompatible DevDock version, duplicate code, config key already used, ignored catalogs) also come as `errorInfo` / `warningInfo` (`{ error, code, params }`), translated by the interface. Manifest validation errors are developer diagnostics and stay in the source language only.
+Errors and warnings of the extension state (`GET /api/core/extensions` → `error`, `warnings`) are in the source language; the state ones (dependencies, incompatible Kelbo version, duplicate code, config key already used, ignored catalogs) also come as `errorInfo` / `warningInfo` (`{ error, code, params }`), translated by the interface. Manifest validation errors are developer diagnostics and stay in the source language only.
 
 ## Projects and folders
 
@@ -273,7 +273,7 @@ Writes are atomic (temporary file + rename).
 
 ## Secrets
 
-Passwords, tokens and other secrets are never saved in clear: an extension encrypts them with the core **master password vault** (`ctx.vault`) and stores the encrypted box (`{ iv, tag, data }`, AES-256-GCM) in its own config section. The vault keeps only a verifier in `config.json` (section `vault`, owned by the core); the key lives in the server's memory while the vault is unlocked, until the user locks it, DevDock restarts or the inactivity timeout expires.
+Passwords, tokens and other secrets are never saved in clear: an extension encrypts them with the core **master password vault** (`ctx.vault`) and stores the encrypted box (`{ iv, tag, data }`, AES-256-GCM) in its own config section. The vault keeps only a verifier in `config.json` (section `vault`, owned by the core); the key lives in the server's memory while the vault is unlocked, until the user locks it, Kelbo restarts or the inactivity timeout expires.
 
 | Member | Purpose |
 |---|---|
@@ -363,11 +363,11 @@ export default {
 | `ctx.api.stream(path, body, onEvent)` | POST answered with SSE (e.g. git actions); resolves with the `exit` code; a non-2xx answer throws with `status` and `data` |
 | `ctx.api.events(path, onEvent, onError)` | GET answered with SSE (`EventSource`); returns a function that closes it |
 | `ctx.core` | Same client for `/api/core` (e.g. `ctx.core.get('/system')`) |
-| `ctx.apiFor(code)` | Same client for another extension's API, `stream` and `events` included (DevDock ≥ 2.6; e.g. `ctx.apiFor('npm').events('/processes/<id>/stream', …)`) |
+| `ctx.apiFor(code)` | Same client for another extension's API, `stream` and `events` included (Kelbo ≥ 2.6; e.g. `ctx.apiFor('npm').events('/processes/<id>/stream', …)`) |
 | `ctx.hasExtension(code)` | Whether another extension is loaded (for features that rely on it) |
 | `ctx.t(key, params)` | Translation of a key of the extension's catalogs (keys are relative: `t('branches.title')` reads `git.branches.title`; keys starting with `core.` are the core's). See *Translations* |
 | `ctx.i18n` | `lang` (active tag), `pick(value)` (text of a string-or-map manifest field), `apply(element)` (translates `data-i18n…` attributes in markup the extension creates) |
-| `ctx.ui` | `t` (global keys), `fmt` (locale-aware formatting, see *Translations*), `toast`, `openModal`, `closeModal`, `patch(el, html)` (updates a container that is redrawn on its own — polling, `change`, `blur` — only when the HTML changes, and after the click when the mouse is pressed inside it, so a click is never lost because its button was replaced; DevDock ≥ 2.3), `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `contextMenu(x, y, items)` (items: `{ label, icon, action, danger, disabled }` or `'separator'`), `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`; the user resizes it by dragging its top edge, and the height is remembered per section) |
+| `ctx.ui` | `t` (global keys), `fmt` (locale-aware formatting, see *Translations*), `toast`, `openModal`, `closeModal`, `patch(el, html)` (updates a container that is redrawn on its own — polling, `change`, `blur` — only when the HTML changes, and after the click when the mouse is pressed inside it, so a click is never lost because its button was replaced; Kelbo ≥ 2.3), `esc`, `js`, `cssColor`, `ansiToHtml`, `formatUptime`, `toolNotice(message, installCmd, recheckHandler)`, `contextMenu(x, y, items)` (items: `{ label, icon, action, danger, disabled }` or `'separator'`), `notify(title, body, icon)` (desktop notification, if enabled with 🔔), `output` (the panel's output drawer: `open(title)`, `append(text, 'out'\|'err'\|'sys')`, `clear()`, `close()`; the user resizes it by dragging its top edge, and the height is remembered per section) |
 | `ctx.bus.on(name, fn)` / `ctx.bus.emit(name, detail)` | Events between extensions; the core emits `core:projects-changed` after any change to projects or folders |
 | `ctx.projects` | Projects and folders of the core, see *Projects and folders* |
 | `ctx.vault` | `ensure()`: resolves `true` when the master password vault is unlocked, asking for the password (or to create it) first; `isVaultError(err)`: whether an API error is a locked or missing vault (`core.vault_locked`, `core.vault_missing`); `status()` |
@@ -446,7 +446,7 @@ Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i1
 
 ## Publishing an extension
 
-An extension can live in its own git repository, or in a folder of a repository that holds several (like the official `devdock-extensions`). Users install it from the Extensions panel (catalog or URL) or with `devdock ext install`:
+An extension can live in its own git repository, or in a folder of a repository that holds several (like the official `kelbo-extensions`). Users install it from the Extensions panel (catalog or URL) or with `devdock ext install`:
 
 - **Versions are git tags** in SemVer: `v1.2.0` (or `1.2.0`) for an extension at the root of its repository, `<code>@1.2.0` for an extension in a folder, so every extension of a shared repository has its own versions. The `version` in `setting.json` should match the tag. Without tags the default branch is installed and updates follow its commits.
 - **Compatibility**: `devdock` in the manifest; the panel proposes the latest tag whose range includes the running core.
@@ -458,7 +458,7 @@ A **catalog** is a JSON file served over http(s):
 
 ```json
 { "extensions": [
-  { "code": "pm2", "name": { "it": "PM2", "en": "PM2" }, "description": "Processi PM2", "repo": "https://github.com/codo82/devdock-extensions.git", "path": "pm2" },
+  { "code": "pm2", "name": { "it": "PM2", "en": "PM2" }, "description": "Processi PM2", "repo": "https://github.com/kelbodev/kelbo-extensions.git", "path": "pm2" },
   { "code": "hello", "name": "Hello", "repo": "git@github.com:someone/devdock-hello.git" }
 ] }
 ```
@@ -492,18 +492,18 @@ A single `npm install` at the root installs everything into the shared `node_mod
 
 ## Testing an extension
 
-Each extension keeps its tests in its own `tests/` folder (`*.test.js`, `node:test`), so it can be removed, moved or published on its own: the core suite (`tests/`) only uses fixture extensions and stays green without any of the built-in ones. The core exports a test kit: built-in extensions require `../../../lib/testkit`, external ones `require('devdock/testkit')` with DevDock as a dev dependency.
+Each extension keeps its tests in its own `tests/` folder (`*.test.js`, `node:test`), so it can be removed, moved or published on its own: the core suite (`tests/`) only uses fixture extensions and stays green without any of the built-in ones. The core exports a test kit: built-in extensions require `../../../lib/testkit`, external ones `require('devdock/testkit')` with Kelbo as a dev dependency.
 
 | Member | Purpose |
 |---|---|
-| `startServer(config, opts)` | Starts DevDock as a separate process on a free port with a temporary `config.json` and a temporary home (`DEVDOCK_HOME`: installed extensions, lock file); resolves `{ port, configPath, home, request(method, path, { body, headers, raw }), readConfig(), stop(), output() }`. `opts.extensions`: folder of the built-in extensions (default the repository's, `null` for none); `opts.install`: extension folders to add to the installed ones (e.g. `[path.join(__dirname, '..')]` for the extension under test); `opts.env`: more environment variables |
+| `startServer(config, opts)` | Starts Kelbo as a separate process on a free port with a temporary `config.json` and a temporary home (`DEVDOCK_HOME`: installed extensions, lock file); resolves `{ port, configPath, home, request(method, path, { body, headers, raw }), readConfig(), stop(), output() }`. `opts.extensions`: folder of the built-in extensions (default the repository's, `null` for none); `opts.install`: extension folders to add to the installed ones (e.g. `[path.join(__dirname, '..')]` for the extension under test); `opts.env`: more environment variables |
 | `mcpClient(srv)` | MCP client (official SDK) connected to the instance with its token |
 | `tmpDir()`, `freePort()` | Temporary folder, free TCP port |
 | `git(cwd, ...args)`, `makeRepo(dir, { scripts })`, `commitFile(dir, name)` | Disposable git repositories with a `package.json` |
 | `manifest(code, extra)`, `writeExtension(root, code, files)` | Minimal valid manifest and fixture extensions written to disk |
 | `i18nProblems(extDir)` | The translation checks for one extension: catalogs valid and consistent with the source language, keys used in the code present in `i18n/it.json`, no UI text written in the code (exceptions in `tests/i18n-allowlist.txt`); `[]` when everything is fine |
 | `parseSse(text)` | Events of a Server-Sent Events response |
-| `validateManifest(json)`, `coreVersion()` | The loader's manifest checks (throws with the reason) and the DevDock version of the kit, for the scripts of an extensions repository (e.g. generating its catalog) |
+| `validateManifest(json)`, `coreVersion()` | The loader's manifest checks (throws with the reason) and the Kelbo version of the kit, for the scripts of an extensions repository (e.g. generating its catalog) |
 
 ```js
 // extensions/hello/tests/hello.test.js

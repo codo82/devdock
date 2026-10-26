@@ -54,7 +54,7 @@
   "errors.file_invalid": "Invalid file name: {name} (must start with .env)",
   "errors.file_not_found": "File not found: {name}",
   "errors.file_too_large": "{name} is too large",
-  "errors.file_changed": "{name} was changed outside DevDock: reloaded, try again",
+  "errors.file_changed": "{name} was changed outside Kelbo: reloaded, try again",
   "errors.key_missing": "Key not found: {key}",
   "errors.no_template": "The project has no template (.env.example)",
   "errors.is_template": "It is the template file",

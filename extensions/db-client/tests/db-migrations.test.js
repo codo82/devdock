@@ -51,7 +51,7 @@ test('scrittura: mai sovrascrivere, contenuto con intestazione', () => {
   assert.equal(fs.readFileSync(path.join(dir, '001_a_create.sql'), 'utf8'), 'uno');
   assert.deepEqual(fs.readdirSync(dir), ['001_a_create.sql'], 'nessun file temporaneo rimasto');
   const content = mig.migrationContent('002_a_alter.sql', { connection: 'Locale', database: 'app', date: new Date('2026-01-02T03:04:05Z') }, ['ALTER TABLE a ADD b INT', 'CREATE INDEX i ON a (b)']);
-  assert.equal(content, '-- 002_a_alter.sql\n-- DevDock · Locale · app · 2026-01-02T03:04:05.000Z\n\nALTER TABLE a ADD b INT;\n\nCREATE INDEX i ON a (b);\n');
+  assert.equal(content, '-- 002_a_alter.sql\n-- Kelbo · Locale · app · 2026-01-02T03:04:05.000Z\n\nALTER TABLE a ADD b INT;\n\nCREATE INDEX i ON a (b);\n');
 });
 
 let srv, repo, base;

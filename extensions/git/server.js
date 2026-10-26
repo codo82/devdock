@@ -174,7 +174,7 @@ module.exports = function createGit(ctx) {
     for (const step of steps) {
       const code = await runStep(cwd, step.args, send);
       if (code !== 0 && !step.optional) return code;
-      // messaggio di DevDock: { error, code, params } tradotto dal frontend
+      // messaggio di Kelbo: { error, code, params } tradotto dal frontend
       if (code !== 0) send('notice', notice('step_failed', { command: step.args[0] }));
     }
     return 0;

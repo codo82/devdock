@@ -85,7 +85,7 @@
         "name": "projects",
         "handler": "projects",
         "readOnly": true,
-        "description": "List the npm projects configured in DevDock with their folder and package.json scripts.",
+        "description": "List the npm projects configured in Kelbo with their folder and package.json scripts.",
         "inputSchema": {
           "type": "object",
           "properties": {}
@@ -95,7 +95,7 @@
         "name": "processes",
         "handler": "processes",
         "readOnly": true,
-        "description": "List the npm processes started by DevDock (running or exited) with pid, listening ports, start time and exit code.",
+        "description": "List the npm processes started by Kelbo (running or exited) with pid, listening ports, start time and exit code.",
         "inputSchema": {
           "type": "object",
           "properties": {}
@@ -105,7 +105,7 @@
         "name": "run",
         "handler": "run",
         "readOnly": false,
-        "description": "Start a package.json script of a project (npm run <script>, or npm install with script \"install\") as a tracked background process, like the Run button of DevDock. Returns the process id: read its output with npm_output.",
+        "description": "Start a package.json script of a project (npm run <script>, or npm install with script \"install\") as a tracked background process, like the Run button of Kelbo. Returns the process id: read its output with npm_output.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -128,7 +128,7 @@
         "name": "stop",
         "handler": "stop",
         "readOnly": false,
-        "description": "Stop an npm process started by DevDock (the whole process group).",
+        "description": "Stop an npm process started by Kelbo (the whole process group).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -146,7 +146,7 @@
         "name": "output",
         "handler": "output",
         "readOnly": true,
-        "description": "Last lines of the output of an npm process started by DevDock, with its status.",
+        "description": "Last lines of the output of an npm process started by Kelbo, with its status.",
         "inputSchema": {
           "type": "object",
           "properties": {

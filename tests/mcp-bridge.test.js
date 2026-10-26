@@ -1,5 +1,5 @@
-// Ponte stdio → server MCP: un client stdio vede gli strumenti di DevDock senza conoscere il
-// token, il ponte continua dopo una rigenerazione e spiega quando DevDock non è avviato
+// Ponte stdio → server MCP: un client stdio vede gli strumenti di Kelbo senza conoscere il
+// token, il ponte continua dopo una rigenerazione e spiega quando Kelbo non è avviato
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
@@ -45,13 +45,13 @@ test('la configurazione proposta per Claude Desktop usa il ponte, senza token', 
   assert.doesNotMatch(JSON.stringify(r.bridge), new RegExp(r.token));
 });
 
-test('DevDock spento o token di un\'altra istanza: errore chiaro al client', async () => {
+test('Kelbo spento o token di un\'altra istanza: errore chiaro al client', async () => {
   const port = await freePort();
   // l'inizializzazione stessa fallisce con il messaggio del ponte
   await assert.rejects(async () => {
     const c = new Client({ name: 'bridge-test', version: '1.0.0' });
     await c.connect(new StdioClientTransport({ command: process.execPath, args: [BRIDGE], env: { PATH: process.env.PATH, DEVDOCK_PORT: String(port), DEVDOCK_CONFIG: srv.configPath } }));
-  }, new RegExp(`DevDock non è in esecuzione su http://127\\.0\\.0\\.1:${port}`));
+  }, new RegExp(`Kelbo non è in esecuzione su http://127\\.0\\.0\\.1:${port}`));
   await assert.rejects(async () => {
     const c = new Client({ name: 'bridge-test', version: '1.0.0' });
     await c.connect(new StdioClientTransport({ command: process.execPath, args: [BRIDGE], env: { PATH: process.env.PATH, DEVDOCK_PORT: String(srv.port), DEVDOCK_CONFIG: path.join(tmpDir(), 'config.json') } }));

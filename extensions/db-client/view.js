@@ -1512,7 +1512,7 @@ export default {
     }
 
     // ---- query parametriche: un campo per parametro ----
-    // I valori restano nella memoria di DevDock (persi al riavvio), per query (connessione +
+    // I valori restano nella memoria di Kelbo (persi al riavvio), per query (connessione +
     // testo) e per nome. Una query già eseguita riparte con i suoi valori senza chiederli;
     // "Cambia" li riapre. Nel browser non resta nulla (le versioni 1.20.0 usavano localStorage).
     try { localStorage.removeItem('devdock.db.queryParams'); localStorage.removeItem('devdock.db.paramNames'); } catch { /* niente da togliere */ }

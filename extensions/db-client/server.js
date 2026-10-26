@@ -357,7 +357,7 @@ module.exports = function createDbClient(ctx) {
         }
         res.setHeader('Content-Type', EXPORT_FORMATS[format].type);
         res.setHeader('Content-Disposition', `attachment; filename="${job.filename}"`);
-        res.write(format === 'sql' ? `-- Export DevDock ${new Date().toISOString()}\n${header}` : '');
+        res.write(format === 'sql' ? `-- Export Kelbo ${new Date().toISOString()}\n${header}` : '');
 
         let fields = null, count = 0, batch = [];
         const flushSql = () => {
