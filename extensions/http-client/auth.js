@@ -36,13 +36,36 @@ const earliest = (...values) => {
   return list.length ? Math.min(...list) : null;
 };
 
+// DevDock dentro WSL: il browser è quello di Windows, raggiunto dai percorsi /mnt/c/…
+const isWsl = () => {
+  if (process.platform !== 'linux') return false;
+  if (process.env.WSL_DISTRO_NAME) return true;
+  try { return /microsoft/i.test(fs.readFileSync('/proc/version', 'utf8')); } catch { return false; }
+};
+const WSL_FIREFOX = ['/mnt/c/Program Files/Mozilla Firefox/firefox.exe', '/mnt/c/Program Files (x86)/Mozilla Firefox/firefox.exe'];
+const WSL_RUNDLL = '/mnt/c/Windows/System32/rundll32.exe';
+
+// Browser che verrà usato (per il dialog): percorso impostato, oppure quello trovato da solo
+function browserInfo(browserPath) {
+  const wsl = isWsl();
+  return { path: browserPath || null, wsl, firefox: wsl ? WSL_FIREFOX.find(f => fs.existsSync(f)) || null : null };
+}
+
 // Apre l'URL nel browser: Firefox nel container indicato (componente aggiuntivo "Open external
-// links in a container", URL ext+container:) oppure il browser predefinito
-function openBrowser(url, container) {
-  if (process.env.DEVDOCK_NO_BROWSER === '1') return false;
+// links in a container", URL ext+container:) oppure il browser predefinito. browserPath: il
+// browser scelto dall'utente (es. Firefox di Windows da WSL). → { ok } oppure { ok: false, error }
+function openBrowser(url, container, browserPath) {
+  if (process.env.DEVDOCK_NO_BROWSER === '1') return Promise.resolve({ ok: false, skipped: true });
   const target = container ? `ext+container:name=${encodeURIComponent(container)}&url=${encodeURIComponent(url)}` : url;
   let cmd, args;
-  if (process.platform === 'darwin') {
+  if (browserPath) {
+    [cmd, args] = [browserPath, [target]];
+  } else if (isWsl()) {
+    const firefox = WSL_FIREFOX.find(f => fs.existsSync(f));
+    if (container && !firefox) return Promise.resolve({ ok: false, error: 'Firefox (C:\\Program Files\\Mozilla Firefox)' });
+    // con il container serve Firefox; altrimenti il browser predefinito di Windows
+    [cmd, args] = container ? [firefox, [target]] : [WSL_RUNDLL, ['url.dll,FileProtocolHandler', target]];
+  } else if (process.platform === 'darwin') {
     [cmd, args] = container ? ['open', ['-a', 'Firefox', target]] : ['open', [target]];
   } else if (process.platform === 'win32') {
     if (container) {
@@ -55,15 +78,16 @@ function openBrowser(url, container) {
   } else {
     [cmd, args] = container ? ['firefox', [target]] : ['xdg-open', [target]];
   }
-  try {
-    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
-    child.on('error', () => {});
-    child.unref();
-    return true;
-  } catch { return false; }
+  return new Promise(resolve => {
+    try {
+      const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+      child.once('error', e => resolve({ ok: false, error: `${cmd}: ${e.code || e.message}` }));
+      child.once('spawn', () => { child.unref(); resolve({ ok: true }); });
+    } catch (e) { resolve({ ok: false, error: `${cmd}: ${e.message}` }); }
+  });
 }
 
-function createAuth({ ctx, vault, pageText, varsOf }) {
+function createAuth({ ctx, vault, pageText, varsOf, browserPath = () => null }) {
   const tokens = new Map();   // "sezione\0utenza" → { token, expiresAt, refreshToken, source }
   const logins = new Map();   // "sezione\0utenza" → login OAuth in corso { authUrl, promise, cancel }
   const discovery = new Map(); // issuer → documento .well-known (in memoria)
@@ -166,6 +190,7 @@ function createAuth({ ctx, vault, pageText, varsOf }) {
       obtainedAt: entry ? new Date(entry.obtainedAt).toISOString() : null,
       refreshable: !!entry?.refreshToken,
       pendingLogin: pending ? pending.authUrl : null,
+      browserError: pending?.browserError || null,
     };
   }
 
@@ -255,7 +280,8 @@ function createAuth({ ctx, vault, pageText, varsOf }) {
 
   async function tokenRequest(auth, tokenEndpoint, params) {
     const form = new URLSearchParams({ ...params, client_id: auth.clientId });
-    if (auth.flow === 'code' && auth.clientSecret) form.set('client_secret', secret(auth.clientSecret));
+    // client "confidential" (es. Keycloak con Client authentication): il secret serve anche con PKCE
+    if (auth.flow !== 'implicit' && auth.clientSecret) form.set('client_secret', secret(auth.clientSecret));
     let res;
     try {
       res = await execute({
@@ -389,7 +415,11 @@ function createAuth({ ctx, vault, pageText, varsOf }) {
       if (logins.get(k) !== pending) { for (const s of servers) s.close(); return; } // annullato nel frattempo
       pending.authUrl = authUrl.toString();
       timer = setTimeout(() => finish(ctx.error(408, 'oauth_timeout')), LOGIN_WAIT_MS);
-      if (open) openBrowser(pending.authUrl, auth.container);
+      if (open) {
+        const r = await openBrowser(pending.authUrl, auth.container, browserPath());
+        if (!r.ok && !r.skipped) pending.browserError = r.error; // l'interfaccia mostra il link da aprire a mano
+      }
+      pending.started = true;
     })().catch(e => finish(e));
     return pending;
   }
@@ -406,7 +436,8 @@ function createAuth({ ctx, vault, pageText, varsOf }) {
       }
       const pending = startOAuth(section, user);
       // l'URL è pronto appena il listener è in ascolto (o il login fallisce subito)
-      for (let i = 0; i < 100 && !pending.authUrl && logins.get(keyOf(section, user)) === pending; i++) await new Promise(r => setTimeout(r, 20));
+      // (e dopo il tentativo di aprire il browser, per riportarne l'eventuale errore)
+      for (let i = 0; i < 150 && !pending.started && logins.get(keyOf(section, user)) === pending; i++) await new Promise(r => setTimeout(r, 20));
       if (!pending.authUrl) await pending.promise; // lancia l'errore di avvio
       return state(section, user);
     }
@@ -418,4 +449,4 @@ function createAuth({ ctx, vault, pageText, varsOf }) {
   return { headersFor, state, store, forget, forgetSection, forgetAll, login, discover, shutdown };
 }
 
-module.exports = { createAuth, jwtExpiry, atPath, AUTH_TYPES, OAUTH_FLOWS, MAX_AFTER_STEPS, openBrowser };
+module.exports = { createAuth, jwtExpiry, atPath, AUTH_TYPES, OAUTH_FLOWS, MAX_AFTER_STEPS, openBrowser, browserInfo };

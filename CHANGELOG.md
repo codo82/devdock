@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-26
+
+### Added
+- **HTTP client — browser for OAuth logins**: *Browser for logins* in the 👤 Users dialog sets the executable to open the logins with (e.g. `/mnt/c/Program Files/Mozilla Firefox/firefox.exe` from WSL), for every user type, on this computer only (not exported). DevDock in WSL is recognised: without a path it uses Windows Firefox when installed in the standard folder (needed for containers), otherwise the Windows default browser.
+- When the browser cannot be started, the Users dialog says so and shows the login link to open by hand (before, nothing happened).
+- Config sections can be marked `local: true` (data of this computer): never exported, not even by a full export (`docs/EXTENSIONS.md`).
+
+### Fixed
+- **HTTP client — client secret with PKCE**: the *Client secret* field was shown only for the "authorization code" flow; confidential clients (Keycloak with *Client authentication* on) need it with PKCE too. It is now available for both flows and sent to the token endpoint whenever it is set.
+
 ## [2.3.1] - 2026-10-24
 
 ### Fixed

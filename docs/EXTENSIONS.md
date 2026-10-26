@@ -266,6 +266,7 @@ After every change the core emits `core:projects-changed` on the bus; extensions
 | `validate(value, cfg)` | Called before every save and import; throwing rejects the write with a 400 (`cfg` is the whole config, for references between sections) |
 | `normalize(value)` | Applied to imported data (e.g. keep only known fields) |
 | `idField` | For lists: field that identifies an item in a *merge* import |
+| `local` | `true` for data that belongs to this computer (e.g. a browser path): never exported, not even by a full export |
 | `merge(current, incoming)` | Custom *merge* import (default: lists add the items with a new `idField`, objects add the new keys) |
 
 Writes are atomic (temporary file + rename).

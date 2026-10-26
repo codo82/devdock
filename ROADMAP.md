@@ -6,7 +6,7 @@ Status legend: `[ ]` to do · `[~]` in progress · `[x]` done
 
 **Rules for every milestone**
 - A milestone is closed only when `CHANGELOG.md` (`[Unreleased]` → version) and, when something changes for the user, `README.md` and `docs/EXTENSIONS.md` are updated.
-- Versioning is SemVer: a closed milestone that changes DevDock is a new minor version (M1 → 2.2.0, M2 → 2.3.0, M3 → 2.4.0, …); a major version only when the extension contract changes (it would make every extension declaring `"devdock": "^2.0"` incompatible).
+- Versioning is SemVer: a closed milestone that changes DevDock is a new minor version (M1 → 2.2.0, M2 → 2.3.0 and its follow-ups, …); a major version only when the extension contract changes (it would make every extension declaring `"devdock": "^2.0"` incompatible).
 - Work on an extension of the [devdock-extensions](https://github.com/codo82/devdock-extensions) repository is released there with its own version and tag (`<code>@<version>`); DevDock gets a new version only if the core changes too.
 
 ---
@@ -20,7 +20,7 @@ Goal: Claude Desktop and the other clients that start MCP servers as processes r
 - [x] **M1.3** 🤖 dialog: the Claude Desktop entry uses the bridge (absolute paths of Node.js and of the bridge, `env` only when the instance is not the default one) instead of `npx mcp-remote` with the token in clear
 - [x] **M1.4** Tests (SDK stdio client through the bridge: tools listed and called, token regenerated while connected, DevDock not running, token of another instance), README
 
-## M2 — Secrets behind the master password, lost clicks — core and extensions ✅ (2.3.0, 2.3.1)
+## M2 — Secrets behind the master password, lost clicks — core and extensions ✅ (2.3.0, 2.3.1, 2.4.0)
 
 Goal: no secret is typed or kept without the master password, and a click on a button always lands — or visibly works.
 
@@ -29,6 +29,7 @@ Goal: no secret is typed or kept without the master password, and a click on a b
 - [x] **M2.3** Core `ctx.ui.patch(el, html)`: containers redrawn on their own are updated only when their HTML changes, and after the click when the mouse is pressed inside them (a button replaced between mousedown and click lost the click); used by the header pills, SSH tunnels and NPM (polling every 5 s), Git (automatic refresh, which no longer shows "loading" over the log), Database (data grid, results, table designer) and MongoDB
 - [x] **M2.4** Master password dialog closed by clicking outside it or replaced by another dialog: the waiting action gives up instead of staying suspended (before, every later action needing the vault did nothing until the page was reloaded)
 - [x] **M2.5** *(2.3.1)* Feedback after a click: a request to the server started by a click puts the button on hold (spinner, no further clicks) and the cursor in "busy" until the answer, so slow actions (reading an extension's repository, the master password, connecting to a database) no longer look like lost clicks
+- [x] **M2.6** *(2.4.0)* HTTP client OAuth: browser executable for the logins (WSL recognised: Windows Firefox or the Windows default browser), error and login link when the browser cannot start; client secret available with PKCE too (confidential Keycloak clients)
 
 ## M3 — Widgets and project dashboard — core and built-in extensions
 

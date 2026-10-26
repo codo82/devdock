@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { fill, buildUrl, execute, hasHeader, SendError, MAX_RESPONSE_BYTES } = require('./send');
-const { createAuth, AUTH_TYPES, OAUTH_FLOWS, MAX_AFTER_STEPS } = require('./auth');
+const { createAuth, AUTH_TYPES, OAUTH_FLOWS, MAX_AFTER_STEPS, browserInfo } = require('./auth');
 const { discover } = require('./discover');
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -62,7 +62,10 @@ module.exports = function createHttpClient(ctx) {
     return key;
   }
 
-  const auth = createAuth({ ctx, vault, pageText, varsOf });
+  // Browser per i login OAuth: percorso scelto dall'utente su questo computer (sezione
+  // "httpBrowser", non esportata: sul computer di destinazione il percorso sarebbe un altro)
+  const browserPath = () => ctx.config.get('httpBrowser')?.path || null;
+  const auth = createAuth({ ctx, vault, pageText, varsOf, browserPath });
 
   // ---- validazione ----
 
@@ -180,7 +183,20 @@ module.exports = function createHttpClient(ctx) {
         }
       },
     },
+    httpBrowser: {
+      empty: {}, local: true,
+      normalize: v => (v && typeof v === 'object' && !Array.isArray(v) ? (v.path ? { path: v.path } : {}) : v),
+      validate(v) {
+        if (!v || typeof v !== 'object' || Array.isArray(v)) throw ctx.error.config('browser_invalid');
+        if (v.path !== undefined && !validBrowserPath(v.path)) throw ctx.error.config('browser_invalid');
+      },
+    },
   };
+
+  // Eseguibile del browser: percorso assoluto (anche C:\… su Windows), nessun argomento
+  function validBrowserPath(p) {
+    return typeof p === 'string' && p.length <= 500 && !CONTROL_RE.test(p) && (path.isAbsolute(p) || /^[A-Za-z]:\\/.test(p));
+  }
 
   // Cambio della master password: i segreti delle utenze vengono ri-cifrati (salvati insieme al
   // nuovo vault); reset: cancellati
@@ -275,7 +291,7 @@ module.exports = function createHttpClient(ctx) {
         ...Object.fromEntries(['issuer', 'authorizationEndpoint', 'tokenEndpoint', 'container']
           .map(k => [k, String(a[k] ?? '').trim()]).filter(([, v]) => v)),
       };
-      next.clientSecret = next.flow === 'code' ? secretField(a.clientSecret, prev.clientSecret) : null;
+      next.clientSecret = next.flow !== 'implicit' ? secretField(a.clientSecret, prev.clientSecret) : null;
     } else next = { type };
     for (const k of ['password', 'clientSecret']) if (next[k] === null) delete next[k];
     const u = { id: existing.id, label: String(body.label ?? existing.label ?? '').trim(), auth: next };
@@ -329,6 +345,21 @@ module.exports = function createHttpClient(ctx) {
     config,
 
     handlers: {
+      browser(req, res) { res.json(browserInfo(browserPath())); },
+
+      // { path } (vuoto: browser predefinito); il file deve esistere su questo computer
+      setBrowser(req, res) {
+        const p = typeof req.body?.path === 'string' ? req.body.path.trim() : '';
+        if (p) {
+          if (!validBrowserPath(p)) throw ctx.error(400, 'browser_invalid');
+          let st = null;
+          try { st = fs.statSync(p); } catch { /* inesistente */ }
+          if (!st?.isFile()) throw ctx.error(400, 'browser_not_found', { path: p });
+        }
+        ctx.config.set('httpBrowser', p ? { path: p } : {});
+        res.json(browserInfo(browserPath()));
+      },
+
       info(req, res) {
         res.json({ vault: vault.state(), methods: METHODS, maxResponseBytes: MAX_RESPONSE_BYTES, maxAfterSteps: MAX_AFTER_STEPS });
       },

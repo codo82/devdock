@@ -15,7 +15,8 @@
   "position": "tab",
   "order": 38,
   "config": [
-    "httpSections"
+    "httpSections",
+    "httpBrowser"
   ],
   "export": [
     {
@@ -41,6 +42,16 @@
         "method": "GET",
         "path": "/info",
         "handler": "info"
+      },
+      {
+        "method": "GET",
+        "path": "/browser",
+        "handler": "browser"
+      },
+      {
+        "method": "PUT",
+        "path": "/browser",
+        "handler": "setBrowser"
       },
       {
         "method": "GET",

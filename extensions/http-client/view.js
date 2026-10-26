@@ -369,11 +369,16 @@ export default {
       if (!(await ctx.vault.ensure())) return;
       usersSection = sectionId;
       try { authStates = (await ctx.api.get(`/sections/${encodeURIComponent(sectionId)}/auth`)).users; } catch (e) { toast(e.message, 'error'); authStates = []; }
+      let browser = null;
+      try { browser = await ctx.api.get('/browser'); } catch { /* riga del browser non mostrata */ }
       const s = section(sectionId);
       const tokenState = u => {
         const st = authStates.find(x => x.id === u.id);
         if (u.auth.type === 'none') return `<span class="hc-muted">${esc(t('users.noAuth'))}</span>`;
         if (u.auth.type === 'basic') return `<span class="hc-muted">${esc(t(u.auth.hasPassword ? 'users.basicReady' : 'users.basicNoPassword'))}</span>`;
+        // login nel browser in corso: link per aprirlo a mano (sempre, e con l'errore se il browser non è partito)
+        if (st?.pendingLogin) return `<span class="hc-warn">${esc(t(st.browserError ? 'users.browserFailed' : 'users.loginPending', { error: st.browserError || '' }))}</span>
+          <a href="${esc(st.pendingLogin)}" target="_blank" rel="noopener noreferrer">${esc(t('users.openLink'))}</a>`;
         if (!st?.hasToken) return `<span class="hc-muted">${esc(t('users.noToken'))}</span>`;
         if (st.expired) return `<span class="hc-warn">${esc(t('users.expired'))}</span>`;
         return `<span class="hc-ok">${esc(st.expiresAt ? t('users.validUntil', { date: fmt.date(st.expiresAt, { dateStyle: 'short', timeStyle: 'short' }) }) : t('users.valid'))}</span>
@@ -390,7 +395,10 @@ export default {
             ${authStates.find(x => x.id === u.id)?.hasToken ? `<button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].forgetToken(${js(u.id)})">${esc(t('users.forget'))}</button>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].editUser(${js(u.id)})">✎</button>
             <button class="btn btn-ghost btn-sm hc-danger" onclick="Ext['http-client'].deleteUser(${js(u.id)})">🗑</button>
-          </td></tr>`).join('')}</tbody></table>` : `<p class="hc-muted">${esc(t('users.none'))}</p>`}`,
+          </td></tr>`).join('')}</tbody></table>` : `<p class="hc-muted">${esc(t('users.none'))}</p>`}
+        ${browser ? `<div class="hc-browser"><span class="hc-muted">${esc(t('browser.label'))}</span>
+          <code>${esc(browser.path || (browser.wsl ? (browser.firefox ? t('browser.wslFirefox', { path: browser.firefox }) : t('browser.wslDefault')) : t('browser.default')))}</code>
+          <button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].browserDialog(${js(sectionId)})">${esc(t('browser.change'))}</button></div>` : ''}`,
         `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>
          <button class="btn btn-primary" onclick="Ext['http-client'].editUser('')">＋ ${esc(t('users.add'))}</button>`);
       byId('modal').classList.add('modal-wide');
@@ -445,7 +453,7 @@ export default {
           + `<div class="hc-grid2">${field(t('userDlg.authEndpoint'), input('f_u_authep', a.authorizationEndpoint))}${field(t('userDlg.tokenEndpoint'), input('f_u_tokenep', a.tokenEndpoint))}</div>`
           + `<div class="hc-grid2">${field(t('userDlg.clientId'), input('f_u_client', a.clientId))}${field(t('userDlg.scope'), input('f_u_scope', a.scope ?? 'openid'))}</div>`
           + field(t('userDlg.flow'), `<select class="form-input" id="f_u_flow" onchange="Ext['http-client'].userTypeChanged()">${['pkce', 'code', 'implicit'].map(f => `<option value="${f}" ${f === (a.flow || 'pkce') ? 'selected' : ''}>${esc(t(`userDlg.flows.${f}`))}</option>`).join('')}</select>`)
-          + (a.flow === 'code' ? field(t('userDlg.clientSecret'), secretInput('f_u_secret', a.hasClientSecret)) : '')
+          + ((a.flow || 'pkce') !== 'implicit' ? field(t('userDlg.clientSecret'), secretInput('f_u_secret', a.hasClientSecret), t('userDlg.clientSecretHint')) : '')
           + `<div class="hc-grid2">${field(t('userDlg.redirectUri'), input('f_u_redirect', a.redirectUri || 'http://localhost:8765/callback'), t('userDlg.redirectHint'))}
              ${field(t('userDlg.container'), input('f_u_container', a.container, `placeholder="${esc(t('userDlg.containerPlaceholder'))}"`), t('userDlg.containerHint'))}</div>`;
       }
@@ -544,11 +552,34 @@ export default {
       try {
         const st = await withVault(() => ctx.api.post(`${base}/login`, {}));
         if (st.pendingLogin) {
-          toast(t('users.loginOpened'), 'info');
+          if (st.browserError) toast(t('users.browserFailed', { error: st.browserError }), 'error');
+          else toast(t('users.loginOpened'), 'info');
           waitLogin(usersSection, uid, st.pendingLogin);
         } else toast(t('users.loggedIn'), 'success');
         usersDialog(usersSection);
       } catch (e) { if (!e.handled) toast(e.message, 'error'); }
+    }
+
+    // Browser per i login OAuth (su questo computer): percorso dell'eseguibile, vuoto = predefinito
+    async function browserDialog(sectionId) {
+      let b;
+      try { b = await ctx.api.get('/browser'); } catch (e) { return toast(e.message, 'error'); }
+      openModal(t('browser.title'), `
+        <p class="hc-muted">${esc(t(b.wsl ? 'browser.hintWsl' : 'browser.hint'))}</p>
+        <div class="form-row"><label>${esc(t('browser.path'))}</label>
+          <input class="form-input hc-code" id="f_hc_browser" value="${esc(b.path || '')}" spellcheck="false"
+            placeholder="${esc(b.wsl ? '/mnt/c/Program Files/Mozilla Firefox/firefox.exe' : t('browser.default'))}"></div>
+        ${b.wsl ? `<p class="hc-muted">${esc(b.firefox ? t('browser.wslFound', { path: b.firefox }) : t('browser.wslNotFound'))}</p>` : ''}`,
+      `<button class="btn btn-ghost" onclick="Ext['http-client'].users(${js(sectionId)})">${esc(t('core.action.cancel'))}</button>
+       <button class="btn btn-primary" onclick="Ext['http-client'].saveBrowser(${js(sectionId)})">${esc(t('core.action.save'))}</button>`);
+      byId('f_hc_browser').focus();
+    }
+    async function saveBrowser(sectionId) {
+      try {
+        await ctx.api.put('/browser', { path: byId('f_hc_browser').value });
+        toast(t('browser.saved'), 'success');
+        usersDialog(sectionId);
+      } catch (e) { toast(e.message, 'error'); }
     }
 
     // Login OAuth avviato dal dialog: si aggiorna lo stato quando il token arriva
@@ -713,6 +744,7 @@ export default {
     }
 
     ctx.expose({
+      browserDialog, saveBrowser,
       toggle(id) {
         const closed = collapsed();
         if (closed.has(id)) closed.delete(id); else closed.add(id);

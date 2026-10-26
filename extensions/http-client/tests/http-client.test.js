@@ -24,6 +24,7 @@ const jwt = (payload) => {
 
 // ---- server di prova: eco, lentezza, login, risorsa protetta, provider OAuth ----
 
+let lastTokenForm = null; // ultima richiesta all'endpoint del token (finto)
 let api, apiUrl, logins = 0, codes = new Map(), refreshCalls = 0;
 function startApi() {
   api = http.createServer(async (req, res) => {
@@ -71,6 +72,7 @@ function startApi() {
           return p.get('refresh_token') === 'refresh-1' ? json(200, { access_token: 'refreshed-token', expires_in: 600 }) : json(400, { error: 'invalid_grant' });
         }
         const c = codes.get(p.get('code'));
+        lastTokenForm = p;
         if (!c) return json(400, { error: 'invalid_grant' });
         if (c.challenge) {
           const expected = crypto.createHash('sha256').update(p.get('code_verifier') || '').digest('base64url');
@@ -411,6 +413,16 @@ test('OAuth: PKCE con login nel browser che sblocca la richiesta in attesa, refr
   await browse(r.json.pendingLogin);
   assert.equal((await state(oid)).hasToken, true);
   assert.doesNotMatch(fs.readFileSync(srv.configPath, 'utf8'), /secret-xyz|refresh-1|implicit-token/);
+
+  // PKCE con client secret (client "confidential" di Keycloak): inviati entrambi
+  r = await call('PUT', userBase(oid), { label: 'Secret', auth: { type: 'oauth', authorizationEndpoint: `${apiUrl}/realm/auth`, tokenEndpoint: `${apiUrl}/realm/token`, clientId: 'devdock', flow: 'pkce', redirectUri: `http://127.0.0.1:${redirectPort}/cb` } });
+  assert.equal(r.json.auth.hasClientSecret, true); // il secret salvato resta
+  await call('DELETE', `${userBase(oid)}/token`);
+  r = await call('POST', `${userBase(oid)}/login`, {});
+  await browse(r.json.pendingLogin);
+  assert.equal((await state(oid)).hasToken, true);
+  assert.equal(lastTokenForm.get('client_secret'), 'secret-xyz');
+  assert.ok(lastTokenForm.get('code_verifier'));
 
   // porta del redirect occupata
   const busy = net.createServer().listen(redirectPort, '127.0.0.1');
