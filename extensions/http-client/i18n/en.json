@@ -301,5 +301,8 @@
   "npmOutput.panel": "npm run {script}",
   "npmOutput.exit": "[process ended, exit {code}]",
   "npmOutput.removed": "[process removed]",
-  "npmOutput.lost": "[connection lost]"
+  "npmOutput.lost": "[connection lost]",
+  "editor.forgetToken": "Forget token",
+  "editor.forgetTokenTitle": "Forget the in-memory token of the chosen user type: the next send obtains a new one",
+  "editor.tokenForgotten": "Token of {name} forgotten"
 }

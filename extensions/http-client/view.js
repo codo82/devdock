@@ -155,6 +155,30 @@ export default {
       renderTabs();
       renderResponse();
       refreshNpmOutput();
+      refreshTokenButton();
+    }
+
+    // "Dimentica il token" accanto all'utenza scelta, solo se ne ha uno in memoria
+    async function refreshTokenButton() {
+      const btn = $(ctx.root, 'forget-token');
+      const s = activeSection();
+      const uid = draft?.userType;
+      if (!s || !uid) { btn.hidden = true; return; }
+      let users = [];
+      try { users = (await ctx.api.get(`/sections/${encodeURIComponent(s.id)}/auth`)).users; } catch { users = []; }
+      if (activeSection() !== s || draft?.userType !== uid) return; // nel frattempo è cambiata
+      btn.hidden = !users.find(u => u.id === uid)?.hasToken;
+    }
+
+    async function forgetActiveToken() {
+      const s = activeSection();
+      const u = s?.userTypes.find(x => x.id === draft?.userType);
+      if (!u) return;
+      try {
+        await ctx.api.del(`/sections/${encodeURIComponent(s.id)}/users/${encodeURIComponent(u.id)}/token`);
+        toast(t('editor.tokenForgotten', { name: u.label }), 'success');
+      } catch (e) { toast(e.message, 'error'); }
+      refreshTokenButton();
     }
 
     // ---- output dei processi npm del progetto collegato (se c'è l'estensione npm) ----
@@ -388,6 +412,7 @@ export default {
         pendingLogin = null;
         $(ctx.root, 'send-btn').disabled = false;
         renderResponse();
+        refreshTokenButton(); // l'invio può aver ottenuto un token
       }
     }
 
@@ -513,6 +538,7 @@ export default {
       if (!(await ctx.vault.ensure())) return;
       usersSection = sectionId;
       try { authStates = (await ctx.api.get(`/sections/${encodeURIComponent(sectionId)}/auth`)).users; } catch (e) { toast(e.message, 'error'); authStates = []; }
+      refreshTokenButton(); // login, token incollato o dimenticato dal dialogo
       let browser = null;
       try { browser = await ctx.api.get('/browser'); } catch { /* riga del browser non mostrata */ }
       const s = section(sectionId);
@@ -841,6 +867,7 @@ export default {
       if (a === 'send') send();
       else if (a === 'save') saveRequest();
       else if (a === 'users') usersDialog(active.section);
+      else if (a === 'forget-token') forgetActiveToken();
       else if (a === 'add-pair') { (draft[el.dataset.list] ||= []).push({ name: '', value: '' }); markDirty(); renderTabs(); ctx.root.querySelector(`[data-list="${el.dataset.list}"][data-index="${draft[el.dataset.list].length - 1}"][data-field="name"]`)?.focus(); }
       else if (a === 'remove-pair') { draft[el.dataset.list].splice(Number(el.dataset.index), 1); markDirty(); renderTabs(); }
       else if (a === 'format-json') {
@@ -879,7 +906,7 @@ export default {
         if (proc) followNpm(proc); else unfollowNpm();
         return;
       }
-      if (role === 'user') { draft.userType = e.target.value || null; if (!draft.userType) delete draft.userType; markDirty(); }
+      if (role === 'user') { draft.userType = e.target.value || null; if (!draft.userType) delete draft.userType; markDirty(); refreshTokenButton(); }
     });
 
     // la lista dei processi si aggiorna quando si apre il menu (uno script avviato dopo)

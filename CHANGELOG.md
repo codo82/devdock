@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-10-26
+
+### Added
+- **HTTP client — Forget token** next to the user type in the request editor: shown when the chosen user type has a token in memory, it forgets it so the next send obtains a new one (before, only from the 👤 Users dialog).
+
 ## [2.6.0] - 2026-10-26
 
 ### Added
