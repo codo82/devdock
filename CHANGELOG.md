@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-26
+
+### Added
+- **HTTP client — files**: two new body types, *File* (a file sent as it is, Content-Type from its extension unless set in the headers) and *Multipart form* (text and file fields, `multipart/form-data` with its boundary). Files are given by path, absolute or relative to the folder of the project linked to the section (variables allowed), and read when sending (max 50 MB); saved requests keep the path, never the content.
+- **HTTP client — binary answers**: saved at once to the browser's Downloads, named after `Content-Disposition` (`filename` or `filename*`) or, without it, after the Content-Type (`application/pdf` → `response.pdf`), with *Download again*; up to 50 MB (text answers are shown up to 5 MB as before).
+
 ## [2.4.1] - 2026-10-26
 
 ### Changed

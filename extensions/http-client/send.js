@@ -2,8 +2,10 @@
 // timeout, limite sulla dimensione della risposta, nessun redirect seguito.
 const http = require('http');
 const https = require('https');
+const { fileNameOf } = require('./mime');
 
-const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;   // testo mostrato
+const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;  // risposta binaria salvata come file
 const DEFAULT_TIMEOUT_MS = 30000;
 const VAR_RE = /\{\{\s*([A-Za-z_][\w.-]{0,63})\s*\}\}/g;
 const TEXT_TYPE_RE = /^(text\/|application\/([\w.+-]*\+)?(json|xml|javascript|x-www-form-urlencoded|graphql|yaml|x-ndjson))|^$/i;
@@ -37,12 +39,14 @@ function buildUrl(url, query, vars) {
 
 const hasHeader = (headers, name) => Object.keys(headers).some(h => h.toLowerCase() === name.toLowerCase());
 
-// Esegue la richiesta. req: { method, url (URL), headers: { nome: valore }, body: string|null }
-// → { status, statusText, headers, ms, size, body, truncated, binary, json }
-function execute(req, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_RESPONSE_BYTES } = {}) {
+// Esegue la richiesta. req: { method, url (URL), headers: { nome: valore }, body: string|Buffer|null }
+// → { status, statusText, headers, ms, size, body, truncated, binary, json } e, per le risposte
+// binarie entro maxBinaryBytes, { base64, fileName } (il contenuto da salvare come file)
+function execute(req, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_RESPONSE_BYTES, maxBinaryBytes = 0 } = {}) {
   const lib = req.url.protocol === 'https:' ? https : http;
   const headers = { ...req.headers };
-  const body = req.body == null ? null : Buffer.from(req.body, 'utf8');
+  const body = req.body == null ? null : Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body, 'utf8');
+  const keep = Math.max(maxBytes, maxBinaryBytes);
   if (body && !hasHeader(headers, 'content-length')) headers['Content-Length'] = String(body.length);
   const started = process.hrtime.bigint();
   return new Promise((resolve, reject) => {
@@ -58,28 +62,31 @@ function execute(req, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_RESPONSE_
       let size = 0, kept = 0, truncated = false;
       res.on('data', chunk => {
         size += chunk.length;
-        if (kept < maxBytes) {
-          const part = chunk.subarray(0, maxBytes - kept);
+        if (kept < keep) {
+          const part = chunk.subarray(0, keep - kept);
           chunks.push(part);
           kept += part.length;
           if (part.length < chunk.length) truncated = true;
         } else truncated = true;
-        if (size > maxBytes * 4) { truncated = true; res.destroy(); finish(); } // risposta enorme: non serve leggerla tutta
+        if (size > keep * 4) { truncated = true; res.destroy(); finish(); } // risposta enorme: non serve leggerla tutta
       });
       res.on('end', finish);
       res.on('error', e => done(new SendError('network', { error: e.message }, 502)));
       function finish() {
-        const buf = Buffer.concat(chunks);
+        let buf = Buffer.concat(chunks);
         const type = String(res.headers['content-type'] || '').split(';')[0].trim();
         const binary = !TEXT_TYPE_RE.test(type) || (type === '' && buf.includes(0));
+        if (!binary && buf.length > maxBytes) { buf = buf.subarray(0, maxBytes); truncated = true; }
         const text = binary ? null : buf.toString('utf8');
+        const rawHeaders = res.rawHeaders.reduce((list, v, i, a) => (i % 2 ? list : [...list, [a[i], a[i + 1]]]), []);
+        const file = binary && maxBinaryBytes && !truncated && buf.length ? { base64: buf.toString('base64'), fileName: fileNameOf(rawHeaders) } : {};
         let json = false;
         if (text != null && /json/i.test(type)) { try { JSON.parse(text); json = true; } catch { /* JSON non valido o troncato */ } }
         done(null, {
           status: res.statusCode, statusText: res.statusMessage || '',
-          headers: res.rawHeaders.reduce((list, v, i, a) => (i % 2 ? list : [...list, [a[i], a[i + 1]]]), []),
+          headers: rawHeaders,
           ms: Number(process.hrtime.bigint() - started) / 1e6,
-          size, truncated, binary, json, body: text,
+          size, truncated, binary, json, body: text, ...file,
         });
       }
     });
@@ -90,4 +97,4 @@ function execute(req, { timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_RESPONSE_
   });
 }
 
-module.exports = { fill, jsonInner, buildUrl, execute, hasHeader, SendError, VAR_RE, MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT_MS };
+module.exports = { fill, jsonInner, buildUrl, execute, hasHeader, SendError, VAR_RE, MAX_RESPONSE_BYTES, MAX_DOWNLOAD_BYTES, DEFAULT_TIMEOUT_MS };

@@ -4,12 +4,15 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { fill, buildUrl, execute, hasHeader, SendError, MAX_RESPONSE_BYTES } = require('./send');
+const { fill, buildUrl, execute, hasHeader, SendError, MAX_RESPONSE_BYTES, MAX_DOWNLOAD_BYTES } = require('./send');
+const { typeOfFile } = require('./mime');
 const { createAuth, AUTH_TYPES, OAUTH_FLOWS, MAX_AFTER_STEPS, browserInfo } = require('./auth');
 const { discover } = require('./discover');
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-const BODY_TYPES = ['none', 'json', 'text'];
+const BODY_TYPES = ['none', 'json', 'text', 'file', 'form'];
+const STEP_BODY_TYPES = ['none', 'json', 'text']; // azioni dopo il token
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const LOGIN_CONTENT_TYPES = ['json', 'form', 'text'];
 const VAR_NAME_RE = /^[A-Za-z_][\w.-]{0,63}$/;
 const RESERVED_VARS = new Set(['baseUrl', 'username', 'password', 'token']);
@@ -89,6 +92,9 @@ module.exports = function createHttpClient(ctx) {
     validatePairs(r.headers, 'request_headers', r.id);
     if (!BODY_TYPES.includes(r.bodyType ?? 'none')) throw bad('body_type');
     if (!isStr(r.body ?? '', LIMITS.body)) throw bad('body');
+    if (r.file != null && !(isStr(r.file, 1000) && !CONTROL_RE.test(r.file))) throw bad('file');
+    if (r.form != null && !(Array.isArray(r.form) && r.form.length <= LIMITS.pairs && r.form.every(f => f && isStr(f.name, 200)
+      && isStr(f.value, LIMITS.value) && !CONTROL_RE.test(f.name) && ['text', 'file'].includes(f.type ?? 'text')))) throw bad('form');
     if (r.userType != null && !users.some(u => u.id === r.userType)) throw bad('user_type');
   }
 
@@ -126,7 +132,7 @@ module.exports = function createHttpClient(ctx) {
     if (!Array.isArray(steps) || steps.length > MAX_AFTER_STEPS) throw bad('after_token');
     for (const st of steps) {
       if (!st || !METHODS.includes(st.method) || !isStr(st.url, LIMITS.url) || !st.url
-          || !BODY_TYPES.includes(st.bodyType ?? 'none') || !isStr(st.body ?? '', LIMITS.body)) throw bad('after_token');
+          || !STEP_BODY_TYPES.includes(st.bodyType ?? 'none') || !isStr(st.body ?? '', LIMITS.body)) throw bad('after_token');
       validatePairs(st.headers, 'user_after_token', u.id);
       if (!Array.isArray(st.extract ?? []) || (st.extract || []).length > 20
           || (st.extract || []).some(x => !x || !VAR_NAME_RE.test(x.name || '') || ['baseUrl', 'username', 'password'].includes(x.name) || !EXTRACT_FROM_RE.test(x.from || ''))) throw bad('after_token');
@@ -257,8 +263,15 @@ module.exports = function createHttpClient(ctx) {
       bodyType: body.bodyType ?? existing.bodyType ?? 'none',
       body: String(body.body ?? existing.body ?? ''),
       userType: body.userType !== undefined ? body.userType || null : existing.userType ?? null,
+      // corpo "file": percorso del file; "form": campi multipart di testo o file (percorsi)
+      file: String(body.file ?? existing.file ?? '').trim(),
+      form: (Array.isArray(body.form) ? body.form : existing.form || []).filter(f => f && (f.name || f.value)).map(f => ({
+        name: String(f.name ?? ''), value: String(f.value ?? ''), ...(f.type === 'file' ? { type: 'file' } : {}), ...(f.enabled === false ? { enabled: false } : {}),
+      })),
     };
     if (!r.userType) delete r.userType;
+    if (!r.file) delete r.file;
+    if (!r.form.length) delete r.form;
     return r;
   }
 
@@ -313,6 +326,23 @@ module.exports = function createHttpClient(ctx) {
 
   const sendError = e => (e instanceof SendError ? ctx.error(e.status, e.key, e.params) : e);
 
+  // File da inviare: percorso assoluto, o relativo alla cartella del progetto collegato
+  function readUpload(section, p) {
+    const raw = String(p || '').trim();
+    if (!raw) throw new SendError('upload_missing', { path: '' }, 400);
+    let full = raw;
+    if (!path.isAbsolute(raw)) {
+      const project = section.projectId ? ctx.projects.get(section.projectId) : null;
+      if (!project) throw new SendError('upload_relative', { path: raw }, 400);
+      full = path.resolve(project.path, raw);
+    }
+    let st = null;
+    try { st = fs.statSync(full); } catch { /* inesistente */ }
+    if (!st?.isFile()) throw new SendError('upload_missing', { path: full }, 400);
+    if (st.size > MAX_UPLOAD_BYTES) throw new SendError('upload_too_large', { path: full, max: Math.round(MAX_UPLOAD_BYTES / 1048576) }, 413);
+    return { name: path.basename(full), data: fs.readFileSync(full) };
+  }
+
   // ---- invio ----
 
   async function sendRequest(section, r, { timeoutMs }) {
@@ -335,8 +365,31 @@ module.exports = function createHttpClient(ctx) {
       if (r.bodyType === 'json' || r.bodyType === 'text') {
         body = fill(r.body, vars);
         if (!hasHeader(headers, 'content-type')) headers['Content-Type'] = r.bodyType === 'json' ? 'application/json' : 'text/plain; charset=utf-8';
+      } else if (r.bodyType === 'file') {
+        const file = readUpload(section, fill(r.file || '', vars));
+        body = file.data;
+        if (!hasHeader(headers, 'content-type')) headers['Content-Type'] = typeOfFile(file.name);
+      } else if (r.bodyType === 'form') {
+        const boundary = `----DevDockForm${crypto.randomBytes(12).toString('hex')}`;
+        const q = v => String(v).replace(/"/g, '%22').replace(/[\r\n]/g, ' ');
+        const parts = [];
+        for (const f of r.form || []) {
+          if (f.enabled === false || !f.name) continue;
+          const name = fill(f.name, vars);
+          if (f.type === 'file') {
+            const file = readUpload(section, fill(f.value, vars));
+            parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${q(name)}"; filename="${q(file.name)}"\r\nContent-Type: ${typeOfFile(file.name)}\r\n\r\n`), file.data, Buffer.from('\r\n'));
+          } else {
+            parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${q(name)}"\r\n\r\n${fill(f.value, vars)}\r\n`));
+          }
+        }
+        parts.push(Buffer.from(`--${boundary}--\r\n`));
+        body = Buffer.concat(parts);
+        // il boundary deve essere quello del corpo: un Content-Type scritto a mano viene sostituito
+        for (const k of Object.keys(headers)) if (k.toLowerCase() === 'content-type') delete headers[k];
+        headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
       }
-      const res = await execute({ method: r.method, url, headers, body }, { timeoutMs });
+      const res = await execute({ method: r.method, url, headers, body }, { timeoutMs, maxBinaryBytes: MAX_DOWNLOAD_BYTES });
       return { url: url.toString(), user: user ? user.id : null, ...res };
     } catch (e) { throw sendError(e); }
   }

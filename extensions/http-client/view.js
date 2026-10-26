@@ -174,14 +174,34 @@ export default {
       const pane = $(ctx.root, 'req-pane');
       if (tab === 'body') {
         pane.innerHTML = `<div class="hc-body-types">
-            ${['none', 'json', 'text'].map(bt => `<label class="hc-radio"><input type="radio" name="hc_body_type" value="${bt}" ${draft.bodyType === bt ? 'checked' : ''}> ${esc(t(`body.${bt}`))}</label>`).join('')}
+            ${['none', 'json', 'text', 'file', 'form'].map(bt => `<label class="hc-radio"><input type="radio" name="hc_body_type" value="${bt}" ${draft.bodyType === bt ? 'checked' : ''}> ${esc(t(`body.${bt}`))}</label>`).join('')}
             ${draft.bodyType === 'json' ? `<button class="btn btn-ghost btn-sm" data-action="format-json">${esc(t('body.format'))}</button>` : ''}
           </div>
           ${draft.bodyType === 'none' ? `<p class="hc-muted">${esc(t('body.noneHint'))}</p>`
+            : draft.bodyType === 'file' ? `<input class="form-input hc-code" data-role="file" value="${esc(draft.file || '')}" spellcheck="false" placeholder="${esc(t('body.filePlaceholder'))}">
+                <p class="hc-muted">${esc(t('body.fileHint'))}</p>`
+            : draft.bodyType === 'form' ? formTable(draft.form || [])
             : `<textarea class="form-input hc-code" data-role="body" spellcheck="false" rows="10">${esc(draft.body)}</textarea>`}`;
       } else {
         pane.innerHTML = pairsTable(tab, draft[tab] || []);
       }
+    }
+
+    // Campi del form multipart: testo o file (percorso, come per il corpo "file")
+    function formTable(items) {
+      return `<table class="hc-pairs"><tbody>
+        ${items.map((p, i) => `<tr>
+          <td class="hc-pair-check"><input type="checkbox" data-list="form" data-index="${i}" data-field="enabled" ${p.enabled === false ? '' : 'checked'} title="${esc(t('pairs.enabled'))}"></td>
+          <td><input class="form-input" data-list="form" data-index="${i}" data-field="name" value="${esc(p.name)}" placeholder="${esc(t('pairs.name'))}" spellcheck="false"></td>
+          <td class="hc-form-type"><select class="form-input" data-list="form" data-index="${i}" data-field="type">
+            <option value="text" ${p.type !== 'file' ? 'selected' : ''}>${esc(t('body.formText'))}</option>
+            <option value="file" ${p.type === 'file' ? 'selected' : ''}>${esc(t('body.formFile'))}</option></select></td>
+          <td><input class="form-input ${p.type === 'file' ? 'hc-code' : ''}" data-list="form" data-index="${i}" data-field="value" value="${esc(p.value)}" placeholder="${esc(t(p.type === 'file' ? 'body.filePlaceholder' : 'pairs.value'))}" spellcheck="false"></td>
+          <td class="hc-pair-check"><button class="sb-item-act hc-visible" data-action="remove-pair" data-list="form" data-index="${i}" title="${esc(t('core.action.delete'))}">✕</button></td>
+        </tr>`).join('')}
+      </tbody></table>
+      <button class="btn btn-ghost btn-sm" data-action="add-pair" data-list="form">＋ ${esc(t('body.formAdd'))}</button>
+      <p class="hc-muted">${esc(t('body.formHint'))}</p>`;
     }
 
     // Tabella nome/valore modificabile (query e header dell'editor)
@@ -204,6 +224,20 @@ export default {
       return 'hc-st-2';
     }
 
+    // Risposta binaria → file nei Download del browser, con il nome dato dal server
+    // (Content-Disposition, altrimenti dal Content-Type)
+    function downloadResponse() {
+      const r = response;
+      if (!r?.base64) return;
+      const bytes = Uint8Array.from(atob(r.base64), c => c.charCodeAt(0));
+      const type = r.headers.find(([k]) => k.toLowerCase() === 'content-type')?.[1] || 'application/octet-stream';
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([bytes], { type })), download: r.fileName });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }
+
     function renderResponse() {
       const el = $(ctx.root, 'response');
       if (sending) {
@@ -215,7 +249,10 @@ export default {
       if (response.error) { el.innerHTML = `<div class="hc-resp-error">${esc(response.error)}</div>`; return; }
       const r = response;
       let body;
-      if (r.binary) body = `<p class="hc-muted hc-pad">${esc(t('response.binary', { size: fmt.bytes(r.size) }))}</p>`;
+      if (r.binary) body = r.base64
+        ? `<p class="hc-pad">${esc(t('response.downloaded', { name: r.fileName, size: fmt.bytes(r.size) }))}
+            <button class="btn btn-ghost btn-sm" data-action="download-body">${esc(t('response.downloadAgain'))}</button></p>`
+        : `<p class="hc-muted hc-pad">${esc(t(r.truncated ? 'response.binaryTooLarge' : 'response.binary', { size: fmt.bytes(r.size) }))}</p>`;
       else if (!r.body) body = `<p class="hc-muted hc-pad">${esc(t('response.empty'))}</p>`;
       else {
         let text = r.body;
@@ -275,6 +312,7 @@ export default {
       try {
         response = await withVault(() => ctx.api.post('/send', { section: s.id, request: draft }));
         respTab = 'body';
+        if (response.base64) downloadResponse(); // contenuto binario: salvato subito nei Download
       } catch (e) {
         response = { error: e.message };
         if (e.code === 'http-client.token_missing' || e.code === 'http-client.token_expired') pasteToken(s.id, user.id);
@@ -292,6 +330,8 @@ export default {
       draft.url = $(ctx.root, 'url').value;
       const body = $(ctx.root, 'body');
       if (body) draft.body = body.value;
+      const file = $(ctx.root, 'file');
+      if (file) draft.file = file.value.trim();
     }
 
     async function saveRequest() {
@@ -740,6 +780,8 @@ export default {
       else if (a === 'format-json') {
         const ta = $(ctx.root, 'body');
         try { ta.value = JSON.stringify(JSON.parse(ta.value), null, 2); draft.body = ta.value; markDirty(); } catch (err) { toast(t('body.invalidJson', { error: err.message }), 'error'); }
+      } else if (a === 'download-body') {
+        downloadResponse();
       } else if (a === 'copy-body') {
         navigator.clipboard?.writeText(response?.body || '').then(() => toast(t('response.copied'), 'success'), () => {});
       }
@@ -752,11 +794,12 @@ export default {
         const item = draft[el.dataset.list][Number(el.dataset.index)];
         if (el.dataset.field === 'enabled') { if (el.checked) delete item.enabled; else item.enabled = false; } else item[el.dataset.field] = el.value;
         markDirty();
+        if (el.dataset.field === 'type') { renderTabs(); return; } // testo ↔ file: cambia il segnaposto
         if (el.dataset.field !== 'value') renderTabsCounts();
         return;
       }
       if (el.name === 'hc_body_type') { readEditor(); draft.bodyType = el.value; markDirty(); renderTabs(); return; }
-      if (['label', 'url', 'body'].includes(el.dataset.role)) markDirty();
+      if (['label', 'url', 'body', 'file'].includes(el.dataset.role)) markDirty();
     });
 
     ctx.root.addEventListener('change', e => {
