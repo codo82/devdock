@@ -18,6 +18,7 @@
   "core.language.choose": "Language",
   "core.output.title": "Output",
   "core.output.clear": "Clear",
+  "core.output.resize": "Drag to resize the output panel (double click: initial height; with the keyboard ↑ ↓)",
   "core.notifications.enable": "Enable desktop notifications",
   "core.notifications.activeTitle": "Notifications on — click to turn off",
   "core.notifications.on": "Notifications on",

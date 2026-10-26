@@ -31,6 +31,7 @@
 .hc-method{width:auto;min-width:96px;font-family:var(--font);font-weight:600}
 .hc-url{flex:1;font-family:var(--font)}
 .hc-user{width:auto;max-width:220px}
+.hc-npm-output{width:auto;max-width:200px;padding-block:2px;font-size:12px}
 .hc-vars{padding:0 16px 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .hc-var{font-family:var(--font);font-size:11px;padding:1px 6px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--muted)}
 .hc-tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--border);align-items:center}

@@ -18,6 +18,7 @@
   "core.language.choose": "Lingua",
   "core.output.title": "Output",
   "core.output.clear": "Pulisci",
+  "core.output.resize": "Trascina per ridimensionare il pannello di output (doppio clic: altezza iniziale; con la tastiera ↑ ↓)",
   "core.notifications.enable": "Attiva notifiche desktop",
   "core.notifications.activeTitle": "Notifiche attive — clicca per disattivare",
   "core.notifications.on": "Notifiche attivate",

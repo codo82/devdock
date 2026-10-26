@@ -4,6 +4,7 @@
 
 const METHOD_COLORS = { GET: '#3fb950', POST: '#d29922', PUT: '#58a6ff', PATCH: '#a371f7', DELETE: '#f85149', HEAD: '#8b949e', OPTIONS: '#8b949e' };
 const COLLAPSED_KEY = 'devdock.httpSections.collapsed';
+const NPM_OUTPUT_KEY = 'devdock.httpSections.npmOutput'; // { <sezione>: script seguito, '' = nessuno }
 const AUTH_TYPES = ['none', 'basic', 'manual', 'login', 'oauth'];
 
 export default {
@@ -153,6 +154,71 @@ export default {
       renderVars();
       renderTabs();
       renderResponse();
+      refreshNpmOutput();
+    }
+
+    // ---- output dei processi npm del progetto collegato (se c'è l'estensione npm) ----
+    // Si segue lo script scelto per la sezione (npm start se non si è scelto nulla), nel
+    // pannello di output in fondo; la scelta resta nel browser
+    let npmProcs = [];      // processi del progetto della sezione attiva, uno per script
+    let following = null;   // { procId, script }
+    let closeStream = null;
+    const npmChoices = () => { try { return JSON.parse(localStorage.getItem(NPM_OUTPUT_KEY)) || {}; } catch { return {}; } };
+    function npmChoice(sectionId) {
+      const c = npmChoices();
+      return Object.hasOwn(c, sectionId) ? c[sectionId] : 'start';
+    }
+    function storeNpmChoice(sectionId, script) {
+      const all = npmChoices();
+      all[sectionId] = script;
+      try { localStorage.setItem(NPM_OUTPUT_KEY, JSON.stringify(all)); } catch { /* solo in questa sessione */ }
+    }
+
+    async function refreshNpmOutput() {
+      const sel = $(ctx.root, 'npm-output');
+      const s = activeSection();
+      if (!s?.projectId || !ctx.hasExtension('npm')) { sel.hidden = true; if (following) unfollowNpm(); return; }
+      let list = [];
+      try { list = await ctx.apiFor('npm').get('/processes'); } catch { list = []; }
+      if (activeSection() !== s) return; // nel frattempo si è aperta un'altra sezione
+      // uno per script: quello in esecuzione, altrimenti il più recente; start per primo
+      const byScript = new Map();
+      for (const p of list.filter(p => p.projectId === s.projectId)) {
+        const cur = byScript.get(p.script);
+        if (!cur || (p.running && !cur.running) || (p.running === cur.running && (p.startedAt || 0) > (cur.startedAt || 0))) byScript.set(p.script, p);
+      }
+      npmProcs = [...byScript.values()].sort((a, b) => (b.script === 'start') - (a.script === 'start') || a.script.localeCompare(b.script));
+      // l'output seguito era di un altro progetto: si chiude
+      if (following && following.projectId !== s.projectId) unfollowNpm();
+      const choice = npmChoice(s.id);
+      const shown = following && npmProcs.some(p => p.id === following.procId) ? following.script : '';
+      sel.hidden = !npmProcs.length;
+      const html = `<option value="">${esc(t('npmOutput.none'))}</option>` + npmProcs.map(p =>
+        `<option value="${esc(p.script)}" ${p.script === (shown || choice) ? 'selected' : ''}>${esc(t(p.running ? 'npmOutput.running' : 'npmOutput.ended', { script: p.script }))}</option>`).join('');
+      // il menu si riscrive solo se cambia: aperto mentre si aggiorna, si richiuderebbe
+      if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
+      // la scelta della sezione è in esecuzione e non la si sta già seguendo: si apre
+      const want = npmProcs.find(p => p.script === choice && p.running);
+      if (want && following?.procId !== want.id) followNpm(want);
+    }
+
+    function followNpm(proc) {
+      closeStream?.(); closeStream = null;
+      following = { procId: proc.id, script: proc.script, projectId: proc.projectId };
+      const output = ctx.ui.output;
+      output.open(t('npmOutput.panel', { script: proc.script }));
+      closeStream = ctx.apiFor('npm').events(`/processes/${encodeURIComponent(proc.id)}/stream`, ({ type, data }) => {
+        if (type === 'exit') {
+          output.append(`\n${data?.removed ? t('npmOutput.removed') : t('npmOutput.exit', { code: String(data?.exitCode) })}`, 'sys');
+          closeStream?.(); closeStream = null;
+        } else output.append(data, type === 'stderr' ? 'err' : 'out');
+      }, () => output.append(`\n${t('npmOutput.lost')}`, 'err'));
+    }
+
+    function unfollowNpm() {
+      closeStream?.(); closeStream = null;
+      following = null;
+      ctx.ui.output.close();
     }
 
     function renderVars() {
@@ -806,8 +872,18 @@ export default {
       const role = e.target.dataset.role;
       if (!draft) return;
       if (role === 'method') { draft.method = e.target.value; e.target.style.color = ctx.ui.cssColor(METHOD_COLORS[draft.method]); markDirty(); }
+      if (role === 'npm-output') {
+        const script = e.target.value;
+        storeNpmChoice(active.section, script);
+        const proc = npmProcs.find(p => p.script === script);
+        if (proc) followNpm(proc); else unfollowNpm();
+        return;
+      }
       if (role === 'user') { draft.userType = e.target.value || null; if (!draft.userType) delete draft.userType; markDirty(); }
     });
+
+    // la lista dei processi si aggiorna quando si apre il menu (uno script avviato dopo)
+    ctx.root.addEventListener('focusin', e => { if (e.target.dataset.role === 'npm-output') refreshNpmOutput(); });
 
     ctx.root.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }

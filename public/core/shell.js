@@ -233,6 +233,7 @@ window.Shell = (() => {
     panel.innerHTML = `
       <div class="ext-root"></div>
       <div class="sse-panel">
+        <div class="sse-resizer" role="separator" aria-orientation="horizontal" tabindex="0" data-i18n-title="core.output.resize" data-i18n-aria-label="core.output.resize"></div>
         <div class="sse-panel-header">
           <span class="sse-title" data-i18n="core.output.title"></span>
           <div style="display:flex;gap:8px;align-items:center">
@@ -303,11 +304,8 @@ window.Shell = (() => {
     return entry.loading;
   }
 
-  // ---- contesto per i moduli frontend ----
-  function makeContext(entry) {
-    const { meta, panel, sidebar } = entry;
-    const api = apiClient(`/api/ext/${meta.code}`);
-
+  // Client API di un'estensione con le risposte SSE: stream (POST) ed events (GET)
+  function withStreams(api) {
     // POST con risposta SSE (es. azioni git): onEvent({type, data}); restituisce l'exit code
     api.stream = async (p, body, onEvent) => {
       const res = await fetch(api.url(p), {
@@ -345,6 +343,13 @@ window.Shell = (() => {
       es.onerror = () => { es.close(); onError?.(); };
       return () => es.close();
     };
+    return api;
+  }
+
+  // ---- contesto per i moduli frontend ----
+  function makeContext(entry) {
+    const { meta, panel, sidebar } = entry;
+    const api = withStreams(apiClient(`/api/ext/${meta.code}`));
 
     const sse = {
       body: panel.querySelector('.sse-body'),
@@ -371,6 +376,7 @@ window.Shell = (() => {
     };
     panel.querySelector('[data-sse="clear"]').addEventListener('click', output.clear);
     panel.querySelector('[data-sse="close"]').addEventListener('click', output.close);
+    initOutputResize(meta.code, sse.box);
 
     return {
       code: meta.code,
@@ -409,7 +415,7 @@ window.Shell = (() => {
       // Un'altra estensione è caricata e attiva? (per funzioni che si appoggiano a lei)
       hasExtension: code => extList.some(e => e.code === code && (e.state === 'ok' || e.state === 'warning')),
       // Client per le API di un'altra estensione (/api/ext/<code>)
-      apiFor: code => apiClient(`/api/ext/${code}`),
+      apiFor: code => withStreams(apiClient(`/api/ext/${code}`)),
     };
   }
 
@@ -694,6 +700,59 @@ window.Shell = (() => {
     // finestra rimpicciolita: la sidebar resta entro il massimo
     window.addEventListener('resize', () => { if (window.innerWidth >= 400 && current() > sidebarMax()) setSidebarWidth(sidebarMax(), false); });
   })();
+
+  // ---- altezza del pannello di output, una per sezione: stessa logica della sidebar
+  // (trascinando il bordo superiore, con ↑/↓, doppio clic per l'altezza iniziale) ----
+  const OUTPUT_KEY = 'devdock.outputHeights';
+  const OUTPUT_DEFAULT = 260, OUTPUT_MIN = 120;
+  // al massimo l'85% del pannello dell'estensione (o della finestra, se non ancora visibile)
+  const outputMax = box => {
+    const h = box.parentElement?.getBoundingClientRect().height || window.innerHeight;
+    return h >= 200 ? Math.max(OUTPUT_MIN, Math.round(h * 0.85)) : 2000;
+  };
+  function savedHeights() {
+    try { return JSON.parse(localStorage.getItem(OUTPUT_KEY)) || {}; } catch { return {}; }
+  }
+  function storeHeight(code, height) {
+    const all = savedHeights();
+    if (height == null) delete all[code]; else all[code] = height;
+    try { localStorage.setItem(OUTPUT_KEY, JSON.stringify(all)); } catch { /* storage non disponibile */ }
+  }
+  function initOutputResize(code, box) {
+    const handle = box.querySelector('.sse-resizer');
+    const setHeight = (h, save = true) => {
+      const height = Math.round(Math.min(outputMax(box), Math.max(OUTPUT_MIN, h)));
+      box.style.height = `${height}px`;
+      if (save) storeHeight(code, height);
+      return height;
+    };
+    const saved = savedHeights()[code];
+    if (saved) box.style.height = `${Math.max(OUTPUT_MIN, saved)}px`;
+    const current = () => box.getBoundingClientRect().height;
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('dragging');
+      document.body.classList.add('resizing-output');
+      const bottom = box.getBoundingClientRect().bottom;
+      const move = ev => setHeight(bottom - ev.clientY, false);
+      const up = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        handle.classList.remove('dragging');
+        document.body.classList.remove('resizing-output');
+        setHeight(current());
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+    });
+    handle.addEventListener('dblclick', () => { box.style.height = ''; storeHeight(code, null); });
+    handle.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      setHeight(current() + (e.key === 'ArrowUp' ? 16 : -16));
+    });
+  }
 
   // ---- aggiornamento manuale (pulsante ↻): estensioni montate + sezioni del core ----
   function refresh() {

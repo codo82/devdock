@@ -293,5 +293,13 @@
   "errors.request_form": "Invalid form fields in request {id}",
   "errors.upload_missing": "File to send not found: {path}",
   "errors.upload_relative": "Relative path {path}: link the section to a project or use an absolute path",
-  "errors.upload_too_large": "File too large to send: {path} (max {max} MB)"
+  "errors.upload_too_large": "File too large to send: {path} (max {max} MB)",
+  "npmOutput.title": "Output of an npm script of the linked project, in the bottom panel",
+  "npmOutput.none": "📟 npm output: none",
+  "npmOutput.running": "📟 {script} ▶",
+  "npmOutput.ended": "📟 {script} ■",
+  "npmOutput.panel": "npm run {script}",
+  "npmOutput.exit": "[process ended, exit {code}]",
+  "npmOutput.removed": "[process removed]",
+  "npmOutput.lost": "[connection lost]"
 }

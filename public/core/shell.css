@@ -260,8 +260,13 @@
   /* ================================================================
      SSE OUTPUT PANEL
   ================================================================ */
-  .sse-panel{position:absolute;bottom:0;inset-inline-start:0;inset-inline-end:0;height:260px;background:#0d1117;border-top:1px solid var(--border);display:flex;flex-direction:column;z-index:10;transform:translateY(100%);transition:transform .25s ease}
+  .sse-panel{position:absolute;bottom:0;inset-inline-start:0;inset-inline-end:0;height:260px;max-height:85%;background:#0d1117;border-top:1px solid var(--border);display:flex;flex-direction:column;z-index:10;transform:translateY(100%);transition:transform .25s ease}
   .sse-panel.open{transform:translateY(0)}
+  .sse-resizer{position:absolute;top:-3px;inset-inline:0;height:6px;cursor:row-resize;z-index:11;background:transparent;transition:background .15s}
+  .sse-resizer:hover,.sse-resizer:focus-visible,.sse-resizer.dragging{background:var(--accent,#388bfd);outline:none}
+  .sse-panel:not(.open) .sse-resizer{display:none}
+  body.resizing-output{cursor:row-resize;user-select:none}
+  body.resizing-output .sse-panel{transition:none}
   .sse-panel-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;border-bottom:1px solid var(--border);font-size:11px;font-family:var(--font);color:var(--muted);flex-shrink:0;background:var(--surface)}
   .sse-panel-header span{color:var(--text)}
   .sse-body{overflow-y:auto;flex:1;padding:8px 14px;font-family:var(--font);font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-all;color:#cdd9e5}

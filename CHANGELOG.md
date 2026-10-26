@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-10-26
+
+### Added
+- **HTTP client — npm output**: in a section linked to a project, the 📟 menu of the editor shows the live output of one of the project's npm scripts (started from the NPM section) in the bottom panel, next to the requests. `npm start` is followed by default when running; the choice is remembered per section. Needs the NPM extension.
+- **Resizable output panel**: the bottom output panel of every section is resized by dragging its top edge (↑/↓ when focused, double click for the initial height); each section keeps its own height, remembered by the browser, like the sidebar width.
+
+### Fixed
+- `ctx.apiFor(code)` now has `stream` and `events` like `ctx.api`, so an extension can follow another one's SSE streams.
+
 ## [2.5.0] - 2026-10-26
 
 ### Added
