@@ -84,3 +84,10 @@
 .hc-routes code{font-family:var(--font);font-size:12px}
 .hc-browser{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:12px}
 .hc-browser code{font-family:var(--font);font-size:11px}
+.hc-user-head{padding-inline-start:22px;font-size:12px;font-weight:600;color:var(--muted)}
+.hc-user-head .pf-chevron{width:9px;height:9px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.5;transition:transform .15s}
+.hc-user-head .pf-chevron.open{transform:rotate(90deg)}
+.hc-user-icon{font-size:11px}
+.hc-user-head .sb-item-act{opacity:0}
+.hc-user-head:hover .sb-item-act{opacity:1}
+.hc-req-nested{padding-inline-start:44px}

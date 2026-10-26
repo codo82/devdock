@@ -62,15 +62,53 @@ export default {
             <span class="sb-count">${esc(fmt.number(s.requests.length))}</span>
             <button class="sb-item-act" onclick="event.stopPropagation();Ext['http-client'].sectionMenu(event,${js(s.id)})" title="${esc(t('sidebar.sectionActions'))}">⋯</button>
           </div>
-          <div class="hc-children">
-            ${s.requests.map(r => `<button class="sb-item hc-req ${active?.request === r.id && active?.section === s.id ? 'active' : ''}"
-                onclick="Ext['http-client'].open(${js(s.id)},${js(r.id)})" oncontextmenu="event.preventDefault();Ext['http-client'].requestMenu(event,${js(s.id)},${js(r.id)})">
-                ${methodBadge(r.method)}<span class="hc-req-label">${esc(r.label)}</span></button>`).join('')}
-            <button class="sb-item hc-add" onclick="Ext['http-client'].newRequest(${js(s.id)})">＋ ${esc(t('sidebar.newRequest'))}</button>
-          </div>
+          <div class="hc-children">${sectionTree(s, closed)}</div>
         </div>`;
       }).join('');
       ctx.setBadge(null);
+    }
+
+    // Richieste di una sezione: raggruppate per tipologia di utenza (progetto ▸ utenza ▸ richieste),
+    // più "senza autorizzazione"; una sezione senza utenze resta un elenco semplice
+    function sectionTree(s, closed) {
+      const reqButton = (r, nested) => `<button class="sb-item hc-req ${nested ? 'hc-req-nested' : ''} ${active?.request === r.id && active?.section === s.id ? 'active' : ''}"
+          onclick="Ext['http-client'].open(${js(s.id)},${js(r.id)})" oncontextmenu="event.preventDefault();Ext['http-client'].requestMenu(event,${js(s.id)},${js(r.id)})">
+          ${methodBadge(r.method)}<span class="hc-req-label">${esc(r.label)}</span></button>`;
+      const addButton = (uid, nested) => `<button class="sb-item hc-add ${nested ? 'hc-req-nested' : ''}" onclick="Ext['http-client'].newRequest(${js(s.id)},${js(uid || '')})">＋ ${esc(t('sidebar.newRequest'))}</button>`;
+      if (!s.userTypes.length) return s.requests.map(r => reqButton(r, false)).join('') + addButton(null, false);
+      const known = new Set(s.userTypes.map(u => u.id));
+      const groups = [
+        ...s.userTypes.map(u => ({ id: u.id, label: u.label, icon: '👤', requests: s.requests.filter(r => r.userType === u.id) })),
+        { id: '', label: t('sidebar.noUser'), icon: '○', requests: s.requests.filter(r => !r.userType || !known.has(r.userType)) },
+      ].filter(g => g.id || g.requests.length);
+      return groups.map(g => {
+        const key = `${s.id}|${g.id || '-'}`;
+        const open = !closed.has(key);
+        return `<div class="sb-item hc-user-head" role="button" tabindex="0" aria-expanded="${open}" onclick="Ext['http-client'].toggle(${js(key)})">
+            <svg class="pf-chevron ${open ? 'open' : ''}" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1.5 7 5 3.5 8.5" /></svg>
+            <span class="hc-user-icon">${g.icon}</span><span class="hc-group-label">${esc(g.label)}</span>
+            <span class="sb-count">${esc(fmt.number(g.requests.length))}</span>
+            <button class="sb-item-act" onclick="event.stopPropagation();Ext['http-client'].newRequest(${js(s.id)},${js(g.id)})" title="${esc(t('sidebar.newRequestFor', { user: g.label }))}">＋</button>
+          </div>
+          ${open ? g.requests.map(r => reqButton(r, true)).join('') + (g.requests.length ? '' : addButton(g.id, true)) : ''}`;
+      }).join('');
+    }
+
+    // Richiesta spostata sotto un'altra utenza (menu contestuale)
+    async function moveToUser(sectionId, requestId, uid) {
+      const s = section(sectionId);
+      if (active?.section === sectionId && active?.request === requestId && draft) {
+        draft.userType = uid || null;
+        if (!uid) delete draft.userType;
+        renderEditor();
+        return saveRequest();
+      }
+      const r = s.requests.find(x => x.id === requestId);
+      try {
+        const saved = await ctx.api.put(`/sections/${encodeURIComponent(sectionId)}/requests/${encodeURIComponent(requestId)}`, { ...r, userType: uid || null });
+        s.requests = s.requests.map(x => (x.id === saved.id ? saved : x));
+        renderSidebar();
+      } catch (e) { toast(e.message, 'error'); }
     }
 
     function menuAt(event, items) {
@@ -752,7 +790,7 @@ export default {
         renderSidebar();
       },
       open(sectionId, requestId) { if (active?.request === requestId && active?.section === sectionId) return; if (canLeave()) openRequest(sectionId, requestId); },
-      newRequest(sectionId) { if (canLeave()) createRequest(sectionId); },
+      newRequest(sectionId, uid) { if (canLeave()) createRequest(sectionId, uid ? { userType: uid } : {}); },
       sectionMenu(event, id) {
         const s = section(id);
         menuAt(event, [
@@ -769,6 +807,9 @@ export default {
         menuAt(event, [
           { label: t('sidebar.openRequest'), icon: '↗', action: () => { if (canLeave()) openRequest(sectionId, requestId); } },
           { label: t('sidebar.duplicate'), icon: '⧉', action: () => { if (canLeave()) createRequest(sectionId, { ...r, id: undefined, label: t('sidebar.copyOf', { name: r.label }) }); } },
+          ...(section(sectionId).userTypes.length ? ['separator',
+            ...section(sectionId).userTypes.filter(u => u.id !== r.userType).map(u => ({ label: t('sidebar.moveTo', { user: u.label }), icon: '👤', action: () => moveToUser(sectionId, requestId, u.id) })),
+            ...(r.userType ? [{ label: t('sidebar.moveTo', { user: t('sidebar.noUser') }), icon: '○', action: () => moveToUser(sectionId, requestId, null) }] : [])] : []),
           'separator',
           { label: t('core.action.delete'), icon: '🗑', danger: true, action: async () => {
             if (!confirm(t('sidebar.confirmDeleteRequest', { name: r.label }))) return;

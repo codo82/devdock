@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-10-26
+
+### Changed
+- **HTTP client sidebar**: requests grouped by user type under each section (section ▸ user ▸ requests, plus *No authorization*), each group collapsible with its count and a ＋ that creates a request for that user; *Move under…* in the request's context menu. Sections without user types keep the plain list.
+
 ## [2.4.0] - 2026-10-26
 
 ### Added
