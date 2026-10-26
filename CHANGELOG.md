@@ -1,10 +1,14 @@
 # Changelog
 
-All notable changes to DevDock are documented in this file.
+All notable changes to Kelbo (formerly DevDock) are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Every closed milestone of the [roadmap](ROADMAP.md) is a minor version. Milestone numbers up to 2.1.0 refer to the archived [roadmap history](docs/ROADMAP-HISTORY.md); the current roadmap starts again from M1.
 
 ## [Unreleased]
+
+### Changed
+- **New name: Kelbo.** DevDock is now called Kelbo: page title, header, interface texts in every language, MCP instructions, README and docs. The repositories moved to [kelbodev/kelbo](https://github.com/kelbodev/kelbo) and [kelbodev/kelbo-extensions](https://github.com/kelbodev/kelbo-extensions); GitHub redirects the old addresses. Commands, environment variables and folders keep their current names for now.
+- **Official extensions catalog** at its new address; a list of catalogs saved with the old address uses the new one.
 
 ## [2.7.0] - 2026-10-26
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Riga di comando di DevDock: avvio e gestione delle estensioni installate.
+// Riga di comando di Kelbo: avvio e gestione delle estensioni installate.
 //   devdock                         avvia il server (come npm start)
 //   devdock ext list                estensioni con versione, provenienza e stato
 //   devdock ext install <url|codice> [--path cartella] [--tag tag] [--yes]
@@ -7,7 +7,7 @@
 //   devdock ext remove <codice> [--yes]
 //   devdock ext check               aggiornamenti disponibili
 //   devdock mcp                     ponte stdio verso il server MCP (per Claude Desktop e simili)
-// Con DevDock in esecuzione passa dalle sue API (l'estensione si carica subito); altrimenti
+// Con Kelbo in esecuzione passa dalle sue API (l'estensione si carica subito); altrimenti
 // lavora sui file e la modifica vale dal prossimo avvio.
 const http = require('http');
 const path = require('path');
@@ -36,7 +36,7 @@ for (let i = 0; i < rest.length; i++) {
 
 function usage(code = 0) {
   console.log(`Uso:
-  devdock [start]                      avvia DevDock
+  devdock [start]                      avvia Kelbo
   devdock ext list                     estensioni installate e incluse
   devdock ext install <url|codice> [--path cartella] [--tag tag] [--yes]
   devdock ext update <codice> [--tag tag] [--yes]
@@ -92,7 +92,7 @@ function offline() {
       });
     } catch { return []; }
   };
-  const catalogUrls = () => loadConfig().extensions?.catalogs ?? [installer.OFFICIAL_CATALOG];
+  const catalogUrls = () => installer.catalogUrls(loadConfig().extensions?.catalogs);
   const known = () => Object.fromEntries([...scan(EXTENSIONS_DIR, 'builtin'), ...scan(INSTALLED_DIR, 'installed')].map(e => [e.code, e]));
   return {
     list: async () => [...scan(EXTENSIONS_DIR, 'builtin'), ...scan(INSTALLED_DIR, 'installed')],
@@ -150,7 +150,7 @@ function showPreview(p) {
   console.log(`\n${typeof p.name === 'object' ? p.name.it || Object.values(p.name)[0] : p.name} (${p.code}) ${p.version}${p.tag ? ` · tag ${p.tag}` : ' · ramo predefinito'}`);
   console.log(`  ${p.repo}${p.path ? ` · ${p.path}` : ''} · ${p.commit.slice(0, 10)}`);
   if (p.installed) console.log(`  installata ora: ${p.installed.version}`);
-  if (!p.compatible) console.log(`  ✖ richiede DevDock ${p.devdock}, questa è la ${p.coreVersion}`);
+  if (!p.compatible) console.log(`  ✖ richiede Kelbo ${p.devdock}, questa è la ${p.coreVersion}`);
   if (p.builtin) console.log(`  ✖ ${p.code} è già un'estensione inclusa`);
   if (p.missing.length) console.log(`  ✖ dipendenze da installare prima: ${p.missing.join(', ')}`);
   if (p.changelog) console.log(`\n${p.changelog.split('\n').map(l => `  ${l}`).join('\n')}\n`);
@@ -172,13 +172,13 @@ function showPreview(p) {
       if (!showPreview(p)) process.exit(2);
       if (!flags.yes && !(await ask(`${sub === 'update' ? 'Aggiornare' : 'Installare'} ${p.code} ${p.version}? [s/N] `))) process.exit(0);
       const r = await api.install(p.id);
-      console.log(r?.restartRequired ? `${p.code} ${p.version} installata: vale dal prossimo avvio di DevDock` : `${p.code} ${p.version} installata e caricata`);
+      console.log(r?.restartRequired ? `${p.code} ${p.version} installata: vale dal prossimo avvio di Kelbo` : `${p.code} ${p.version} installata e caricata`);
     } else if (sub === 'remove') {
       const code = args[0];
       if (!code) usage(1);
       if (!flags.yes && !(await ask(`Rimuovere ${code}? [s/N] `))) process.exit(0);
       const r = await api.remove(code);
-      console.log(r?.restartRequired ? `${code} rimossa: vale dal prossimo avvio di DevDock` : `${code} rimossa`);
+      console.log(r?.restartRequired ? `${code} rimossa: vale dal prossimo avvio di Kelbo` : `${code} rimossa`);
     } else if (sub === 'check') {
       const r = await api.check();
       const entries = Object.entries(r.extensions || {});

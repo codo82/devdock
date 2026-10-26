@@ -210,7 +210,7 @@
         "name": "connections",
         "handler": "connections",
         "readOnly": true,
-        "description": "List the MySQL/MariaDB connections configured in DevDock (no credentials). Requires the DevDock vault to be unlocked from its UI.",
+        "description": "List the MySQL/MariaDB connections configured in Kelbo (no credentials). Requires the Kelbo vault to be unlocked from its UI.",
         "inputSchema": {
           "type": "object",
           "properties": {}

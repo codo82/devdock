@@ -54,7 +54,7 @@
   "errors.file_invalid": "Nome di file non valido: {name} (deve iniziare con .env)",
   "errors.file_not_found": "File non trovato: {name}",
   "errors.file_too_large": "{name} è troppo grande",
-  "errors.file_changed": "{name} è stato modificato fuori da DevDock: ricaricato, riprova",
+  "errors.file_changed": "{name} è stato modificato fuori da Kelbo: ricaricato, riprova",
   "errors.key_missing": "Chiave non trovata: {key}",
   "errors.no_template": "Il progetto non ha un modello (.env.example)",
   "errors.is_template": "È il file modello",

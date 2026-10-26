@@ -1,6 +1,6 @@
 // File .env dei progetti: confronto con il modello (.env.example), lettura dei
 // valori uno alla volta e modifica che conserva commenti e ordine. I valori non
-// passano mai dalla configurazione di DevDock né dagli strumenti MCP.
+// passano mai dalla configurazione di Kelbo né dagli strumenti MCP.
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');

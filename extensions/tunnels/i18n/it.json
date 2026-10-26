@@ -12,7 +12,7 @@
   "pill.stopAll": "⏹ Stop all",
   "groups.none": "Nessun gruppo",
   "main.selectGroup": "Seleziona un gruppo dalla sidebar",
-  "main.autossh": "autossh non installato: i tunnel usano ssh e la riconnessione è gestita da DevDock.",
+  "main.autossh": "autossh non installato: i tunnel usano ssh e la riconnessione è gestita da Kelbo.",
   "main.connected": {
     "one": "{count} connesso",
     "other": "{count} connessi"

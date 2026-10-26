@@ -48,7 +48,7 @@ before(async () => {
   repoA = rootRepo(path.join(base, 'hello'));
   release(repoA, null, 'hello', '1.0.0', { changelog: '# Changelog\n\n## [1.0.0]\n- prima\n' });
   release(repoA, null, 'hello', '1.1.0', { changelog: '# Changelog\n\n## [1.1.0]\n- seconda\n\n## [1.0.0]\n- prima\n' });
-  release(repoA, null, 'hello', '2.0.0', { devdock: '^9.0' }); // richiede un DevDock futuro
+  release(repoA, null, 'hello', '2.0.0', { devdock: '^9.0' }); // richiede un Kelbo futuro
   repoB = rootRepo(path.join(base, 'tools'));
   release(repoB, 'tools/greet', 'greet', '1.0.0');
   release(repoB, 'tools/greet', 'greet', '1.2.0');
@@ -216,7 +216,7 @@ test('estensione che non si ricarica a caldo: l\'aggiornamento chiede il riavvio
   assert.equal((await call('DELETE', '/extensions-admin/fixed')).json.code, 'core.ext_restart_required');
 });
 
-test('riga di comando senza DevDock in esecuzione: installazione sui file, elenco, rimozione', async () => {
+test('riga di comando senza Kelbo in esecuzione: installazione sui file, elenco, rimozione', async () => {
   const { execFileSync } = require('child_process');
   const { ROOT } = require('../lib/testkit');
   const home = tmpDir('devdock-cli-home-');
@@ -224,10 +224,17 @@ test('riga di comando senza DevDock in esecuzione: installazione sui file, elenc
   fs.writeFileSync(env.DEVDOCK_CONFIG, '{"projects":[]}');
   const cli = (...args) => execFileSync(process.execPath, [path.join(ROOT, 'bin/devdock.js'), 'ext', ...args], { env, encoding: 'utf8' });
   let out = cli('install', repoB, '--path', 'tools/greet', '--yes');
-  assert.match(out, /greet 1\.2\.0 installata: vale dal prossimo avvio di DevDock/);
+  assert.match(out, /greet 1\.2\.0 installata: vale dal prossimo avvio di Kelbo/);
   assert.ok(fs.existsSync(path.join(home, 'extensions', 'greet', 'setting.json')));
   assert.match(cli('list'), /greet\s+1\.2\.0\s+installed/);
   assert.match(cli('check'), /greet\s+1\.2\.0 aggiornata/);
   assert.match(cli('remove', 'greet', '--yes'), /greet rimossa/);
   assert.equal(fs.existsSync(path.join(home, 'extensions', 'greet')), false);
+});
+
+test('catalogo ufficiale di prima del passaggio a Kelbo: nella lista salvata diventa quello nuovo', async () => {
+  const legacy = 'https://raw.githubusercontent.com/codo82/devdock-extensions/main/index.json';
+  const r = await call('PUT', '/extensions-admin/catalogs', { catalogs: [legacy, catalogUrl] });
+  assert.deepEqual(r.json.catalogs, ['https://raw.githubusercontent.com/kelbodev/kelbo-extensions/main/index.json', catalogUrl]);
+  await call('PUT', '/extensions-admin/catalogs', { catalogs: [catalogUrl] });
 });

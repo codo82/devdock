@@ -36,7 +36,7 @@ const earliest = (...values) => {
   return list.length ? Math.min(...list) : null;
 };
 
-// DevDock dentro WSL: il browser è quello di Windows, raggiunto dai percorsi /mnt/c/…
+// Kelbo dentro WSL: il browser è quello di Windows, raggiunto dai percorsi /mnt/c/…
 const isWsl = () => {
   if (process.platform !== 'linux') return false;
   if (process.env.WSL_DISTRO_NAME) return true;
@@ -313,7 +313,7 @@ function createAuth({ ctx, vault, pageText, varsOf, browserPath = () => null }) 
     return fromTokenResponse(section, user, json);
   }
 
-  // Login nel browser: DevDock ascolta sulla porta del redirect URI solo per la durata del
+  // Login nel browser: Kelbo ascolta sulla porta del redirect URI solo per la durata del
   // login, riceve il codice (o il token nel frammento, flusso implicit) e lo scambia
   function startOAuth(section, user, { open = true } = {}) {
     const k = keyOf(section, user);
@@ -340,7 +340,7 @@ function createAuth({ ctx, vault, pageText, varsOf, browserPath = () => null }) 
     const page = (req, res, key, params = {}, status = 200, script = '') => {
       const text = pageText(req.headers['accept-language'], key, params);
       res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(`<!doctype html><meta charset="utf-8"><title>DevDock</title><body style="font-family:system-ui;padding:40px"><p id="m">${text.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)}</p>${script}</body>`);
+      res.end(`<!doctype html><meta charset="utf-8"><title>Kelbo</title><body style="font-family:system-ui;padding:40px"><p id="m">${text.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)}</p>${script}</body>`);
     };
 
     async function onRequest(req, res) {

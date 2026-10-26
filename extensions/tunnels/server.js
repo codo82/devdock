@@ -121,7 +121,7 @@ module.exports = function createTunnels(ctx) {
     td.process = proc;
     td.pid = proc.pid;
 
-    // Righe di ssh così come arrivano; i messaggi di DevDock hanno anche code/params
+    // Righe di ssh così come arrivano; i messaggi di Kelbo hanno anche code/params
     // (il frontend li traduce, text resta nella lingua sorgente)
     const log = (text, sys) => {
       td.logs.push({ ts: Date.now(), text, ...(sys ? { code: `${ctx.code}.${sys.name}`, params: sys.params } : {}) });

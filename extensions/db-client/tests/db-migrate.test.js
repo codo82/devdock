@@ -44,7 +44,7 @@ test('migration: file nel repository, DDL, errori e schema letto di nuovo', asyn
     let r = await migrate({ operations });
     assert.equal(r.status, 428);
     assert.equal(r.json.migration.file, '002_ordini_create.sql');
-    assert.match(r.json.migration.content, /^-- 002_ordini_create\.sql\n-- DevDock · Locale · app · /);
+    assert.match(r.json.migration.content, /^-- 002_ordini_create\.sql\n-- Kelbo · Locale · app · /);
     assert.ok(r.json.migration.content.includes(r.json.statements[0] + ';'));
     assert.equal(fs.existsSync(path.join(dir, '002_ordini_create.sql')), false, 'niente file prima della conferma');
 

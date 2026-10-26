@@ -1,4 +1,4 @@
-// DevDock — entry point: middleware di sicurezza, route API, file statici, avvio
+// Kelbo — entry point: middleware di sicurezza, route API, file statici, avvio
 const express = require('express');
 const path = require('path');
 const { ROOT, PORT, CONFIG_PATH, EXTENSIONS_DIR, INSTALLED_DIR } = require('./lib/env');
@@ -56,7 +56,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGHUP',  () => shutdown('SIGHUP')); // chiusura del terminale
 
 app.listen(PORT, '127.0.0.1', () => {
-  console.log(`DevDock → http://127.0.0.1:${PORT}`);
+  console.log(`Kelbo → http://127.0.0.1:${PORT}`);
   console.log(`Config: ${CONFIG_PATH}`);
   const active = extensions.list().filter(e => e.state !== 'disabled').map(e => e.code);
   console.log(`Estensioni: ${active.length ? active.join(', ') : 'nessuna'}`);

@@ -98,7 +98,7 @@ module.exports = function coreRoutes(extensions) {
   // ---- estensioni: pannello, cataloghi, installazione, aggiornamenti ----
 
   const settings = () => loadConfig().extensions || {};
-  const catalogUrls = () => settings().catalogs ?? [installer.OFFICIAL_CATALOG];
+  const catalogUrls = () => installer.catalogUrls(settings().catalogs);
   // estensioni presenti (non i doppioni): codice → { version, source }
   const known = () => Object.fromEntries(extensions.list().filter(e => !e.duplicate)
     .map(e => [e.code, { version: e.version, source: e.source }]));

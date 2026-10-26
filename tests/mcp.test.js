@@ -34,7 +34,7 @@ test('token: generato, fuori da config.json, obbligatorio; niente richieste da b
 });
 
 test('istruzioni ed elenco degli strumenti, con il prefisso dell\'estensione', async () => {
-  assert.match(client.getInstructions(), /DevDock/);
+  assert.match(client.getInstructions(), /Kelbo/);
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map(t => t.name).sort(), ['sample_items', 'sample_touch']);
   assert.equal(tools.find(t => t.name === 'sample_touch').annotations.readOnlyHint, false);

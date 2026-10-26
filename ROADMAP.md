@@ -1,24 +1,24 @@
-# DevDock — Roadmap
+# Kelbo — Roadmap
 
-Open work, numbered again from M1 after DevDock 2.1.0. The milestones closed up to 2.1.0 (M0–M17, with their original numbers, the ones the CHANGELOG uses) are archived in [docs/ROADMAP-HISTORY.md](docs/ROADMAP-HISTORY.md).
+Open work, numbered again from M1 after Kelbo 2.1.0. The milestones closed up to 2.1.0 (M0–M17, with their original numbers, the ones the CHANGELOG uses) are archived in [docs/ROADMAP-HISTORY.md](docs/ROADMAP-HISTORY.md).
 
 Status legend: `[ ]` to do · `[~]` in progress · `[x]` done
 
 **Rules for every milestone**
 - A milestone is closed only when `CHANGELOG.md` (`[Unreleased]` → version) and, when something changes for the user, `README.md` and `docs/EXTENSIONS.md` are updated.
-- Versioning is SemVer: a closed milestone that changes DevDock is a new minor version (M1 → 2.2.0, M2 → 2.3.0 and its follow-ups, …); a major version only when the extension contract changes (it would make every extension declaring `"devdock": "^2.0"` incompatible).
-- Work on an extension of the [devdock-extensions](https://github.com/codo82/devdock-extensions) repository is released there with its own version and tag (`<code>@<version>`); DevDock gets a new version only if the core changes too.
+- Versioning is SemVer: a closed milestone that changes Kelbo is a new minor version (M1 → 2.2.0, M2 → 2.3.0 and its follow-ups, …); a major version only when the extension contract changes (it would make every extension declaring `"devdock": "^2.0"` incompatible).
+- Work on an extension of the [kelbo-extensions](https://github.com/kelbodev/kelbo-extensions) repository is released there with its own version and tag (`<code>@<version>`); Kelbo gets a new version only if the core changes too.
 
 ---
 
 ## M1 — MCP: stdio bridge — core ✅ (2.2.0)
 
-Goal: Claude Desktop and the other clients that start MCP servers as processes reach DevDock without a token in their configuration and without third-party packages. *(Formerly part of M8.13.)*
+Goal: Claude Desktop and the other clients that start MCP servers as processes reach Kelbo without a token in their configuration and without third-party packages. *(Formerly part of M8.13.)*
 
-- [x] **M1.1** `bin/devdock-mcp.js` (also `devdock mcp` and the `devdock-mcp` bin): stdio ↔ Streamable HTTP with the MCP SDK already used by the server; port and token file of the instance from `DEVDOCK_PORT` / `DEVDOCK_CONFIG` like the server; the token is read again at every request (a 401 is retried once), so the bridge survives a regeneration; DevDock not running or a token of another instance → a JSON-RPC error with a clear message (core catalogs)
+- [x] **M1.1** `bin/devdock-mcp.js` (also `devdock mcp` and the `devdock-mcp` bin): stdio ↔ Streamable HTTP with the MCP SDK already used by the server; port and token file of the instance from `DEVDOCK_PORT` / `DEVDOCK_CONFIG` like the server; the token is read again at every request (a 401 is retried once), so the bridge survives a regeneration; Kelbo not running or a token of another instance → a JSON-RPC error with a clear message (core catalogs)
 - [x] **M1.2** The server creates the token on the first access to `/mcp` even when the request has no `Authorization` header (first start of the bridge)
 - [x] **M1.3** 🤖 dialog: the Claude Desktop entry uses the bridge (absolute paths of Node.js and of the bridge, `env` only when the instance is not the default one) instead of `npx mcp-remote` with the token in clear
-- [x] **M1.4** Tests (SDK stdio client through the bridge: tools listed and called, token regenerated while connected, DevDock not running, token of another instance), README
+- [x] **M1.4** Tests (SDK stdio client through the bridge: tools listed and called, token regenerated while connected, Kelbo not running, token of another instance), README
 
 ## M2 — Secrets behind the master password, lost clicks — core and extensions ✅ (2.3.0 – 2.5.0)
 
@@ -41,26 +41,26 @@ Goal: every extension can share a **mini view** (widget) of what it knows about 
 - [ ] **M3.2** Core widget host: `ctx.widgets.list(scope)` and `ctx.widgets.mount(id, el, params)` for any extension that wants to show widgets; modules loaded on demand with the extension's CSS and catalogs; the same click-feedback and redraw rules as the panels (M2)
 - [ ] **M3.3** Built-in extension `dashboard` (tab): project selector (the core projects, also from a link in NPM/Git/the sidebar), grid of the widgets for that project; per project the user chooses which widgets to show, their order (drag) and size, saved in its config section; *Add widget* lists the widgets of the loaded extensions; refresh on ↻ and when the tab is shown
 - [ ] **M3.4** Widgets of the built-in extensions:
-  - **NPM** — scripts used most in the project (run counter kept by the extension in the DevDock home, not in `config.json`), running processes with ports, run/stop/restart, a link to the logs
+  - **NPM** — scripts used most in the project (run counter kept by the extension in the Kelbo home, not in `config.json`), running processes with ports, run/stop/restart, a link to the logs
   - **Git** — branch, ahead/behind, changed files, last commits; fetch, pull and push (push after a confirmation showing the commits that will be sent)
   - **Database** — connections linked to the project (`projectId`, already there): status, pending migrations of the linked repository, a link that opens the connection
   - **Env** — `.env` files of the project with missing or empty keys compared with the template (never the values)
   - **HTTP** — sections linked to the project: their requests, with send from the widget and the status of the last answer
   - **SSH tunnels** — the tunnels used by the project's database connections, with connect/disconnect
-- [ ] **M3.5** Widgets of the installed extensions in devdock-extensions, each released with its own version: `mongo-client` (connections linked to a project — needs a `projectId` field like the DB client), `ports` (ports in use by the project's processes); `notes` gets its widget in M4.6
+- [ ] **M3.5** Widgets of the installed extensions in kelbo-extensions, each released with its own version: `mongo-client` (connections linked to a project — needs a `projectId` field like the DB client), `ports` (ports in use by the project's processes); `notes` gets its widget in M4.6
 - [ ] **M3.6** Tests (contract and host with fixture extensions, a broken widget isolated, dashboard layout saved per project), README section "Dashboard", CHANGELOG
 
-## M4 — Notes and to-do lists — new external extension `notes` (devdock-extensions)
+## M4 — Notes and to-do lists — new external extension `notes` (kelbo-extensions)
 
-Goal: notes and to-do lists kept next to the code, grouped in sections (folders) that can be linked to a project. Small and self-contained, so it is born as an installable extension in `devdock-extensions` (`notes@1.0.0`, `"devdock": "^2.4"` for the widget contract of M3); the core does not change, NPM and Git only get a link to it (M4.5). Nothing secret is meant to go here: notes are stored in clear like the rest of the configuration.
+Goal: notes and to-do lists kept next to the code, grouped in sections (folders) that can be linked to a project. Small and self-contained, so it is born as an installable extension in `kelbo-extensions` (`notes@1.0.0`, `"devdock": "^2.4"` for the widget contract of M3); the core does not change, NPM and Git only get a link to it (M4.5). Nothing secret is meant to go here: notes are stored in clear like the rest of the configuration.
 
 - [ ] **M4.1** Data: sections (one level, like the DB client folders) with name, colour and an optional linked project (`projectId` of the core projects); each section holds notes and to-do lists, in the order chosen by the user. Note: title, Markdown text, last change. To-do list: title and items (text, done, done date), at most a few hundred items per list. Stored in the extension's own config section (`notes`), validated on every save, with an Export/Import checkbox "Note e to-do"
 - [ ] **M4.2** Sidebar: sections ▸ notes and lists, with the number of open items per list and per section; new section / note / list, rename, move between sections, delete (with confirmation), drag to reorder; filter by text; a project selector that shows only the sections linked to it (plus the unlinked ones)
-- [ ] **M4.3** Note editor: Markdown text with a preview (headings, lists, checkboxes, links, code, tables; rendered without external libraries and escaped, links opened outside DevDock), saved automatically a moment after the last keystroke, "saved" indicator; a note changed elsewhere in the meantime is not overwritten
+- [ ] **M4.3** Note editor: Markdown text with a preview (headings, lists, checkboxes, links, code, tables; rendered without external libraries and escaped, links opened outside Kelbo), saved automatically a moment after the last keystroke, "saved" indicator; a note changed elsewhere in the meantime is not overwritten
 - [ ] **M4.4** To-do lists: add an item with Enter, edit in place, check/uncheck, reorder by dragging, delete; done items collapsed at the bottom with their date and a *Clear done* action; the badge on the tab counts the open items
-- [ ] **M4.5** Link with the projects: the section's project shown in the sidebar and in the header of the note; a project removed from DevDock leaves the section unlinked, not deleted; from the NPM and Git sections, a link *Notes of this project* opens the extension filtered on that project (`ctx.open` and the event bus, only when `notes` is installed)
+- [ ] **M4.5** Link with the projects: the section's project shown in the sidebar and in the header of the note; a project removed from Kelbo leaves the section unlinked, not deleted; from the NPM and Git sections, a link *Notes of this project* opens the extension filtered on that project (`ctx.open` and the event bus, only when `notes` is installed)
 - [ ] **M4.6** Widget for the project dashboard (M3): open items of the to-do lists of the project's sections (check them from the widget, add one) and the last notes changed
-- [ ] **M4.7** Search across titles, notes and items with the matches highlighted; tests (with the DevDock test kit), README, CHANGELOG, release `notes@1.0.0`
+- [ ] **M4.7** Search across titles, notes and items with the matches highlighted; tests (with the Kelbo test kit), README, CHANGELOG, release `notes@1.0.0`
 
 ## M5 — DB client: PostgreSQL and SQL Server — extension `db-client`
 
@@ -76,15 +76,27 @@ Goal: the Database section works with PostgreSQL and Microsoft SQL Server as wel
 - [ ] **M5.8** The existing MCP tools of the DB client (`db_client_*`) keep working with the new engines (with schemas; reads in a read-only transaction: `BEGIN READ ONLY` on PostgreSQL, a transaction always rolled back on SQL Server plus the classification of the statement); no new MCP features
 - [ ] **M5.9** Tests (in `extensions/db-client/tests/`, with the core test kit): per-dialect unit tests that need no server (classification, quoting, pagination, DDL generation, introspection mapping), integration tests against disposable PostgreSQL and SQL Server servers when they are available (skipped otherwise, like the MySQL ones); README, CHANGELOG
 
-## M6 — Installation script and DevDock updates from the interface — core
+## M6 — Installation script and Kelbo updates from the interface — core
 
-Goal: DevDock is installed with one command and kept up to date from the header, like the installed extensions; it runs under PM2, so a restart after an update is handled for you.
+Goal: Kelbo is installed with one command and kept up to date from the header, like the installed extensions; it runs under PM2, so a restart after an update is handled for you.
 
-- [ ] **M6.1** Installation script (`install.sh` for macOS/Linux/WSL, `install.ps1` for Windows): checks Node.js (minimum version) and PM2 (offers `npm i -g pm2` when missing), clones DevDock at the latest release tag into a chosen folder (default `~/devdock`), runs `npm install --ignore-scripts`, starts it with `pm2 start` (process name `devdock`, `DEVDOCK_PORT` if given) and `pm2 save`; run again on an existing installation, it updates it. Idempotent, with a clear message at every step; never touches an existing `config.json`
-- [ ] **M6.2** Update check of DevDock itself: the latest `v<x.y.z>` tag of the repository compared with the running version (at start-up, once a day and on demand, like the extensions); a dot on the header (🧩 or a dedicated button) and *DevDock x.y.z available* in the Extensions panel, with the CHANGELOG of the versions in between
-- [ ] **M6.3** *Update DevDock* from the interface, only for a git checkout with no local changes: `git fetch --tags`, checkout of the new tag (fast-forward only, refused with a clear message otherwise), `npm install --ignore-scripts`, progress shown live; the previous tag is kept for a *previous version*. Confirmation first: tunnels, npm processes and mock servers started by DevDock stop at the restart
-- [ ] **M6.4** Restart: under PM2 (`pm_id` in the environment) DevDock asks PM2 to restart it (`pm2 restart devdock` run detached) and the page shows *restarting…*, polls `/api/core/system` until the new version answers and reloads itself (with a timeout and the manual command if it does not come back); without PM2 the update is applied and the page says to restart by hand
+- [ ] **M6.1** Installation script (`install.sh` for macOS/Linux/WSL, `install.ps1` for Windows): checks Node.js (minimum version) and PM2 (offers `npm i -g pm2` when missing), clones Kelbo at the latest release tag into a chosen folder (default `~/devdock`), runs `npm install --ignore-scripts`, starts it with `pm2 start` (process name `devdock`, `DEVDOCK_PORT` if given) and `pm2 save`; run again on an existing installation, it updates it. Idempotent, with a clear message at every step; never touches an existing `config.json`
+- [ ] **M6.2** Update check of Kelbo itself: the latest `v<x.y.z>` tag of the repository compared with the running version (at start-up, once a day and on demand, like the extensions); a dot on the header (🧩 or a dedicated button) and *Kelbo x.y.z available* in the Extensions panel, with the CHANGELOG of the versions in between
+- [ ] **M6.3** *Update Kelbo* from the interface, only for a git checkout with no local changes: `git fetch --tags`, checkout of the new tag (fast-forward only, refused with a clear message otherwise), `npm install --ignore-scripts`, progress shown live; the previous tag is kept for a *previous version*. Confirmation first: tunnels, npm processes and mock servers started by Kelbo stop at the restart
+- [ ] **M6.4** Restart: under PM2 (`pm_id` in the environment) Kelbo asks PM2 to restart it (`pm2 restart devdock` run detached) and the page shows *restarting…*, polls `/api/core/system` until the new version answers and reloads itself (with a timeout and the manual command if it does not come back); without PM2 the update is applied and the page says to restart by hand
 - [ ] **M6.5** Tests (update check against a local repository with tags, refused update with local changes, restart request mocked), README (installation and updates), CHANGELOG
+
+## M7 — New name: Kelbo — core and extensions
+
+Goal: DevDock becomes **Kelbo** (the old name was taken by other developer tools and had no free domain). Repositories in the `kelbodev` organization, website on `kelbo.dev`; existing installations keep working without manual steps.
+
+- [x] **M7.1** Name in the interface (page title, header logo), in the catalogs of every language, in MCP instructions and tool descriptions, in README and docs; repositories moved to `kelbodev/kelbo` and `kelbodev/kelbo-extensions` (GitHub redirects the old URLs); links and official catalog updated, the old catalog URL saved in `config.json` is read as the new one
+- [ ] **M7.2** Apache 2.0 license (`LICENSE`, `"license"` in `package.json`) in both repositories
+- [ ] **M7.3** Technical names: package and commands `kelbo` / `kelbo-mcp`; `~/.devdock` moved to `~/.kelbo` at the first start; `KELBO_*` variables, with `DEVDOCK_*` still read; MCP token file and server name `kelbo` (setup snippets in the 🤖 dialog, old token file renamed); manifest field `"kelbo"`, with `"devdock"` still accepted; PM2 process name
+- [ ] **M7.4** Lock file and list of the installed extensions: repository URLs of `codo82/devdock-extensions` rewritten to `kelbodev/kelbo-extensions` at start-up (until then the GitHub redirect serves them)
+- [ ] **M7.5** `kelbo-extensions`: repository URLs in `index.json`, READMEs, manifests and package names of the extensions
+- [ ] **M7.6** Website `kelbo.dev`: static page in Italian and English (what it does, extensions, screenshots, installation), GitHub Pages with the custom domain
+- [ ] **M7.7** Tests (migration of the home folder, of the token file and of the lock file; old variables and manifest field), README, CHANGELOG
 
 ---
 
@@ -93,7 +105,7 @@ Goal: DevDock is installed with one command and kept up to date from the header,
 Not planned for now; to be taken back into the roadmap when needed (descriptions in [docs/ROADMAP-HISTORY.md](docs/ROADMAP-HISTORY.md), section M8):
 
 - MCP server: activity log of the calls (ex M8.12), resources and `list_changed` notifications (rest of ex M8.13), state-changing tools enabled one by one (ex M8.11)
-- Swagger: specs kept on the server and read-only MCP tools (ex M8.14), in the `swagger` extension of devdock-extensions
+- Swagger: specs kept on the server and read-only MCP tools (ex M8.14), in the `swagger` extension of kelbo-extensions
 
 ---
 
@@ -104,6 +116,7 @@ Not planned for now; to be taken back into the roadmap when needed (descriptions
 | M1 MCP stdio bridge | S | core | done in 2.2.0 |
 | M2 Secrets and lost clicks | S | core, `http-client`, `mongo-client` | done in 2.3.0 |
 | M3 Widgets and project dashboard | M | core contract and host, built-in `dashboard`, widgets in every extension | widget contract first, then the dashboard, then one widget per extension |
-| M4 Notes and to-do lists | S | `notes` (devdock-extensions); link in NPM and Git | sections linked to projects, with a dashboard widget from the start |
+| M4 Notes and to-do lists | S | `notes` (kelbo-extensions); link in NPM and Git | sections linked to projects, with a dashboard widget from the start |
 | M5 PostgreSQL and SQL Server | L | `db-client` | engine layer first (MySQL moved onto it with no change), then one dialect at a time |
 | M6 Install script and updates from the interface | M | core, `install.sh`/`install.ps1` | script first (PM2 is the base of the restart), then check, update and restart from the interface |
+| M7 New name: Kelbo | M | core, extensions, `kelbo-extensions`, website | interface and links first, then technical names with migration of existing installations, then the website |

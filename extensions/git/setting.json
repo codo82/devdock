@@ -64,7 +64,7 @@
         "name": "repos",
         "handler": "repos",
         "readOnly": true,
-        "description": "List the Git repositories of the DevDock projects with current branch, commits ahead/behind the upstream, number of changed files and whether a merge is in progress.",
+        "description": "List the Git repositories of the Kelbo projects with current branch, commits ahead/behind the upstream, number of changed files and whether a merge is in progress.",
         "inputSchema": {
           "type": "object",
           "properties": {}

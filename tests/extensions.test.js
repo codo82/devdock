@@ -118,12 +118,12 @@ test('stato delle estensioni dopo il caricamento', async () => {
   assert.equal(all['senza-manifest'], undefined);
 });
 
-test('contratto versionato: versioni di DevDock compatibili', async () => {
+test('contratto versionato: versioni di Kelbo compatibili', async () => {
   const all = await list();
   const core = require('../package.json').version;
   assert.equal(all.future.state, 'disabled');
-  assert.equal(all.future.error, `future/setting.json: richiede DevDock ^3.0, questa è la ${core}`);
-  assert.match(all.old.error, /richiede DevDock \^1\.0/);
+  assert.equal(all.future.error, `future/setting.json: richiede Kelbo ^3.0, questa è la ${core}`);
+  assert.match(all.old.error, /richiede Kelbo \^1\.0/);
   assert.match(all.norange.error, /"devdock" obbligatorio/);
   assert.match(all.badversion.error, /"version" obbligatoria/);
   assert.equal(all.wide.state, 'ok');
