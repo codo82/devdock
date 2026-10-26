@@ -85,17 +85,19 @@ window.Extensions = (() => {
             ${upd?.moved ? `<span class="ext-pill ext-pill-warn" title="${esc(t('core.ext.movedTitle'))}">${esc(t('core.ext.moved'))}</span>` : ''}</div>
           <div class="ext-muted ext-desc">${esc(pick(e.description))}</div>
           <div class="ext-muted ext-source" title="${esc(sourceLabel(e))}">${esc(sourceLabel(e))}</div>
-          ${e.error ? `<div class="ext-error">${esc(e.error)}</div>` : ''}
-          ${e.warnings?.length ? `<div class="ext-warn">${esc(e.warnings.join(' · '))}</div>` : ''}
+          ${e.error ? `<div class="ext-error">${esc(window.I18n.errorText(e.errorInfo, e.error))}</div>` : ''}
+          ${e.warnings?.length ? `<div class="ext-warn">${esc((e.warningInfo || e.warnings).map(w => window.I18n.errorText(w)).join(' · '))}</div>` : ''}
+          ${duplicate ? '' : `<div class="ext-controls">
+            <label class="ext-toggle" title="${esc(t(e.state === 'off' ? 'core.ext.enable' : 'core.ext.disable'))}">
+              <span class="ext-switch"><input type="checkbox" ${e.state === 'off' ? '' : 'checked'} ${busy ? 'disabled' : ''} onchange="Extensions.toggle(${js(e.code)}, this.checked)"><span></span></span>
+              ${esc(t('core.ext.enabledLabel'))}</label>
+            ${e.frontend?.js && e.manifestPosition ? `<label class="ext-toggle">${esc(t('core.ext.positionLabel'))}
+              <select class="form-input ext-position" title="${esc(t('core.ext.positionTitle'))}" ${busy ? 'disabled' : ''} onchange="Extensions.position(${js(e.code)}, this.value)">
+              ${['tab', 'header'].map(p => `<option value="${p}" ${p === e.position ? 'selected' : ''}>${esc(t(`core.ext.position.${p}`))}${p === e.manifestPosition ? ` ${esc(t('core.ext.position.default'))}` : ''}</option>`).join('')}
+              </select></label>` : ''}
+          </div>`}
         </div>
         <div class="ext-actions">
-          ${!duplicate && e.frontend?.js && e.manifestPosition ? `<select class="form-input ext-position" title="${esc(t('core.ext.positionTitle'))}" ${busy ? 'disabled' : ''}
-              onchange="Extensions.position(${js(e.code)}, this.value)">
-            ${['tab', 'header'].map(p => `<option value="${p}" ${p === e.position ? 'selected' : ''}>${esc(t(`core.ext.position.${p}`))}${p === e.manifestPosition ? ` ${esc(t('core.ext.position.default'))}` : ''}</option>`).join('')}
-            </select>` : ''}
-          ${duplicate ? '' : `
-            <label class="ext-switch" title="${esc(t(e.state === 'off' ? 'core.ext.enable' : 'core.ext.disable'))}">
-              <input type="checkbox" ${e.state === 'off' ? '' : 'checked'} ${busy ? 'disabled' : ''} onchange="Extensions.toggle(${js(e.code)}, this.checked)"><span></span></label>`}
           ${e.source === 'installed' && upd?.available ? `<button class="btn btn-primary btn-sm" onclick="Extensions.update(${js(e.code)})">${esc(t('core.ext.update'))}</button>` : ''}
           ${e.source === 'installed' && e.hasBackup ? `<button class="btn btn-ghost btn-sm" onclick="Extensions.restore(${js(e.code)})" title="${esc(t('core.ext.restoreTitle', { version: e.lock?.previous || '' }))}">${esc(t('core.ext.restore'))}</button>` : ''}
           ${e.source === 'installed' ? `<button class="btn btn-ghost btn-sm ext-danger" onclick="Extensions.remove(${js(e.code)})">${esc(t('core.ext.remove'))}</button>` : ''}
@@ -254,6 +256,7 @@ window.Extensions = (() => {
       }
     } catch (e) { progress.error = e.message; }
     if (progress.result) await window.Shell.syncExtensions();
+    catalog = null;
     await load();
     render();
   }
@@ -261,12 +264,14 @@ window.Extensions = (() => {
   async function act(fn) {
     if (busy) return;
     busy = true;
+    render(); // comandi disattivati finché l'azione non finisce
     try {
       const r = await fn();
       if (r?.restartRequired) toast(t('core.ext.restartNeeded'), 'info');
       await window.Shell.syncExtensions();
     } catch (e) { toast(e.message, 'error'); }
     busy = false;
+    catalog = null; // "già installata" nel catalogo segue installazioni e rimozioni
     await load();
     render();
   }

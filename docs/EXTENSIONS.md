@@ -228,7 +228,7 @@ Error responses have one shape for the core and every extension:
 - Output of external commands (`git`, `npm`, `pm2`, `ssh`, MySQL errors) is not translated: it travels as a parameter (e.g. `git.command_failed` with `{ output }`) and is shown as is.
 - SSE events that carry a DevDock message use the same `{ error, code, params }` object (e.g. the Git `notice` event).
 
-Manifest and loader errors (`GET /api/core/extensions` → `error`, `warnings`) are developer diagnostics and stay in the source language.
+Errors and warnings of the extension state (`GET /api/core/extensions` → `error`, `warnings`) are in the source language; the state ones (dependencies, incompatible DevDock version, duplicate code, config key already used, ignored catalogs) also come as `errorInfo` / `warningInfo` (`{ error, code, params }`), translated by the interface. Manifest validation errors are developer diagnostics and stay in the source language only.
 
 ## Projects and folders
 

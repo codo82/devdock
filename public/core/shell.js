@@ -99,7 +99,7 @@ window.Shell = (() => {
 
   function warningMark(meta) {
     return meta.warnings?.length
-      ? `<span class="ext-warning" title="${esc(meta.warnings.join('\n'))}">⚠</span>` : '';
+      ? `<span class="ext-warning" title="${esc((meta.warningInfo || meta.warnings).map(w => window.I18n.errorText(w)).join('\n'))}">⚠</span>` : '';
   }
 
   function createTab(meta) {

@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-10-26
+
+### Added
+- **HTTP client — filter in the Express routes dialog**: text (path, file, method; several words all match), method and *Not imported only*, with the count of the routes shown; the filter stays when coming back from importing a route.
+
+### Changed
+- **Extensions panel**: the switch and the Tab/Header selector are on a second line of each extension, under its description, with their labels; no more horizontal scrolling or controls cut off on the right.
+
+### Fixed
+- **Extensions panel**: after installing, removing, switching an extension or going back to a previous version, the catalog showed the old state (e.g. *installed* for an extension just removed) until DevDock was reloaded; while an action runs the other controls are disabled.
+- Warnings and errors of the extension state (optional dependency not available, missing dependency, incompatible DevDock version, …) were always in Italian: they are now in the core catalogs and shown in the interface language (`warningInfo` / `errorInfo` in `/api/core/extensions`, with the source text still in `warnings` / `error`).
+
 ## [2.6.1] - 2026-10-26
 
 ### Added

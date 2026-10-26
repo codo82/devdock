@@ -797,26 +797,63 @@ export default {
 
     let routesData = null;
 
+    // filtro delle rotte: testo (percorso, file, metodo), metodo e "solo da importare";
+    // resta impostato tornando dall'import di una rotta
+    let routesFilter = { text: '', method: '', pending: false };
     async function routesDialog(sectionId) {
       const s = section(sectionId);
       try { routesData = await ctx.api.get(`/sections/${encodeURIComponent(sectionId)}/routes`); } catch (e) { toast(e.message, 'error'); return; }
       routesData.section = sectionId;
+      routesFilter = { text: '', method: '', pending: false };
+      renderRoutes();
+    }
+
+    function renderRoutes() {
+      const s = section(routesData.section);
       const existing = new Set(s.requests.map(r => `${r.method} ${r.url.replace(/^\{\{\s*baseUrl\s*\}\}/, '')}`));
       const d = routesData;
       openModal(t('routes.title', { section: s.label }), `<div class="hc-scroll">
         <p class="hc-muted">${esc(d.entry ? t('routes.entry', { file: d.entry.file, from: d.entry.from, count: d.files }) : t('routes.noEntry', { count: d.files }))}</p>
         ${d.autoloaders.length ? `<p class="hc-warn">${esc(t('routes.autoloaders', { list: fmt.list(d.autoloaders) }))}</p>` : ''}
-        ${d.routes.length ? `<table class="data-table hc-routes"><thead><tr><th>${esc(t('routes.method'))}</th><th>${esc(t('routes.path'))}</th><th>${esc(t('routes.file'))}</th><th></th></tr></thead><tbody>
-          ${d.routes.map((r, i) => `<tr>
+        ${d.routes.length ? `<div class="hc-routes-filter">
+          <input class="form-input" id="f_hc_rfilter" type="search" value="${esc(routesFilter.text)}" placeholder="${esc(t('routes.filter'))}" aria-label="${esc(t('routes.filter'))}" oninput="Ext['http-client'].filterRoutes()" spellcheck="false" autocomplete="off">
+          <select class="form-input hc-method" id="f_hc_rfmethod" onchange="Ext['http-client'].filterRoutes()" aria-label="${esc(t('routes.method'))}">
+            <option value="">${esc(t('routes.allMethods'))}</option>
+            ${[...new Set(d.routes.map(r => r.method))].sort().map(m => `<option ${m === routesFilter.method ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+          </select>
+          <label class="hc-check"><input type="checkbox" id="f_hc_rfpending" ${routesFilter.pending ? 'checked' : ''} onchange="Ext['http-client'].filterRoutes()"> ${esc(t('routes.onlyPending'))}</label>
+          <span class="hc-muted" id="f_hc_rcount"></span>
+        </div>
+        <table class="data-table hc-routes"><thead><tr><th>${esc(t('routes.method'))}</th><th>${esc(t('routes.path'))}</th><th>${esc(t('routes.file'))}</th><th></th></tr></thead><tbody>
+          ${d.routes.map((r, i) => `<tr data-route="${i}" data-imported="${existing.has(`${r.method} ${r.path}`) ? 1 : ''}" data-search="${esc(`${r.method} ${r.path} ${r.file}`.toLowerCase())}">
             <td>${methodBadge(r.method)}</td>
             <td><code>${esc(r.path)}</code>${r.complete ? '' : ` <span class="hc-warn">${esc(t('routes.incomplete'))}</span>`}</td>
             <td class="hc-muted">${esc(r.file)}:${esc(r.line)}</td>
             <td>${existing.has(`${r.method} ${r.path}`) ? `<span class="hc-muted">${esc(t('routes.imported'))}</span>`
               : `<button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].importRoute(${i})">${esc(t('routes.import'))}</button>`}</td>
-          </tr>`).join('')}</tbody></table>` : `<p class="hc-muted">${esc(t('routes.none'))}</p>`}
+          </tr>`).join('')}</tbody></table>
+        <p class="hc-muted" id="f_hc_rnomatch" hidden>${esc(t('routes.noMatch'))}</p>` : `<p class="hc-muted">${esc(t('routes.none'))}</p>`}
         <p class="hc-muted">${esc(t('routes.hint'))}</p></div>`,
         `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>`);
       byId('modal').classList.add('modal-wide');
+      if (d.routes.length) { filterRoutes(); setTimeout(() => byId('f_hc_rfilter')?.focus(), 0); }
+    }
+
+    function filterRoutes() {
+      if (!byId('f_hc_rfilter')) return;
+      routesFilter = { text: val('f_hc_rfilter'), method: val('f_hc_rfmethod'), pending: byId('f_hc_rfpending').checked };
+      const words = routesFilter.text.toLowerCase().split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const row of document.querySelectorAll('.hc-routes tr[data-route]')) {
+        const r = routesData.routes[Number(row.dataset.route)];
+        const ok = (!routesFilter.method || r.method === routesFilter.method)
+          && (!routesFilter.pending || !row.dataset.imported)
+          && words.every(w => row.dataset.search.includes(w));
+        row.hidden = !ok;
+        if (ok) shown++;
+      }
+      byId('f_hc_rcount').textContent = t('routes.shown', { shown: fmt.number(shown), total: fmt.number(routesData.routes.length) });
+      byId('f_hc_rnomatch').hidden = shown > 0;
     }
 
     // Import di una rotta: percorso modificabile (le parti «…» vanno completate), poi la richiesta
@@ -829,7 +866,7 @@ export default {
         <div class="hc-inline"><select class="form-input hc-method" id="f_hc_rmethod">${info.methods.map(m => `<option ${m === method ? 'selected' : ''}>${m}</option>`).join('')}</select>
           <input class="form-input" id="f_hc_rpath" value="${esc(r.path)}" spellcheck="false"></div>
         <p class="hc-muted">${esc(r.complete ? t('routes.importHint') : t('routes.completeHint', { list: fmt.list(r.unresolved) }))}</p>`,
-        `<button class="btn btn-ghost" onclick="Ext['http-client'].routes(${js(routesData.section)})">${esc(t('core.action.cancel'))}</button>
+        `<button class="btn btn-ghost" onclick="Ext['http-client'].backToRoutes()">${esc(t('core.action.cancel'))}</button>
          <button class="btn btn-primary" onclick="Ext['http-client'].confirmImport()">${esc(t('routes.import'))}</button>`);
       setTimeout(() => byId('f_hc_rpath')?.focus(), 0);
     }
@@ -1001,6 +1038,8 @@ export default {
         try { await ctx.api.del(`/sections/${encodeURIComponent(usersSection)}/users/${encodeURIComponent(uid)}/token`); usersDialog(usersSection); } catch (e) { toast(e.message, 'error'); }
       },
       routes: routesDialog,
+      backToRoutes: renderRoutes,
+      filterRoutes,
       importRoute,
       confirmImport,
     });

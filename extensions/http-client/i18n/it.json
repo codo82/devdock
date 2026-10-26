@@ -304,5 +304,10 @@
   "npmOutput.lost": "[connessione persa]",
   "editor.forgetToken": "Dimentica token",
   "editor.forgetTokenTitle": "Dimentica il token in memoria dell'utenza scelta: al prossimo invio se ne ottiene uno nuovo",
-  "editor.tokenForgotten": "Token di {name} dimenticato"
+  "editor.tokenForgotten": "Token di {name} dimenticato",
+  "routes.filter": "Filtra per percorso, file o metodo…",
+  "routes.allMethods": "Tutti i metodi",
+  "routes.onlyPending": "Solo da importare",
+  "routes.shown": "{shown} di {total}",
+  "routes.noMatch": "Nessuna rotta corrisponde al filtro."
 }

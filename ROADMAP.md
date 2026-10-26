@@ -76,6 +76,16 @@ Goal: the Database section works with PostgreSQL and Microsoft SQL Server as wel
 - [ ] **M5.8** The existing MCP tools of the DB client (`db_client_*`) keep working with the new engines (with schemas; reads in a read-only transaction: `BEGIN READ ONLY` on PostgreSQL, a transaction always rolled back on SQL Server plus the classification of the statement); no new MCP features
 - [ ] **M5.9** Tests (in `extensions/db-client/tests/`, with the core test kit): per-dialect unit tests that need no server (classification, quoting, pagination, DDL generation, introspection mapping), integration tests against disposable PostgreSQL and SQL Server servers when they are available (skipped otherwise, like the MySQL ones); README, CHANGELOG
 
+## M6 — Installation script and DevDock updates from the interface — core
+
+Goal: DevDock is installed with one command and kept up to date from the header, like the installed extensions; it runs under PM2, so a restart after an update is handled for you.
+
+- [ ] **M6.1** Installation script (`install.sh` for macOS/Linux/WSL, `install.ps1` for Windows): checks Node.js (minimum version) and PM2 (offers `npm i -g pm2` when missing), clones DevDock at the latest release tag into a chosen folder (default `~/devdock`), runs `npm install --ignore-scripts`, starts it with `pm2 start` (process name `devdock`, `DEVDOCK_PORT` if given) and `pm2 save`; run again on an existing installation, it updates it. Idempotent, with a clear message at every step; never touches an existing `config.json`
+- [ ] **M6.2** Update check of DevDock itself: the latest `v<x.y.z>` tag of the repository compared with the running version (at start-up, once a day and on demand, like the extensions); a dot on the header (🧩 or a dedicated button) and *DevDock x.y.z available* in the Extensions panel, with the CHANGELOG of the versions in between
+- [ ] **M6.3** *Update DevDock* from the interface, only for a git checkout with no local changes: `git fetch --tags`, checkout of the new tag (fast-forward only, refused with a clear message otherwise), `npm install --ignore-scripts`, progress shown live; the previous tag is kept for a *previous version*. Confirmation first: tunnels, npm processes and mock servers started by DevDock stop at the restart
+- [ ] **M6.4** Restart: under PM2 (`pm_id` in the environment) DevDock asks PM2 to restart it (`pm2 restart devdock` run detached) and the page shows *restarting…*, polls `/api/core/system` until the new version answers and reloads itself (with a timeout and the manual command if it does not come back); without PM2 the update is applied and the page says to restart by hand
+- [ ] **M6.5** Tests (update check against a local repository with tags, refused update with local changes, restart request mocked), README (installation and updates), CHANGELOG
+
 ---
 
 ## Parked
@@ -96,3 +106,4 @@ Not planned for now; to be taken back into the roadmap when needed (descriptions
 | M3 Widgets and project dashboard | M | core contract and host, built-in `dashboard`, widgets in every extension | widget contract first, then the dashboard, then one widget per extension |
 | M4 Notes and to-do lists | S | `notes` (devdock-extensions); link in NPM and Git | sections linked to projects, with a dashboard widget from the start |
 | M5 PostgreSQL and SQL Server | L | `db-client` | engine layer first (MySQL moved onto it with no change), then one dialect at a time |
+| M6 Install script and updates from the interface | M | core, `install.sh`/`install.ps1` | script first (PM2 is the base of the restart), then check, update and restart from the interface |

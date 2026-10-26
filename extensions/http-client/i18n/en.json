@@ -304,5 +304,10 @@
   "npmOutput.lost": "[connection lost]",
   "editor.forgetToken": "Forget token",
   "editor.forgetTokenTitle": "Forget the in-memory token of the chosen user type: the next send obtains a new one",
-  "editor.tokenForgotten": "Token of {name} forgotten"
+  "editor.tokenForgotten": "Token of {name} forgotten",
+  "routes.filter": "Filter by path, file or method…",
+  "routes.allMethods": "All methods",
+  "routes.onlyPending": "Not imported only",
+  "routes.shown": "{shown} of {total}",
+  "routes.noMatch": "No route matches the filter."
 }
