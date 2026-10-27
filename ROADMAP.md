@@ -50,17 +50,17 @@ Goal: every extension can share a **mini view** (widget) of what it knows about 
 - [ ] **M3.5** Widgets of the installed extensions in kelbo-extensions, each released with its own version: `mongo-client` (connections linked to a project — needs a `projectId` field like the DB client), `ports` (ports in use by the project's processes); `notes` gets its widget in M4.6
 - [ ] **M3.6** Tests (contract and host with fixture extensions, a broken widget isolated, dashboard layout saved per project), README section "Dashboard", CHANGELOG
 
-## M4 — Notes and to-do lists — new external extension `notes` (kelbo-extensions)
+## M4 — Notes and to-do lists — new external extension `notes` (kelbo-extensions) — `notes@1.0.0` ✅ except M4.5–M4.7
 
-Goal: notes and to-do lists kept next to the code, grouped in sections (folders) that can be linked to a project. Small and self-contained, so it is born as an installable extension in `kelbo-extensions` (`notes@1.0.0`, `"devdock": "^2.4"` for the widget contract of M3); the core does not change, NPM and Git only get a link to it (M4.5). Nothing secret is meant to go here: notes are stored in clear like the rest of the configuration.
+Goal: to-do lists and notes kept next to the code, one board per project. Small and self-contained, so it is born as an installable extension in `kelbo-extensions`; the core does not change. *Changed from the first plan: the content is encrypted with the master password (it may hold anything), boards are the projects themselves instead of free sections, and notes are sticky notes instead of Markdown documents.*
 
-- [ ] **M4.1** Data: sections (one level, like the DB client folders) with name, colour and an optional linked project (`projectId` of the core projects); each section holds notes and to-do lists, in the order chosen by the user. Note: title, Markdown text, last change. To-do list: title and items (text, done, done date), at most a few hundred items per list. Stored in the extension's own config section (`notes`), validated on every save, with an Export/Import checkbox "Note e to-do"
-- [ ] **M4.2** Sidebar: sections ▸ notes and lists, with the number of open items per list and per section; new section / note / list, rename, move between sections, delete (with confirmation), drag to reorder; filter by text; a project selector that shows only the sections linked to it (plus the unlinked ones)
-- [ ] **M4.3** Note editor: Markdown text with a preview (headings, lists, checkboxes, links, code, tables; rendered without external libraries and escaped, links opened outside Kelbo), saved automatically a moment after the last keystroke, "saved" indicator; a note changed elsewhere in the meantime is not overwritten
-- [ ] **M4.4** To-do lists: add an item with Enter, edit in place, check/uncheck, reorder by dragging, delete; done items collapsed at the bottom with their date and a *Clear done* action; the badge on the tab counts the open items
-- [ ] **M4.5** Link with the projects: the section's project shown in the sidebar and in the header of the note; a project removed from Kelbo leaves the section unlinked, not deleted; from the NPM and Git sections, a link *Notes of this project* opens the extension filtered on that project (`ctx.open` and the event bus, only when `notes` is installed)
-- [ ] **M4.6** Widget for the project dashboard (M3): open items of the to-do lists of the project's sections (check them from the widget, add one) and the last notes changed
-- [ ] **M4.7** Search across titles, notes and items with the matches highlighted; tests (with the Kelbo test kit), README, CHANGELOG, release `notes@1.0.0`
+- [x] **M4.1** Data: one board per project of Kelbo plus *General*; each board holds to-do lists (name and items: text, done, done date) and notes (text, colour, last change). The content of a board is one box encrypted by the core vault, in the extension's section `notesBoards`; the vault locked → `423` on every route; master password changed → re-encrypted, reset → deleted. Export/Import checkbox "Note e to-do"
+- [x] **M4.2** Sidebar: *General* and the projects (with their folders), the number of open items per board, boards of removed projects under *Removed projects*; the badge on the tab counts the open items
+- [x] **M4.3** Notes: sticky notes in a grid, six colours, saved automatically a moment after the last keystroke with a "saved" indicator; a note changed elsewhere in the meantime is not overwritten (`409`)
+- [x] **M4.4** To-do lists: several per board; add an item with Enter, edit in place, check/uncheck, reorder by dragging, delete; done items under the open ones with their date and *Clear done*; lists renamed in place, moved and deleted from their menu
+- [ ] **M4.5** From the NPM and Git sections, a link *Notes of this project* opens the extension on that project (`ctx.open` and the event bus, only when `notes` is installed)
+- [ ] **M4.6** Widget for the project dashboard (M3): open items of the project's lists (check them from the widget, add one) and the last notes changed
+- [ ] **M4.7** Search across list names, items and notes of every board, with the matches highlighted
 
 ## M5 — DB client: PostgreSQL and SQL Server — extension `db-client`
 
@@ -116,7 +116,7 @@ Not planned for now; to be taken back into the roadmap when needed (descriptions
 | M1 MCP stdio bridge | S | core | done in 2.2.0 |
 | M2 Secrets and lost clicks | S | core, `http-client`, `mongo-client` | done in 2.3.0 |
 | M3 Widgets and project dashboard | M | core contract and host, built-in `dashboard`, widgets in every extension | widget contract first, then the dashboard, then one widget per extension |
-| M4 Notes and to-do lists | S | `notes` (kelbo-extensions); link in NPM and Git | sections linked to projects, with a dashboard widget from the start |
+| M4 Notes and to-do lists | S | `notes` (kelbo-extensions); link in NPM and Git | `notes@1.0.0` done (boards per project, encrypted); link, widget and search left |
 | M5 PostgreSQL and SQL Server | L | `db-client` | engine layer first (MySQL moved onto it with no change), then one dialect at a time |
 | M6 Install script and updates from the interface | M | core, `install.sh`/`install.ps1` | script first (PM2 is the base of the restart), then check, update and restart from the interface |
 | M7 New name: Kelbo | M | core, extensions, `kelbo-extensions`, website | interface and links first, then technical names with migration of existing installations, then the website |
