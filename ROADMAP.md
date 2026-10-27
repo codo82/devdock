@@ -98,6 +98,20 @@ Goal: DevDock becomes **Kelbo** (the old name was taken by other developer tools
 - [ ] **M7.6** Website `kelbo.dev`: static page in Italian and English (what it does, extensions, screenshots, installation), GitHub Pages with the custom domain
 - [ ] **M7.7** Tests (migration of the home folder, of the token file and of the lock file; old variables and manifest field), README, CHANGELOG
 
+## M8 — Angular CLI — new external extension `angular-cli` (kelbo-extensions)
+
+Goal: run the Angular CLI generators of a project from Kelbo (component, service, directive, pipe, guard…) with a form built from the generator's own options, see the files before they are written, and keep `ng add` / `ng update` at hand. Angular-specific, so it is born as an installable extension in `kelbo-extensions` (`angular-cli@1.0.0`); the core does not change.
+
+- [ ] **M8.1** Angular workspaces among the core projects: a project with `angular.json` is recognised, with its applications and libraries (`projects` of `angular.json`), the Angular CLI version installed in the project (`node_modules/@angular/cli`) and the defaults of `schematics` in `angular.json`; the CLI is always the project's own (`node_modules/.bin/ng`, run without a shell), never a global one; a project without `node_modules` shows *run npm install first* (with the NPM extension, a button that does it)
+- [ ] **M8.2** Generators: the schematics of `@schematics/angular` (component, service, directive, pipe, guard, interceptor, resolver, class, interface, enum, module, environments, config…) plus those of the other collections installed in the project (packages with a `schematics` field, e.g. Angular Material, NgRx), read from their `collection.json`; hidden and private schematics left out
+- [ ] **M8.3** Generate dialog: target project of the workspace, name with optional path (`features/orders/order-list`), and a form built from the schematic's `schema.json` (booleans, enums, strings, `x-prompt` texts as labels), with the `angular.json` defaults pre-filled and only the changed options passed to the CLI; every value validated before it reaches the command (`ctx.lib.validate`)
+- [ ] **M8.4** Preview with `--dry-run` before writing: files that would be created or updated, with their path; *Generate* runs the same command for real, shows its output live and lists the files written; the preview is rebuilt when the form changes, and a file that would be overwritten is marked
+- [ ] **M8.5** Recent generators per project (schematic and options, without the name) to repeat one with a click; the last options used become the defaults of the dialog for that project
+- [ ] **M8.6** `ng add <package>` (with the package's own prompts answered from a form when it declares them, otherwise run with `--defaults`) and `ng update`: list of the packages that can be updated, update one or all, output live; refused when the Git working tree has uncommitted changes, unless confirmed (with the Git extension, the changed files are shown)
+- [ ] **M8.7** Link with the other sections: from NPM and Git, *Angular CLI* on Angular projects (only when `angular-cli` is installed); widget for the project dashboard (M3) with the quick generators
+- [ ] **M8.8** MCP tools: list of the Angular workspaces and of their generators with options (read-only); `angular_cli_generate` (state-changing, dry run unless `apply: true`)
+- [ ] **M8.9** Tests with the Kelbo test kit (fixture workspace with a fake `ng` that records its arguments and answers like the dry run; real `collection.json` / `schema.json` of `@schematics/angular` as fixtures for the form), README, CHANGELOG, release `angular-cli@1.0.0`
+
 ---
 
 ## Parked
@@ -120,3 +134,4 @@ Not planned for now; to be taken back into the roadmap when needed (descriptions
 | M5 PostgreSQL and SQL Server | L | `db-client` | engine layer first (MySQL moved onto it with no change), then one dialect at a time |
 | M6 Install script and updates from the interface | M | core, `install.sh`/`install.ps1` | script first (PM2 is the base of the restart), then check, update and restart from the interface |
 | M7 New name: Kelbo | M | core, extensions, `kelbo-extensions`, website | interface and links first, then technical names with migration of existing installations, then the website |
+| M8 Angular CLI | M | `angular-cli` (kelbo-extensions) | workspaces and generators first, then the form from `schema.json` with dry-run preview, then `ng add` / `ng update` and MCP tools |
