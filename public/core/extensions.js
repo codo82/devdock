@@ -47,6 +47,7 @@ window.Extensions = (() => {
       `<button class="btn btn-ghost" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>`);
     document.getElementById('modal').classList.add('modal-wide');
     render();
+    if (!catalog) loadCatalog(); // versioni nuove nel catalogo → controllo degli aggiornamenti subito
   }
 
   const root = () => document.getElementById('extAdmin');
@@ -122,10 +123,19 @@ window.Extensions = (() => {
       </div>`;
   }
 
-  async function loadCatalog(refresh = false) {
+  let catalogLoading = null;
+  function loadCatalog(refresh = false) {
+    if (!refresh && catalogLoading) return catalogLoading;
+    catalogLoading = fetchCatalog(refresh).finally(() => { catalogLoading = null; });
+    return catalogLoading;
+  }
+  async function fetchCatalog(refresh) {
     try { catalog = await api.get(`/extensions-admin/catalog${refresh ? '?refresh=1' : ''}`); }
     catch (e) { catalog = { catalogs: [], extensions: [], error: e.message }; }
-    if (tab === 'catalog') render();
+    // il server ha rifatto il controllo degli aggiornamenti (il catalogo ne mostrava di nuovi):
+    // elenco delle installate e badge li seguono
+    if (catalog.updatesCheckedAt && catalog.updatesCheckedAt !== data?.updatesCheckedAt) await load();
+    if (root() && !preview && !progress) render();
   }
 
   function renderCatalog() {
@@ -140,10 +150,12 @@ window.Extensions = (() => {
       ${list.length ? list.map(e => `<div class="ext-row">
           <div class="ext-icon">${esc(e.icon || '◆')}</div>
           <div class="ext-info"><div class="ext-name">${esc(pick(e.name))} <span class="ext-muted">${esc(e.code)}${e.version ? ` · ${esc(e.version)}` : ''}</span>
-            ${e.installed ? `<span class="ext-pill ext-pill-ok">${esc(t('core.ext.alreadyInstalled', { version: e.installed.version || '' }))}</span>` : ''}</div>
+            ${e.installed ? `<span class="ext-pill ext-pill-ok">${esc(t('core.ext.alreadyInstalled', { version: e.installed.version || '' }))}</span>` : ''}
+            ${e.update?.available ? `<span class="ext-pill ext-pill-upd">${esc(t('core.ext.updateAvailable', { version: e.update.latest || '' }))}</span>` : ''}</div>
             <div class="ext-muted ext-desc">${esc(pick(e.description))}</div>
             <div class="ext-muted ext-source">${esc(e.repo)}${e.path ? ` · ${esc(e.path)}` : ''}</div></div>
-          <div class="ext-actions">${e.installed ? '' : `<button class="btn btn-primary btn-sm" onclick="Extensions.previewCatalog(${js(e.code)})">${esc(t('core.ext.install'))}</button>`}</div>
+          <div class="ext-actions">${!e.installed ? `<button class="btn btn-primary btn-sm" onclick="Extensions.previewCatalog(${js(e.code)})">${esc(t('core.ext.install'))}</button>`
+            : e.update?.available ? `<button class="btn btn-primary btn-sm" onclick="Extensions.update(${js(e.code)})">${esc(t('core.ext.update'))}</button>` : ''}</div>
         </div>`).join('') : `<p class="ext-muted">${esc(t(catalog.extensions.length ? 'core.ext.noMatch' : 'core.ext.catalogEmpty'))}</p>`}`;
   }
 

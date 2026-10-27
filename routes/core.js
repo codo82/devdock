@@ -10,6 +10,7 @@ const projects = require('../lib/projects');
 const layout = require('../lib/layout');
 const vault = require('../lib/vault');
 const installer = require('../lib/ext-install');
+const semver = require('../lib/semver');
 const { validateManifest, CORE_VERSION } = require('../lib/extensions');
 const { loadConfig, saveConfig } = require('../lib/config');
 const { openSse } = require('../lib/sse');
@@ -151,7 +152,19 @@ module.exports = function coreRoutes(extensions) {
   router.get('/extensions-admin/catalog', extCall(async req => {
     const data = await installer.catalogs(catalogUrls(), { refresh: !!req.query.refresh });
     const present = known();
-    return { ...data, extensions: data.extensions.map(e => ({ ...e, installed: present[e.code] || null })) };
+    const newer = e => {
+      const p = present[e.code];
+      return p?.source === 'installed' && semver.valid(e.version) && semver.valid(p.version) && semver.compare(e.version, p.version) > 0;
+    };
+    // il catalogo ha una versione più nuova di quella installata ma il controllo dei tag (una
+    // volta al giorno) non la conosce ancora: lo si rifà subito, al massimo una volta al minuto
+    const stale = data.extensions.some(e => newer(e) && !updates.extensions[e.code]?.available);
+    if (stale && Date.now() - Date.parse(updates.checkedAt || 0) > 60 * 1000) await checkUpdates();
+    return {
+      ...data,
+      updatesCheckedAt: updates.checkedAt,
+      extensions: data.extensions.map(e => ({ ...e, installed: present[e.code] || null, update: newer(e) ? updates.extensions[e.code] || null : null })),
+    };
   }));
 
   router.put('/extensions-admin/catalogs', extCall(req => {

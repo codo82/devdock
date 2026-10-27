@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-10-27
+
+### Fixed
+- **Extensions panel — updates not offered**: the catalog could show a newer version of an installed extension (e.g. *notes 1.2.0, installed 1.0.0*) while the panel offered no update, because the update check on the repository tags runs at start-up and once a day and had run before the new tag was published. When the catalog lists a newer version than the one installed and the last check doesn't know it, the check is run again at once (at most once a minute); the catalog is read in the background when the panel opens, so the *Installed* tab and the badge on 🧩 follow, and the catalog row of an installed extension shows *x.y.z available* with **Update**.
+
 ### Changed
 - **New name: Kelbo.** DevDock is now called Kelbo: page title, header, interface texts in every language, MCP instructions, README and docs. The repositories moved to [kelbodev/kelbo](https://github.com/kelbodev/kelbo) and [kelbodev/kelbo-extensions](https://github.com/kelbodev/kelbo-extensions); GitHub redirects the old addresses. Commands, environment variables and folders keep their current names for now.
 - **Official extensions catalog** at its new address; a list of catalogs saved with the old address uses the new one.
