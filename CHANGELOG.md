@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.11.1] - 2026-10-28
+
+### Changed
+- **Database**: the column headers of query results, table data and structure stay at the top while the rows are scrolled; only the table scrolls, the bar with search, filters and pages (or the result summary) stays in view.
+
 ## [2.11.0] - 2026-10-28
 
 ### Added

@@ -51,7 +51,9 @@
 /* risultati */
 .db-results{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
 .db-result-meta{padding:6px 16px;font-size:11px;color:var(--muted);font-family:var(--font);border-bottom:1px solid var(--border)}
-.db-table-wrap{overflow:auto;flex:1}
+.db-table-wrap{overflow:auto;flex:1;min-height:0}
+/* intestazione delle colonne ferma mentre si scorrono le righe (risultati, dati, struttura) */
+.db-table thead th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--border)}
 .db-table td{white-space:nowrap;max-width:420px;overflow:hidden;text-overflow:ellipsis}
 .db-null{color:var(--muted);font-style:italic}
 /* celle modificate non ancora salvate */
