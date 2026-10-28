@@ -27,7 +27,9 @@ npm start          # or: npm run dev  (restarts automatically on changes)
 
 Then open <http://127.0.0.1:3500>.
 
-Optional environment variables: `DEVDOCK_PORT` (port, default 3500), `DEVDOCK_CONFIG` (configuration path, default `config.json` in the project folder) and `DEVDOCK_HOME` (Kelbo's own folder outside the repository, default `~/.devdock`: installed extensions, their lock file and backups).
+Optional environment variables: `KELBO_PORT` (port, default 3500), `KELBO_CONFIG` (configuration path, default `config.json` in the project folder) and `KELBO_HOME` (Kelbo's own folder outside the repository, default `~/.kelbo`: installed extensions, their lock file and backups). The `DEVDOCK_*` names used before 2.13 still work (`KELBO_*` wins when both are set).
+
+**Coming from DevDock (before 2.13)**: nothing to do. At the first start `~/.devdock` is moved to `~/.kelbo` with everything in it — installed extensions (with their npm dependencies), lock file and backups of the previous versions — so the downloaded extensions keep working and keep *previous version*; the move is a single rename, or a copy that is checked before the old folder is deleted, and on any error Kelbo goes on with `~/.devdock` and says why in its log. Nothing moves when `KELBO_HOME`/`DEVDOCK_HOME` is set or when `~/.kelbo` already exists. The MCP token file is renamed too (same token), the addresses of the official extensions repository (`codo82/devdock-extensions` → `kelbodev/kelbo-extensions`) are rewritten in the lock file and in the list of installed extensions, and the `devdock`/`devdock-mcp` commands and `bin/devdock-mcp.js` still work (the Claude Desktop entries already copied keep running).
 
 When the server stops (Ctrl+C, `kill` or closing the terminal), the tunnels and npm processes started by Kelbo are terminated.
 
@@ -90,25 +92,25 @@ A connection can be linked to a **migrations folder in a repository** (📁 Migr
 Kelbo is also an **MCP server**, so AI agents (Claude Code, Claude Desktop, any MCP client) can look at your development environment: tunnels, PM2 processes, Git repositories, npm projects and databases. Click 🤖 in the header for the endpoint, the token and ready-to-copy setup:
 
 ```bash
-claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"
+claude mcp add --transport http kelbo http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"
 ```
 
-Clients that start MCP servers as processes (Claude Desktop and similar) use Kelbo's **stdio bridge**, `bin/devdock-mcp.js` (also `devdock mcp`, or `devdock-mcp` after `npm link`). The 🤖 dialog gives the ready-to-copy `claude_desktop_config.json` entry, with the absolute paths of Node.js and of the bridge:
+Clients that start MCP servers as processes (Claude Desktop and similar) use Kelbo's **stdio bridge**, `bin/kelbo-mcp.js` (also `kelbo mcp`, or `kelbo-mcp` after `npm link`). The 🤖 dialog gives the ready-to-copy `claude_desktop_config.json` entry, with the absolute paths of Node.js and of the bridge:
 
 ```json
-{ "mcpServers": { "devdock": { "command": "/usr/local/bin/node", "args": ["/path/to/devdock/bin/devdock-mcp.js"] } } }
+{ "mcpServers": { "kelbo": { "command": "/usr/local/bin/node", "args": ["/path/to/kelbo/bin/kelbo-mcp.js"] } } }
 ```
 
-The bridge reads the port and the token of the instance by itself (the same `DEVDOCK_PORT` and `DEVDOCK_CONFIG` as the server, added to the entry as `env` only when they are not the default ones), so the client configuration holds no secret and keeps working after the token is regenerated; when Kelbo is not running the client gets a clear error. Copy the entry again if you update Node.js or move the Kelbo folder.
+The bridge reads the port and the token of the instance by itself (the same `KELBO_PORT` and `KELBO_CONFIG` as the server, added to the entry as `env` only when they are not the default ones), so the client configuration holds no secret and keeps working after the token is regenerated; when Kelbo is not running the client gets a clear error. Copy the entry again if you update Node.js or move the Kelbo folder.
 
 - **What an agent can do**: read tunnels and their status, which `.env` keys are missing (never the values), Git repositories (branch, ahead/behind, status, log), npm projects and scripts, the output of npm processes; **start and stop npm scripts**; on databases list connections (without credentials), databases, tables and table structures, and run read-only queries (row limit, run in a `READ ONLY` transaction); list the mock servers and read the calls they received (credential headers such as `Authorization`, `Cookie` and API keys are redacted). Installed extensions add their own tools (PM2 processes and logs, listening ports…). Nothing else changes state.
 - **Databases need the vault unlocked from the Kelbo UI**: the master password never goes through the agent. When the vault is locked the tools answer with a clear error asking you to unlock it.
-- **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.devdock-mcp-token` next to `config.json` (not exported, regenerable from the 🤖 dialog). Requests coming from a browser are rejected.
+- **Access**: only on `127.0.0.1`, with a bearer token generated on first start and stored in `.kelbo-mcp-token` next to `config.json` (not exported, regenerable from the 🤖 dialog). Requests coming from a browser are rejected.
 - Tool names are prefixed with the extension (`git_status`, `npm_run`, `db_client_query`); errors carry the same codes as the API.
 
 ## Extensions
 
-Every section of Kelbo is an extension. Some are **built in** (they come with Kelbo and are updated with it); others are **installed** from git repositories into `~/.devdock/extensions`.
+Every section of Kelbo is an extension. Some are **built in** (they come with Kelbo and are updated with it); others are **installed** from git repositories into `~/.kelbo/extensions`.
 
 The official extensions live in [kelbo-extensions](https://github.com/kelbodev/kelbo-extensions), whose catalog is the default one of the panel:
 
@@ -129,7 +131,7 @@ Versions are the semver tags of the repository (`v1.2.0` for an extension at the
 
 The **Installed extensions** export checkbox exports the list (source and tag, no code): on another machine the imported list appears in the panel as *To install*, each with its preview.
 
-From the command line (`npm run ext -- <command>` or `devdock ext <command>` when Kelbo is installed globally): `list`, `install <url|code> [--path folder] [--tag tag] [--yes]`, `update <code>`, `remove <code>`, `check`. With Kelbo running the change is loaded at once; otherwise it applies at the next start.
+From the command line (`npm run ext -- <command>` or `kelbo ext <command>` when Kelbo is installed globally): `list`, `install <url|code> [--path folder] [--tag tag] [--yes]`, `update <code>`, `remove <code>`, `check`. With Kelbo running the change is loaded at once; otherwise it applies at the next start.
 
 ## Configuration
 

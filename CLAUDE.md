@@ -20,5 +20,5 @@ Read before changing code:
 ## Running and testing
 
 - `npm test` — integration tests (`node:test`); each test file starts Kelbo as a separate process with a temporary config (`tests/helpers.js`).
-- Manual checks: start an instance with `DEVDOCK_PORT=<port> DEVDOCK_CONFIG=<tmp file>` and temporary git repos/projects. Never modify the user's `config.json`, and never start tunnels towards the user's real servers (use aliases on `.invalid` domains).
+- Manual checks: start an instance with `KELBO_PORT=<port> KELBO_CONFIG=<tmp file>` and temporary git repos/projects. Never modify the user's `config.json`, and never start tunnels towards the user's real servers (use aliases on `.invalid` domains).
 - `npm run dev` restarts on backend changes; a new extension folder needs a restart.

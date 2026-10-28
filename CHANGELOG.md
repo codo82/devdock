@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-10-28
+
+Milestone M7 (new name: Kelbo), except the website.
+
+### Added
+- **Apache 2.0 license** (`LICENSE`, `"license"` in `package.json`), also in `kelbo-extensions`.
+- Manifest field **`"kelbo"`** for the compatible core versions; `"devdock"` is still accepted (both must be equal when present). Extensions that must also load on Kelbo before 2.13 keep `"devdock"` too.
+
+### Changed
+- **Technical names**: package `kelbo`, commands `kelbo` and `kelbo-mcp` (`bin/kelbo.js`, `bin/kelbo-mcp.js`), environment variables `KELBO_PORT`, `KELBO_CONFIG`, `KELBO_HOME`, `KELBO_EXTENSIONS_DIR`, `KELBO_NO_BROWSER`, MCP server name `kelbo` (setup snippets of the 🤖 dialog), MCP token file `.kelbo-mcp-token`, exported configuration `kelbo-config-….json`, Kelbo home `~/.kelbo`. The old names keep working: `DEVDOCK_*` variables (the `KELBO_*` ones win), the `devdock`/`devdock-mcp` commands and `bin/devdock-mcp.js` (Claude Desktop entries copied before keep running).
+- **Kelbo home moved**: at the first start `~/.devdock` becomes `~/.kelbo` with everything in it — installed extensions with their `node_modules`, `extensions.lock.json`, `backups/` — so the downloaded extensions stay installed, updatable and with their *previous version*. One rename, or (another disk) a copy checked file by file before the old folder is deleted; on any error Kelbo goes on with `~/.devdock` and logs why. Nothing moves with `KELBO_HOME`/`DEVDOCK_HOME` set or when `~/.kelbo` exists (a log line says both are there). The old MCP token file is renamed on first use, same token.
+- Addresses of the official extensions repository (`codo82/devdock-extensions`, https or ssh) are rewritten to `kelbodev/kelbo-extensions` at start-up in the lock file (previous versions included) and in the list of installed extensions; the catalog lists the new address.
+- Test kit: `opts.env` takes the `DEVDOCK_*` names as `KELBO_*`, and `null` removes a variable; `require('kelbo/testkit')` for external extensions (Kelbo as dev dependency `github:kelbodev/kelbo#main`).
+
+### Unchanged on purpose
+- The key derivation labels of the master password vault, the `config.json` sections and the browser storage keys keep their old names: renaming them would make the stored secrets unreadable or drop the user's preferences.
+
 ## [2.12.1] - 2026-10-28
 
 ### Changed

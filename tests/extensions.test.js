@@ -92,6 +92,11 @@ before(async () => {
   ext(root, 'norange', { 'setting.json': manifest('norange', { devdock: undefined }) });
   ext(root, 'badversion', { 'setting.json': manifest('badversion', { version: 'uno' }) });
   ext(root, 'wide', { 'setting.json': manifest('wide', { devdock: '>=1.5 <3 || ^4' }) });
+  // campo "kelbo" (dalla 2.13): da solo, insieme a "devdock" uguale, o diverso (errore)
+  ext(root, 'newfield', { 'setting.json': manifest('newfield', { devdock: undefined, kelbo: '^2.0' }) });
+  ext(root, 'newfuture', { 'setting.json': manifest('newfuture', { devdock: undefined, kelbo: '^7.0' }) });
+  ext(root, 'bothfields', { 'setting.json': manifest('bothfields', { devdock: '^2.0', kelbo: '^2.0' }) });
+  ext(root, 'clashfields', { 'setting.json': manifest('clashfields', { devdock: '^2.0', kelbo: '^3.0' }) });
 
   srv = await startServer({ groups: [], servers: [], projects: [] }, { env: { DEVDOCK_EXTENSIONS_DIR: root } });
 });
@@ -128,6 +133,12 @@ test('contratto versionato: versioni di Kelbo compatibili', async () => {
   assert.match(all.badversion.error, /"version" obbligatoria/);
   assert.equal(all.wide.state, 'ok');
   assert.equal(all.wide.devdock, '>=1.5 <3 || ^4');
+  assert.equal(all.wide.kelbo, '>=1.5 <3 || ^4'); // "devdock" vale come "kelbo"
+  assert.equal(all.newfield.state, 'ok');
+  assert.equal(all.newfield.kelbo, '^2.0');
+  assert.match(all.newfuture.error, /richiede Kelbo \^7\.0/);
+  assert.equal(all.bothfields.state, 'ok');
+  assert.match(all.clashfields.error, /"kelbo" e "devdock" indicano versioni diverse/);
   assert.equal(all.wide.version, '1.0.0');
 });
 
