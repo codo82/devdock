@@ -180,8 +180,8 @@
   "routes.importHint": "La richiesta usa {{baseUrl}} seguito dal percorso; i parametri come :id si possono sostituire dopo.",
   "routes.completeHint": "Sostituisci le parti tra « » con il valore reale: {list}",
   "routes.stillIncomplete": "Il percorso contiene ancora parti da completare (« »)",
-  "oauthPage.done": "Login completato per {user}: puoi chiudere questa scheda e tornare a Kelbo.",
-  "oauthPage.failed": "Login non riuscito: {error}",
+  "oauthPage.done": "Accesso eseguito per {user}: Kelbo ha il token e la richiesta prosegue.",
+  "oauthPage.failed": "Kelbo non ha ottenuto il token: controlla i dati della tipologia di utenza e riprova.",
   "oauthPage.wait": "Completamento del login…",
   "users.loginPending": "Login in corso nel browser",
   "users.browserFailed": "Il browser non si è aperto ({error}): apri il link qui accanto",
@@ -309,5 +309,10 @@
   "routes.allMethods": "Tutti i metodi",
   "routes.onlyPending": "Solo da importare",
   "routes.shown": "{shown} di {total}",
-  "routes.noMatch": "Nessuna rotta corrisponde al filtro."
+  "routes.noMatch": "Nessuna rotta corrisponde al filtro.",
+  "oauthPage.lang": "it",
+  "oauthPage.doneTitle": "Login completato",
+  "oauthPage.failedTitle": "Login non riuscito",
+  "oauthPage.waitTitle": "Login in corso",
+  "oauthPage.closeHint": "Puoi chiudere questa scheda e tornare a Kelbo."
 }

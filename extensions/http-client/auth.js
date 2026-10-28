@@ -87,6 +87,35 @@ function openBrowser(url, container, browserPath) {
   });
 }
 
+// Pagina HTML autonoma mostrata nel browser alla fine del login (nessuna risorsa esterna):
+// scheda centrata con il nome di Kelbo, icona, titolo, messaggio ed eventuale dettaglio
+const htmlEsc = v => String(v).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+function oauthPage({ kind, lang, title, text, detail, hint, script = '' }) {
+  const icon = kind === 'done' ? '<div class="icon ok">✓</div>' : kind === 'failed' ? '<div class="icon err">!</div>' : '<div class="icon spin"></div>';
+  return `<!doctype html><html lang="${htmlEsc(/^[a-z]{2,3}$/i.test(lang) ? lang : 'it')}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEsc(title)} · Kelbo</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#1f2328;--muted:#59636e;--border:#d1d9e0;--ok:#1a7f37;--err:#cf222e;--accent:#0969da;--code:#f6f8fa}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--card:#161b22;--text:#e6edf3;--muted:#8d96a0;--border:#30363d;--ok:#3fb950;--err:#f85149;--accent:#58a6ff;--code:#0d1117}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.card{width:100%;max-width:440px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px 28px 24px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+.brand{font:600 13px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.02em;color:var(--muted);margin-bottom:22px}
+.brand b{color:var(--accent)}
+.icon{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff}
+.icon.ok{background:var(--ok)}.icon.err{background:var(--err)}
+.icon.spin{border:4px solid var(--border);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-size:20px;margin:0 0 8px}
+p{margin:0;color:var(--muted)}
+pre{margin:16px 0 0;padding:10px 12px;background:var(--code);border:1px solid var(--border);border-radius:8px;text-align:left;white-space:pre-wrap;word-break:break-word;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--err)}
+.hint{margin-top:20px;font-size:12.5px}
+</style></head><body><main class="card" role="${kind === 'failed' ? 'alert' : 'status'}">
+<div class="brand">Kel<b>bo</b></div>${icon}<h1>${htmlEsc(title)}</h1><p id="m">${htmlEsc(text)}</p>
+${detail ? `<pre>${htmlEsc(detail)}</pre>` : ''}${hint ? `<p class="hint">${htmlEsc(hint)}</p>` : ''}
+</main>${script}</body></html>`;
+}
+
 function createAuth({ ctx, vault, pageText, varsOf, browserPath = () => null }) {
   const tokens = new Map();   // "sezione\0utenza" → { token, expiresAt, refreshToken, source }
   const logins = new Map();   // "sezione\0utenza" → login OAuth in corso { authUrl, promise, cancel }
@@ -337,10 +366,11 @@ function createAuth({ ctx, vault, pageText, varsOf, browserPath = () => null }) 
       if (error) rejectFn(error); else resolveFn(entry);
     }
 
-    const page = (req, res, key, params = {}, status = 200, script = '') => {
-      const text = pageText(req.headers['accept-language'], key, params);
+    // Pagina nel browser: kind 'done' | 'failed' | 'wait', testi nella lingua del browser
+    const page = (req, res, kind, params = {}, status = 200, script = '') => {
+      const tx = key => pageText(req.headers['accept-language'], `oauthPage.${key}`, params);
       res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(`<!doctype html><meta charset="utf-8"><title>Kelbo</title><body style="font-family:system-ui;padding:40px"><p id="m">${text.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)}</p>${script}</body>`);
+      res.end(oauthPage({ kind, lang: tx('lang'), title: tx(`${kind}Title`), text: tx(kind), detail: params.error || '', hint: kind === 'wait' ? '' : tx('closeHint'), script }));
     };
 
     async function onRequest(req, res) {
@@ -355,16 +385,16 @@ function createAuth({ ctx, vault, pageText, varsOf, browserPath = () => null }) 
         }
         if (params.get('error')) {
           const e = ctx.error(401, 'oauth_denied', { error: params.get('error'), description: params.get('error_description') || '' });
-          page(req, res, 'oauthPage.failed', { error: e.message }, 400);
+          page(req, res, 'failed', { error: e.message }, 400);
           return finish(e);
         }
         if (auth.flow === 'implicit' && req.method === 'GET' && !params.get('access_token')) {
           // il token è nel frammento (#access_token=…), che il browser non invia: lo rimanda la pagina
-          return page(req, res, 'oauthPage.wait', {}, 200,
+          return page(req, res, 'wait', {}, 200,
             '<script>fetch(location.pathname,{method:"POST",body:location.hash.slice(1)}).then(r=>r.text()).then(t=>{document.open();document.write(t);document.close()})</script>');
         }
         if (params.get('state') !== stateParam) {
-          page(req, res, 'oauthPage.failed', { error: ctx.error.message('oauth_state') }, 400);
+          page(req, res, 'failed', { error: ctx.error.message('oauth_state') }, 400);
           return finish(ctx.error(401, 'oauth_state'));
         }
         let entry;
@@ -378,10 +408,10 @@ function createAuth({ ctx, vault, pageText, varsOf, browserPath = () => null }) 
           });
           entry = await fromTokenResponse(section, user, json);
         }
-        page(req, res, 'oauthPage.done', { user: user.label });
+        page(req, res, 'done', { user: user.label });
         finish(null, entry);
       } catch (e) {
-        page(req, res, 'oauthPage.failed', { error: e.message }, 500);
+        page(req, res, 'failed', { error: e.message }, 500);
         finish(e);
       }
     }

@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-10-28
+
+### Changed
+- **HTTP client — OAuth login pages in the browser**: the pages shown at the end of a login (completed, failed, completing) are a centred card with the Kelbo name, a green ✓, a red ! or a spinner, a title and the message, the error detail in its own box and the reminder to go back to Kelbo; light or dark following the system, in the browser's language, with no external resources.
+
 ## [2.12.0] - 2026-10-28
 
 ### Added
