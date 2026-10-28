@@ -5,7 +5,7 @@
   },
   "code": "tunnels",
   "version": "1.0.0",
-  "devdock": "^2.0",
+  "kelbo": "^2.0",
   "description": {
     "it": "Port forwarding SSH (ssh -L / autossh) per gruppi di server, con riconnessione automatica",
     "en": "SSH port forwarding (ssh -L / autossh) for groups of servers, with automatic reconnection"

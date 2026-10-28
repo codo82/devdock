@@ -8,7 +8,7 @@ const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio
 const { startServer, freePort, tmpDir } = require('../lib/testkit');
 const { sampleExtensions } = require('./fixtures');
 
-const BRIDGE = path.join(__dirname, '..', 'bin', 'devdock-mcp.js');
+const BRIDGE = path.join(__dirname, '..', 'bin', 'kelbo-mcp.js');
 let srv;
 before(async () => { srv = await startServer({ projects: [], items: [{ id: 'i1' }] }, { extensions: sampleExtensions() }); });
 after(() => srv?.stop());
@@ -23,9 +23,9 @@ async function connect(env) {
 }
 
 test('il client stdio vede gli strumenti e li chiama; il token rigenerato è riletto', async () => {
-  const { client } = await connect({ DEVDOCK_PORT: String(srv.port), DEVDOCK_CONFIG: srv.configPath });
+  const { client } = await connect({ KELBO_PORT: String(srv.port), KELBO_CONFIG: srv.configPath });
   try {
-    assert.equal(client.getServerVersion().name, 'devdock');
+    assert.equal(client.getServerVersion().name, 'kelbo');
     const names = (await client.listTools()).tools.map(t => t.name);
     assert.ok(names.includes('sample_items'));
     let r = await client.callTool({ name: 'sample_items', arguments: {} });
@@ -41,7 +41,7 @@ test('la configurazione proposta per Claude Desktop usa il ponte, senza token', 
   const r = (await srv.request('GET', '/api/core/mcp')).json;
   assert.equal(r.bridge.command, process.execPath);
   assert.deepEqual(r.bridge.args, [BRIDGE]);
-  assert.deepEqual(r.bridge.env, { DEVDOCK_PORT: String(srv.port), DEVDOCK_CONFIG: srv.configPath });
+  assert.deepEqual(r.bridge.env, { KELBO_PORT: String(srv.port), KELBO_CONFIG: srv.configPath });
   assert.doesNotMatch(JSON.stringify(r.bridge), new RegExp(r.token));
 });
 
@@ -50,7 +50,7 @@ test('Kelbo spento o token di un\'altra istanza: errore chiaro al client', async
   // l'inizializzazione stessa fallisce con il messaggio del ponte
   await assert.rejects(async () => {
     const c = new Client({ name: 'bridge-test', version: '1.0.0' });
-    await c.connect(new StdioClientTransport({ command: process.execPath, args: [BRIDGE], env: { PATH: process.env.PATH, DEVDOCK_PORT: String(port), DEVDOCK_CONFIG: srv.configPath } }));
+    await c.connect(new StdioClientTransport({ command: process.execPath, args: [BRIDGE], env: { PATH: process.env.PATH, KELBO_PORT: String(port), KELBO_CONFIG: srv.configPath } }));
   }, new RegExp(`Kelbo non è in esecuzione su http://127\\.0\\.0\\.1:${port}`));
   await assert.rejects(async () => {
     const c = new Client({ name: 'bridge-test', version: '1.0.0' });

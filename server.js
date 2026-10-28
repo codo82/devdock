@@ -1,6 +1,8 @@
 // Kelbo — entry point: middleware di sicurezza, route API, file statici, avvio
 const express = require('express');
 const path = require('path');
+// ~/.devdock → ~/.kelbo (estensioni installate comprese) prima di leggere la cartella
+require('./lib/home').migrateHome();
 const { ROOT, PORT, CONFIG_PATH, EXTENSIONS_DIR, INSTALLED_DIR } = require('./lib/env');
 const { applySecurity } = require('./lib/security');
 const { ConfigError } = require('./lib/config');

@@ -213,7 +213,7 @@ window.Extensions = (() => {
             ${p.versions.map(v => `<option value="${esc(v.tag)}" ${v.tag === p.tag ? 'selected' : ''}>${esc(v.version)} (${esc(v.tag)})</option>`).join('')}</select>`
             : `<p class="ext-warn">${esc(t('core.ext.noTags', { version: p.version }))}</p>`}
           ${p.installed ? `<p class="ext-muted">${esc(t('core.ext.installedVersion', { version: p.installed.version || '?' }))}</p>` : ''}</div>
-        ${p.compatible ? '' : `<p class="ext-error">${esc(t('core.ext.incompatible', { range: p.devdock, version: p.coreVersion }))}</p>`}
+        ${p.compatible ? '' : `<p class="ext-error">${esc(t('core.ext.incompatible', { range: p.kelbo ?? p.devdock, version: p.coreVersion }))}</p>`}
         ${p.builtin ? `<p class="ext-error">${esc(t('core.ext.builtinConflict', { code: p.code }))}</p>` : ''}
         ${deps ? `<div class="form-row"><label>${esc(t('core.ext.dependencies'))}</label><ul class="ext-deps">${deps}</ul>
           ${p.missing.length ? `<p class="ext-error">${esc(t('core.ext.missingDeps', { list: fmt.list(p.missing) }))}</p>` : ''}</div>` : ''}

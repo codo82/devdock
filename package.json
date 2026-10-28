@@ -1,7 +1,8 @@
 {
-  "name": "devdock",
+  "name": "kelbo",
   "version": "2.12.1",
   "description": "Dashboard locale per sviluppatori: tunnel SSH, script npm, Git, database, file .env, client HTTP e mock server, con estensioni installabili",
+  "license": "Apache-2.0",
   "private": true,
   "workspaces": [
     "extensions/*"
@@ -13,6 +14,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
+    "kelbo": "bin/kelbo.js",
+    "kelbo-mcp": "bin/kelbo-mcp.js",
     "devdock": "bin/devdock.js",
     "devdock-mcp": "bin/devdock-mcp.js"
   },
@@ -21,7 +24,7 @@
     "dev": "node --watch server.js",
     "test": "node --test",
     "i18n:report": "node scripts/i18n-report.js",
-    "ext": "node bin/devdock.js ext"
+    "ext": "node bin/kelbo.js ext"
   },
   "engines": {
     "node": ">=18"

@@ -55,7 +55,7 @@ function browserInfo(browserPath) {
 // links in a container", URL ext+container:) oppure il browser predefinito. browserPath: il
 // browser scelto dall'utente (es. Firefox di Windows da WSL). → { ok } oppure { ok: false, error }
 function openBrowser(url, container, browserPath) {
-  if (process.env.DEVDOCK_NO_BROWSER === '1') return Promise.resolve({ ok: false, skipped: true });
+  if ((process.env.KELBO_NO_BROWSER ?? process.env.DEVDOCK_NO_BROWSER) === '1') return Promise.resolve({ ok: false, skipped: true });
   const target = container ? `ext+container:name=${encodeURIComponent(container)}&url=${encodeURIComponent(url)}` : url;
   let cmd, args;
   if (browserPath) {

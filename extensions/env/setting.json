@@ -2,7 +2,7 @@
   "name": { "it": "Env", "en": "Env" },
   "code": "env",
   "version": "1.0.0",
-  "devdock": "^2.0",
+  "kelbo": "^2.0",
   "description": {
     "it": "File .env dei progetti: confronto con .env.example, valori nascosti mostrati uno alla volta, modifica che conserva commenti e ordine",
     "en": "Project .env files: comparison with .env.example, hidden values shown one at a time, editing that keeps comments and order"

@@ -124,7 +124,7 @@ test('contratto versionato: versioni di Kelbo compatibili', async () => {
   assert.equal(all.future.state, 'disabled');
   assert.equal(all.future.error, `future/setting.json: richiede Kelbo ^3.0, questa è la ${core}`);
   assert.match(all.old.error, /richiede Kelbo \^1\.0/);
-  assert.match(all.norange.error, /"devdock" obbligatorio/);
+  assert.match(all.norange.error, /"kelbo" obbligatorio/);
   assert.match(all.badversion.error, /"version" obbligatoria/);
   assert.equal(all.wide.state, 'ok');
   assert.equal(all.wide.devdock, '>=1.5 <3 || ^4');
