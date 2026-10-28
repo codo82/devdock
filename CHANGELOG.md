@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-10-28
+
+### Added
+- **Database — query tabs**: the editor has tabs, each with its own connection and database, SQL text and results (data grid, designer, structure, query result with its sorting, unsaved cell edits and parameters used), kept while working in another tab. **＋** opens a new tab on the same connection and database; ✕ closes one (asking first when it has unsaved edits). The selector in the toolbar chooses the connection and database of the tab among those open in the sidebar; clicking a connection or a database in the sidebar sets them for the current tab. The tabs (connection, database, text) last for the browser session.
+- The actions on a table in the sidebar (first 100 rows, count, open data, structure, alter, SHOW CREATE, truncate, drop) open in a **new tab**, or in the tab that already shows the same query (or the same table's data, structure or designer) on the same connection and database.
+- A query that takes time keeps running in its tab (spinner on the tab) while another tab is used; its result lands in its own tab.
+- **Database — parameters from an object**: in the parameters dialog the values can be pasted as an object written as in JavaScript (`{ site_id: 15, year: 2024, level: 'site', energy_vector_id: null }`, quoted or unquoted keys, `'…'` or `"…"` strings, numbers, `null`, `true`/`false`, trailing commas, comments; JSON too). The fields are filled by parameter name (also ignoring case) with the right type (`null` → NULL, numbers → Number, strings → Text); the dialog says how many were filled, which keys were not used and which parameters are still without a value. The text is only read, never run.
+
+### Changed
+- **NPM**: the script rows are highlighted on hover.
+
 ## [2.8.1] - 2026-10-27
 
 ### Fixed

@@ -1,6 +1,6 @@
 {
   "name": "devdock",
-  "version": "2.8.1",
+  "version": "2.9.0",
   "description": "Dashboard locale per sviluppatori: tunnel SSH, script npm, Git, database, file .env, client HTTP e mock server, con estensioni installabili",
   "private": true,
   "workspaces": [

@@ -25,7 +25,6 @@
   "gate.tooShort": "Almeno {min} caratteri",
   "gate.mismatch": "Le due password non coincidono",
   "main.noConnection": "Seleziona una connessione dalla sidebar",
-  "toolbar.activeDbTitle": "Database attivo: sceglilo dalla sidebar",
   "toolbar.limitTitle": "Righe massime",
   "toolbar.limit": "{count} righe",
   "toolbar.run": "▶ Esegui",
@@ -37,7 +36,6 @@
   "toolbar.history": "🕘 Storico",
   "toolbar.historyTitle": "Query eseguite in questa sessione",
   "toolbar.hint": "Ctrl/Cmd+Invio · le modifiche a dati e schema chiedono sempre conferma",
-  "toolbar.noDb": "nessun database: scegline uno dalla sidebar",
   "filter.eq": "=",
   "filter.ne": "≠",
   "filter.contains": "contiene",
@@ -496,5 +494,24 @@
   "errors.params_invalid": "Valori dei parametri non validi: solo testo, numeri, booleani o NULL",
   "errors.params_missing": "Mancano i valori dei parametri: {params}",
   "params.used": "Parametri:",
-  "params.change": "Cambia"
+  "params.change": "Cambia",
+  "tabs.newTitle": "Nuova tab (stessa connessione e database)",
+  "tabs.close": "Chiudi la tab",
+  "tabs.untitled": "Query {n}",
+  "tabs.noConnection": "Nessuna connessione",
+  "tabs.chooseConnection": "La connessione di questa tab non c'è più: scegline un'altra dal selettore qui sotto o dalla sidebar.",
+  "tabs.confirmClose": {
+    "one": "La tab ha {count} modifica non salvata: chiuderla comunque?",
+    "other": "La tab ha {count} modifiche non salvate: chiuderla comunque?"
+  },
+  "toolbar.targetTitle": "Connessione e database di questa tab (tra quelli aperti nella sidebar)",
+  "toolbar.noDbOption": "{connection} — nessun database",
+  "params.pasteLabel": "Incolla i valori come oggetto ({ nome: valore, … }): i campi si compilano da soli",
+  "params.pasteInvalid": "Oggetto non valido (riga {line}, colonna {column})",
+  "params.pasteFilled": {
+    "one": "{count} di {total} parametri compilato",
+    "other": "{count} di {total} parametri compilati"
+  },
+  "params.pasteUnused": "non usati: {list}",
+  "params.pasteMissing": "senza valore: {list}"
 }

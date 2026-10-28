@@ -25,7 +25,6 @@
   "gate.tooShort": "At least {min} characters",
   "gate.mismatch": "The two passwords do not match",
   "main.noConnection": "Select a connection in the sidebar",
-  "toolbar.activeDbTitle": "Active database: choose it in the sidebar",
   "toolbar.limitTitle": "Maximum rows",
   "toolbar.limit": "{count} rows",
   "toolbar.run": "▶ Run",
@@ -37,7 +36,6 @@
   "toolbar.history": "🕘 History",
   "toolbar.historyTitle": "Queries run in this session",
   "toolbar.hint": "Ctrl/Cmd+Enter · data and schema changes always ask for confirmation",
-  "toolbar.noDb": "no database: choose one in the sidebar",
   "filter.eq": "=",
   "filter.ne": "≠",
   "filter.contains": "contains",
@@ -496,5 +494,24 @@
   "errors.params_invalid": "Invalid parameter values: only text, numbers, booleans or NULL",
   "errors.params_missing": "Missing parameter values: {params}",
   "params.used": "Parameters:",
-  "params.change": "Change"
+  "params.change": "Change",
+  "tabs.newTitle": "New tab (same connection and database)",
+  "tabs.close": "Close the tab",
+  "tabs.untitled": "Query {n}",
+  "tabs.noConnection": "No connection",
+  "tabs.chooseConnection": "The connection of this tab is gone: choose another one from the selector below or from the sidebar.",
+  "tabs.confirmClose": {
+    "one": "The tab has {count} unsaved change: close it anyway?",
+    "other": "The tab has {count} unsaved changes: close it anyway?"
+  },
+  "toolbar.targetTitle": "Connection and database of this tab (among those open in the sidebar)",
+  "toolbar.noDbOption": "{connection} — no database",
+  "params.pasteLabel": "Paste the values as an object ({ name: value, … }): the fields are filled in",
+  "params.pasteInvalid": "Invalid object (line {line}, column {column})",
+  "params.pasteFilled": {
+    "one": "{count} of {total} parameters filled",
+    "other": "{count} of {total} parameters filled"
+  },
+  "params.pasteUnused": "not used: {list}",
+  "params.pasteMissing": "without a value: {list}"
 }

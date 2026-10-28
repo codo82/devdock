@@ -196,3 +196,22 @@
 .db-params-used{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border);min-width:0}
 .db-params-used .db-mono{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto}
 .db-params-used .btn{flex-shrink:0}
+/* Tab delle query */
+.db-tabs{display:flex;align-items:stretch;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;background:var(--surface)}
+.db-tab{display:flex;align-items:center;gap:6px;max-width:240px;padding:5px 6px 5px 10px;border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;cursor:pointer;color:var(--muted);font-size:12px;white-space:nowrap;margin-bottom:-1px}
+.db-tab:hover{background:var(--surface2);color:var(--text)}
+.db-tab.active{background:var(--bg);border-color:var(--border);color:var(--text);border-bottom:1px solid var(--bg)}
+.db-tab-label{overflow:hidden;text-overflow:ellipsis;font-family:var(--font)}
+.db-tab-where{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;max-width:90px}
+.db-tab.active .db-tab-label{color:var(--ext-color)}
+.db-tab-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px;border-radius:3px;opacity:.6}
+.db-tab:hover .db-tab-close,.db-tab.active .db-tab-close{opacity:1}
+.db-tab-close:hover{color:var(--danger);background:var(--surface2)}
+.db-tab-new{background:none;border:1px dashed var(--border);border-radius:6px;color:var(--muted);cursor:pointer;padding:0 10px;margin:2px 0 4px 4px;font-size:13px}
+.db-tab-new:hover{color:var(--text);border-color:var(--muted)}
+.db-target{width:auto;max-width:320px}
+.db-tab-run{width:8px;height:8px;border-radius:50%;border:2px solid var(--ext-color);border-right-color:transparent;animation:ui-spin .8s linear infinite;flex-shrink:0}
+.db-params-paste{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.db-params-paste label{font-size:12px;color:var(--muted)}
+.db-params-paste textarea{font-size:12px;resize:vertical;white-space:pre;overflow:auto}
+.db-param-err{color:var(--danger)}

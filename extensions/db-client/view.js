@@ -168,6 +168,77 @@ function createAutocomplete({ input, container, esc, source }) {
   return { update, close, onKeyDown, element: box };
 }
 
+// Oggetto scritto come in JavaScript, per riempire i parametri di una query:
+//   { site_id: 15, level: 'site', energy_vector_id: null, }
+// Chiavi con o senza virgolette, stringhe tra '…' o "…", numeri, null, true/false, virgole
+// finali e commenti // o /* */. Solo lettura del testo, nessun codice eseguito.
+// → { ok: true, values: { chiave: valore } } oppure { ok: false, at } (posizione dell'errore)
+function parseObjectText(text) {
+  let i = 0;
+  const src = String(text);
+  const fail = () => { throw Object.assign(new Error('parse'), { at: i }); };
+  const space = () => {
+    for (;;) {
+      while (i < src.length && /\s/.test(src[i])) i++;
+      if (src.startsWith('//', i)) { while (i < src.length && src[i] !== '\n') i++; }
+      else if (src.startsWith('/*', i)) { const end = src.indexOf('*/', i + 2); if (end < 0) fail(); i = end + 2; }
+      else return;
+    }
+  };
+  const string = () => {
+    const q = src[i++];
+    let out = '';
+    while (i < src.length && src[i] !== q) {
+      if (src[i] === '\\') {
+        const c = src[++i];
+        const map = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', 0: '\0' };
+        if (c === 'u' && /^[0-9a-fA-F]{4}$/.test(src.slice(i + 1, i + 5))) { out += String.fromCharCode(parseInt(src.slice(i + 1, i + 5), 16)); i += 5; continue; }
+        out += map[c] ?? c;
+        i++;
+      } else out += src[i++];
+    }
+    if (src[i] !== q) fail();
+    i++;
+    return out;
+  };
+  const value = () => {
+    space();
+    const c = src[i];
+    if (c === "'" || c === '"') return string();
+    const m = /^(-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?|null|true|false|undefined)(?![\w$])/.exec(src.slice(i));
+    if (!m) fail();
+    i += m[0].length;
+    return m[0] === 'null' || m[0] === 'undefined' ? null : m[0] === 'true' ? true : m[0] === 'false' ? false : Number(m[0]);
+  };
+  try {
+    const values = {};
+    space();
+    if (src[i] !== '{') fail();
+    i++;
+    for (;;) {
+      space();
+      if (src[i] === '}') { i++; break; }
+      let key;
+      if (src[i] === "'" || src[i] === '"') key = string();
+      else { const m = /^[A-Za-z_$][\w$]*/.exec(src.slice(i)); if (!m) fail(); key = m[0]; i += key.length; }
+      space();
+      if (src[i] !== ':') fail();
+      i++;
+      values[key] = value();
+      space();
+      if (src[i] === ',') { i++; continue; }
+      if (src[i] === '}') { i++; break; }
+      fail();
+    }
+    space();
+    if (i < src.length) fail();
+    return { ok: true, values };
+  } catch (e) {
+    if (e.at === undefined) throw e;
+    return { ok: false, at: e.at };
+  }
+}
+
 export default {
   async mount(ctx) {
     const { esc, js, toast, openModal, closeModal, fmt } = ctx.ui;
@@ -182,8 +253,132 @@ export default {
     let folders = [];            // cartelle della sidebar (un livello)
 
     const active = () => connections.find(c => c.id === activeId) || null;
-    const editors = new Map(); // testo dell'editor per connessione
-    const activeDb = new Map(); // database attivo per connessione
+
+    // ---- tab: ognuna con connessione, database, testo dell'editor e risultati propri ----
+    // I risultati della tab non visibile restano nel suo stato (griglia, designer, risultato,
+    // ordinamento, modifiche in sospeso) e nei nodi del pannello, staccati e rimessi al cambio
+    const TABS_KEY = 'kelbo.db-client.tabs'; // tab della sessione del browser (senza risultati)
+    let tabs = [];
+    let current = null;
+    let tabSeq = 0;
+    const tabDb = () => current?.db || null;
+    function makeTab({ connId = null, db = null, sql = '', title = null, key = null } = {}) {
+      const c = connections.find(x => x.id === connId);
+      return { id: ++tabSeq, connId, db: db || c?.database || null, sql, title, key, running: false, frag: null,
+        st: { grid: null, designer: null, lastResult: null, resultSort: null, lastParamInfo: null, edits: null } };
+    }
+    // Stato dei risultati della tab visibile → nella tab (nodi del pannello compresi)
+    function stash(tab) {
+      tab.st = { grid, designer, lastResult, resultSort, lastParamInfo, edits };
+      const frag = document.createDocumentFragment();
+      const el = $(ctx.root, 'results');
+      tab.scroll = el.scrollTop;
+      while (el.firstChild) frag.appendChild(el.firstChild);
+      tab.frag = frag;
+    }
+    function restore(tab) {
+      ({ grid, designer, lastResult, resultSort, lastParamInfo, edits } = tab.st);
+      const el = $(ctx.root, 'results');
+      el.replaceChildren(tab.frag || '');
+      tab.frag = null;
+      el.scrollTop = tab.scroll || 0;
+    }
+    // fn eseguita con la tab indicata visibile (per i risultati che arrivano dopo un cambio
+    // di tab): scambio sincrono, il browser non mostra nulla nel mezzo
+    function inTab(tab, fn) {
+      if (!tab || tab === current) return fn();
+      if (!tabs.includes(tab)) return undefined; // chiusa nel frattempo
+      const prev = current;
+      stash(prev); restore(tab); current = tab; activeId = tab.connId;
+      try { return fn(); } finally { stash(tab); restore(prev); current = prev; activeId = prev.connId; }
+    }
+    function switchTab(tab) {
+      if (!tab || tab === current) return;
+      if (current) { current.sql = sqlInput.value; stash(current); }
+      current = tab;
+      restore(tab);
+      activeId = tab.connId;
+      sqlInput.value = tab.sql;
+      syncHighlight();
+      renderTabs();
+      renderConnections();
+      renderWorkspace();
+      saveTabs();
+    }
+    function addTab(opts) {
+      const tab = makeTab(opts);
+      tabs.splice(current ? tabs.indexOf(current) + 1 : tabs.length, 0, tab);
+      switchTab(tab);
+      return tab;
+    }
+    function closeTab(tab) {
+      const st = tab === current ? { grid, lastResult, edits } : tab.st;
+      const pending = st.edits ? st.edits.cells.size : 0;
+      if (pending && !confirm(t('tabs.confirmClose', { count: pending }))) return;
+      const i = tabs.indexOf(tab);
+      tabs.splice(i, 1);
+      if (tab !== current) { renderTabs(); saveTabs(); return; }
+      current = null;
+      $(ctx.root, 'results').replaceChildren();
+      if (!tabs.length) { addTab({ connId: tab.connId, db: tab.db }); return; }
+      switchTab(tabs[Math.min(i, tabs.length - 1)]);
+    }
+    // Tab già aperta con la stessa connessione, database e contenuto (query o tabella), o null
+    function findTab(connId, db, match) {
+      return tabs.find(tb => tb.connId === connId && tb.db === db && match(tb)) || null;
+    }
+    const tabSql = tb => (tb === current ? sqlInput.value : tb.sql).trim();
+    // Connessione e database della tab visibile (la sidebar e il selettore della barra)
+    function setTarget(connId, db) {
+      if (!current) { addTab({ connId, db }); return; }
+      const c = connections.find(x => x.id === connId);
+      if (current.connId !== connId) current.db = db ?? c?.database ?? null;
+      else if (db !== undefined) current.db = db;
+      current.connId = connId;
+      activeId = connId;
+      renderTabs();
+      renderConnections();
+      renderWorkspace();
+      saveTabs();
+    }
+    function saveTabs() {
+      try {
+        sessionStorage.setItem(TABS_KEY, JSON.stringify({
+          tabs: tabs.map(tb => ({ connId: tb.connId, db: tb.db, sql: tb === current ? sqlInput.value : tb.sql, title: tb.title })),
+          current: tabs.indexOf(current),
+        }));
+      } catch { /* solo in memoria */ }
+    }
+    // All'apertura: le tab della sessione, o una tab sulla prima connessione
+    function initTabs() {
+      if (tabs.length || !connections.length) return;
+      let saved = null;
+      try { saved = JSON.parse(sessionStorage.getItem(TABS_KEY)); } catch { /* nessuna */ }
+      for (const x of saved?.tabs || []) {
+        if (typeof x?.sql !== 'string') continue;
+        tabs.push(makeTab({ connId: connections.some(c => c.id === x.connId) ? x.connId : null, db: typeof x.db === 'string' ? x.db : null, sql: x.sql, title: typeof x.title === 'string' ? x.title : null }));
+      }
+      if (!tabs.length) tabs.push(makeTab({ connId: connections[0].id }));
+      const first = tabs[Math.max(0, Math.min(tabs.length - 1, Number(saved?.current) || 0))];
+      switchTab(first);
+    }
+
+    const tabTitle = tb => {
+      if (tb.title) return tb.title;
+      const line = tabSql(tb).split('\n').map(x => x.trim()).find(Boolean);
+      return line ? (line.length > 28 ? line.slice(0, 28) + '…' : line) : t('tabs.untitled', { n: tabs.indexOf(tb) + 1 });
+    };
+    function renderTabs() {
+      const el = $(ctx.root, 'tabs');
+      el.innerHTML = tabs.map(tb => {
+        const c = connections.find(x => x.id === tb.connId);
+        const where = c ? `${c.label}${tb.db ? ` / ${tb.db}` : ''}` : t('tabs.noConnection');
+        return `<div class="db-tab ${tb === current ? 'active' : ''}" role="tab" aria-selected="${tb === current}" data-tab="${tb.id}" title="${esc(where)}">
+          ${tb.running ? `<span class="db-tab-run" title="${esc(t('run.running'))}"></span>` : ''}<span class="db-tab-label">${esc(tabTitle(tb))}</span>
+          <span class="db-tab-where">${esc(c ? (tb.db || c.label) : '—')}</span>
+          <button class="db-tab-close" data-tab-close="${tb.id}" title="${esc(t('tabs.close'))}" aria-label="${esc(t('tabs.close'))}">✕</button></div>`;
+      }).join('') + `<button class="db-tab-new" data-action="new-tab" title="${esc(t('tabs.newTitle'))}">＋</button>`;
+    }
 
     // Albero della sidebar: connessione ▸ database ▸ tabelle ▸ colonne (caricati all'apertura)
     const open = new Set();      // nodi aperti: "c|id", "d|id|db", "t|id|db|table"
@@ -219,8 +414,12 @@ export default {
       try {
         ({ connections, folders, tunnelsAvailable } = await ctx.api.get('/connections'));
       } catch (e) { toast(e.message, 'error'); return; }
-      if (activeId && !active()) activeId = null;
+      // tab su connessioni eliminate: restano, senza connessione (se ne sceglie un'altra)
+      for (const tb of tabs) if (tb.connId && !connections.some(c => c.id === tb.connId)) tb.connId = null;
+      activeId = current?.connId ?? null;
       ctx.setBadge(connections.length || null);
+      initTabs();
+      renderTabs();
       renderConnections();
       renderWorkspace();
     }
@@ -266,6 +465,7 @@ export default {
       };
       el.innerHTML = `<div class="db-tree" role="tree">${folders.map(folderNode).join('')}${
         connections.filter(c => !c.folder || !known.has(c.folder)).map(connNode).join('')}</div>`;
+      if (current) renderTarget(); // database delle connessioni aperte nel selettore della tab
     }
 
     // ---- cartelle ----
@@ -319,7 +519,7 @@ export default {
     function dbNode(c, db) {
       const k = nodeKey('d', c.id, db);
       const entry = cache.get(k);
-      const isActive = c.id === activeId && activeDb.get(c.id) === db;
+      const isActive = c.id === activeId && tabDb() === db;
       return `<div class="db-node">
         <div class="db-row db-row-db ${isActive ? 'active' : ''}" ${attrs('db', c, db)}>
           ${caret(k)}<span class="db-row-icon">🛢️</span><span class="db-row-label">${esc(db)}</span>
@@ -408,21 +608,45 @@ export default {
       renderConnections();
     }
 
-    function setActiveDb(c, db) {
-      activeDb.set(c.id, db);
-      if (activeId !== c.id) actions.select(c.id); else { renderConnections(); renderActiveDb(); }
+    const setActiveDb = (c, db) => setTarget(c.id, db);
+
+    // Selettore della barra: connessione e database della tab, tra le connessioni aperte
+    // nella sidebar (con i loro database) più quella attuale
+    const TARGET_SEP = '\u0001';
+    function renderTarget() {
+      const sel = $(ctx.root, 'target');
+      const groups = connections.map(c => {
+        const dbs = cache.get(nodeKey('c', c.id));
+        const list = Array.isArray(dbs) ? [...dbs] : [];
+        const mine = c.id === current?.connId;
+        if (!list.length && !mine) return '';
+        if (mine && current.db && !list.includes(current.db)) list.unshift(current.db);
+        const opt = db => `<option value="${esc(c.id + TARGET_SEP + db)}" ${mine && current.db === db ? 'selected' : ''}>${esc(`${c.label} / ${db}`)}</option>`;
+        return `<optgroup label="${esc(c.label)}">
+          <option value="${esc(c.id + TARGET_SEP)}" ${mine && !current.db ? 'selected' : ''}>${esc(t('toolbar.noDbOption', { connection: c.label }))}</option>
+          ${list.map(opt).join('')}</optgroup>`;
+      }).join('');
+      ctx.ui.patch(sel, (current?.connId ? '' : `<option value="" selected>${esc(t('tabs.noConnection'))}</option>`) + groups);
     }
 
-    function renderActiveDb() {
-      const db = activeDb.get(activeId);
-      $(ctx.root, 'active-db').innerHTML = db ? `🛢️ ${esc(db)}` : `<span class="db-muted">${esc(t('toolbar.noDb'))}</span>`;
-    }
-
-    // Testo nell'editor ed esecuzione (le modifiche passano comunque dalla conferma)
-    function runSql(sql) {
+    // Testo nell'editor ed esecuzione (le modifiche passano comunque dalla conferma). Con
+    // where ({ c, db, title }, dai clic sulle tabelle): in una tab nuova, o in quella che ha
+    // già la stessa query sulla stessa connessione e database
+    function runSql(sql, where) {
+      if (where) {
+        const same = findTab(where.c.id, where.db, tb => !tb.key && tabSql(tb) === sql.trim());
+        if (same) switchTab(same); else addTab({ connId: where.c.id, db: where.db, title: where.title });
+      }
       sqlInput.value = sql;
       sqlInput.dispatchEvent(new Event('input'));
       run();
+    }
+    // Griglia dei dati, struttura o designer di una tabella: nella tab che li mostra già
+    // (ricaricati), altrimenti in una nuova
+    function openInTab(c, db, key, title, open) {
+      const same = findTab(c.id, db, tb => tb.key === key);
+      if (same) switchTab(same); else addTab({ connId: c.id, db, title, key });
+      open();
     }
 
     // ---- anteprima dati (griglia paginata con ricerca, filtri e ordinamento) ----
@@ -466,15 +690,15 @@ export default {
         return;
       }
       if (grid.data) clearEdits(grid.data);
-      const g = grid;
+      const g = grid, tab = current;
       g.selected = new Set(); // la selezione vale per la pagina mostrata
       const c = connections.find(x => x.id === g.connId);
       try {
         g.data = await ctx.api.post(tableUrl(c, g.db, g.table) + '/rows',
           { page: g.page, pageSize: g.pageSize, search: g.search, filters: g.filters, sort: g.sort });
         g.loaded = { page: g.page, pageSize: g.pageSize, search: g.search, filters: [...g.filters], sort: g.sort };
-        if (grid === g) renderGrid();
-      } catch (e) { if (grid === g) renderError(e.message); }
+        inTab(tab, () => { if (grid === g) renderGrid(); });
+      } catch (e) { inTab(tab, () => { if (grid === g) renderError(e.message); }); }
     }
 
     // Modifica possibile solo con chiave primaria e connessione scrivibile
@@ -541,9 +765,11 @@ export default {
     async function openDesigner(c, db, table = null) {
       if (c.readOnly) { toast(t('designer.readOnly'), 'error'); return; }
       if (!db) { toast(t('designer.chooseDb'), 'error'); return; }
+      const tab = current;
       try { ddlInfo = ddlInfo || (await ctx.api.get('/info')).ddl; } catch (e) { toast(e.message, 'error'); return; }
-      grid = null;
-      if (!table) {
+      if (!table) return inTab(tab, () => {
+        grid = null;
+        lastResult = null;
         designer = {
           connId: c.id, db, mode: 'create', table: null,
           def: { name: '', engine: 'InnoDB', charset: 'utf8mb4', comment: '',
@@ -551,11 +777,11 @@ export default {
                  indexes: [], foreignKeys: [] },
         };
         renderDesigner();
-        return;
-      }
-      $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('structure.loading'))}</div>`;
-      try {
-        const { definition } = await ctx.api.get(`${tableUrl(c, db, table)}/definition`);
+      });
+      inTab(tab, () => { grid = null; lastResult = null; $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('structure.loading'))}</div>`; });
+      let definition;
+      try { ({ definition } = await ctx.api.get(`${tableUrl(c, db, table)}/definition`)); } catch (e) { inTab(tab, () => renderError(e.message)); return; }
+      inTab(tab, () => {
         const pk = new Set(definition.primaryKey || []);
         designer = {
           connId: c.id, db, mode: 'alter', table,
@@ -567,7 +793,7 @@ export default {
           },
         };
         renderDesigner();
-      } catch (e) { renderError(e.message); }
+      });
     }
 
     const sel = (name, options, value, attrs = '') =>
@@ -881,7 +1107,7 @@ export default {
       const sql = statement();
       if (!c || !sql) { toast(t('export.needSelect'), 'error'); return; }
       exportMenu(anchor, formats().map(([f, label]) => ({
-        icon: '⤓', label, action: () => startExport(c, f, { type: 'query', sql, database: activeDb.get(c.id) || null }),
+        icon: '⤓', label, action: () => startExport(c, f, { type: 'query', sql, database: tabDb() }),
       })));
     }
 
@@ -1135,14 +1361,15 @@ export default {
       const tb = (cache.get(nodeKey('d', c.id, db)) || []).find?.(x => x.name === name);
       const full = `${quoteId(db)}.${quoteId(name)}`;
       const ro = c.readOnly;
+      const sqlTab = sql => runSql(sql, { c, db, title: name });
       ctx.ui.contextMenu(ev.clientX, ev.clientY, [
-        { icon: '▤', label: t('menu.openData'), action: () => openGrid(c, db, name) },
-        { icon: '▶', label: t('menu.first100'), action: () => runSql(`SELECT * FROM ${full} LIMIT 100;`) },
-        { icon: '#', label: t('menu.count'), action: () => runSql(`SELECT COUNT(*) AS ${quoteId(t('menu.countAlias'))} FROM ${full};`) },
-        { icon: '▦', label: t('menu.structure'), action: () => showStructure(c, db, name) },
-        ...(tb?.view ? [] : [{ icon: '✎', label: t('menu.alter'), disabled: ro, action: () => openDesigner(c, db, name) }]),
+        { icon: '▤', label: t('menu.openData'), action: () => openInTab(c, db, `grid:${name}`, `▤ ${name}`, () => openGrid(c, db, name)) },
+        { icon: '▶', label: t('menu.first100'), action: () => sqlTab(`SELECT * FROM ${full} LIMIT 100;`) },
+        { icon: '#', label: t('menu.count'), action: () => sqlTab(`SELECT COUNT(*) AS ${quoteId(t('menu.countAlias'))} FROM ${full};`) },
+        { icon: '▦', label: t('menu.structure'), action: () => openInTab(c, db, `structure:${name}`, `▦ ${name}`, () => showStructure(c, db, name)) },
+        ...(tb?.view ? [] : [{ icon: '✎', label: t('menu.alter'), disabled: ro, action: () => openInTab(c, db, `alter:${name}`, `✎ ${name}`, () => openDesigner(c, db, name)) }]),
         ...formats().map(([f, label]) => ({ icon: '⤓', label: t('menu.export', { format: label }), action: () => startExport(c, f, { type: 'table', db, table: name }) })),
-        { icon: '⌘', label: tb?.view ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE', action: () => runSql(`SHOW CREATE ${tb?.view ? 'VIEW' : 'TABLE'} ${full};`) },
+        { icon: '⌘', label: tb?.view ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE', action: () => sqlTab(`SHOW CREATE ${tb?.view ? 'VIEW' : 'TABLE'} ${full};`) },
         'separator',
         { icon: '↳', label: t('menu.insertName'), action: () => {
           sqlInput.setRangeText(full, sqlInput.selectionStart, sqlInput.selectionEnd, 'end');
@@ -1151,17 +1378,24 @@ export default {
         } },
         { icon: '⧉', label: t('menu.copyName'), action: () => navigator.clipboard?.writeText(name).then(() => toast(t('menu.copied'))) },
         'separator',
-        ...(tb?.view ? [] : [{ icon: '⌫', label: t('menu.truncate'), danger: true, disabled: ro, action: () => runSql(`TRUNCATE TABLE ${full};`) }]),
-        { icon: '✕', label: t(tb?.view ? 'menu.dropView' : 'menu.dropTable'), danger: true, disabled: ro, action: () => runSql(`DROP ${tb?.view ? 'VIEW' : 'TABLE'} ${full};`) },
+        ...(tb?.view ? [] : [{ icon: '⌫', label: t('menu.truncate'), danger: true, disabled: ro, action: () => sqlTab(`TRUNCATE TABLE ${full};`) }]),
+        { icon: '✕', label: t(tb?.view ? 'menu.dropView' : 'menu.dropTable'), danger: true, disabled: ro, action: () => sqlTab(`DROP ${tb?.view ? 'VIEW' : 'TABLE'} ${full};`) },
       ]);
     }
 
     async function showStructure(c, db, name) {
       grid = null;
+      designer = null;
+      lastResult = null;
+      $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('structure.loading'))}</div>`;
+      const tab = current;
+      let info;
+      try { info = await ctx.api.get(tableUrl(c, db, name)); } catch (e) { inTab(tab, () => renderError(e.message)); return; }
+      inTab(tab, () => renderStructure(db, name, info));
+    }
+    function renderStructure(db, name, info) {
       const el = $(ctx.root, 'results');
-      el.innerHTML = `<div class="db-muted db-pad">${esc(t('structure.loading'))}</div>`;
-      try {
-        const info = await ctx.api.get(tableUrl(c, db, name));
+      {
         const table = (head, rows) => `<table class="data-table db-table"><thead><tr>${head.map(h => `<th>${esc(t(`structure.${h}`))}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
         const yesNo = v => esc(t(v ? 'structure.yes' : 'structure.no'));
         const none = `<p class="db-muted db-pad">${esc(t('structure.none'))}</p>`;
@@ -1177,20 +1411,18 @@ export default {
             <h4>${esc(t('structure.foreignKeys'))}</h4>
             ${info.foreignKeys.length ? table(['name', 'indexColumns', 'reference'], info.foreignKeys.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.columns.join(', '))}</td><td>${esc(f.refDatabase)}.${esc(f.refTable)} (${esc(f.refColumns.join(', '))})</td></tr>`)) : none}
           </div>`;
-      } catch (e) { renderError(e.message); }
+      }
     }
 
     const target = c => c.tunnel ? t('conn.tunnel', { name: c.tunnel }) : `${c.host}:${c.port}`;
 
     function renderWorkspace() {
       const c = active();
-      $(ctx.root, 'no-connection').hidden = !!c;
-      $(ctx.root, 'workspace').hidden = !c;
-      if (!c) return;
-      $(ctx.root, 'sql').value = editors.get(c.id) || '';
-      syncHighlight();
-      if (!activeDb.has(c.id) && c.database) activeDb.set(c.id, c.database);
-      renderActiveDb();
+      $(ctx.root, 'no-connection').hidden = !!current;
+      $(ctx.root, 'workspace').hidden = !current;
+      if (!current) return;
+      renderTarget();
+      if (!c) { $(ctx.root, 'conn-header').innerHTML = `<span class="db-muted">${esc(t('tabs.chooseConnection'))}</span>`; return; }
       $(ctx.root, 'conn-header').innerHTML = `
         <h3>🗄️ ${esc(c.label)}</h3>
         <span class="db-conn-meta">${esc(c.user)}@${esc(target(c))}${c.database ? ` / ${esc(c.database)}` : ''}</span>
@@ -1398,7 +1630,13 @@ export default {
       pre.scrollTop = sqlInput.scrollTop;
       pre.scrollLeft = sqlInput.scrollLeft;
     }
-    sqlInput.addEventListener('input', () => { if (activeId) editors.set(activeId, sqlInput.value); syncHighlight(); });
+    let titleTimer = null;
+    sqlInput.addEventListener('input', () => {
+      if (current) current.sql = sqlInput.value;
+      syncHighlight();
+      clearTimeout(titleTimer); // titolo della tab (prima riga) e sessione, senza ridisegnare a ogni tasto
+      titleTimer = setTimeout(() => { renderTabs(); saveTabs(); }, 400);
+    });
     sqlInput.addEventListener('scroll', syncHighlight);
     // Autocompletamento: tabelle del database attivo e colonne (lette quando servono, in cache)
     const acColumns = new Map(); // "conn|db|table" → Promise<[{ name, type }]>
@@ -1406,14 +1644,14 @@ export default {
       input: sqlInput, container: $(ctx.root, 'editor'), esc,
       source: {
         async tables() {
-          const c = active(), db = c && activeDb.get(c.id);
+          const c = active(), db = c && tabDb();
           if (!c || !db) return [];
           const k = nodeKey('d', c.id, db);
           if (!Array.isArray(cache.get(k))) await loadTables(c, db).catch(() => {});
           return Array.isArray(cache.get(k)) ? cache.get(k).map(tb => tb.name) : [];
         },
         columns(table) {
-          const c = active(), db = c && activeDb.get(c.id);
+          const c = active(), db = c && tabDb();
           if (!c || !db || !table) return Promise.resolve([]);
           const k = `${c.id}|${db}|${table}`;
           if (!acColumns.has(k)) {
@@ -1470,19 +1708,21 @@ export default {
         `${list.length ? `<button class="btn btn-ghost" onclick="Ext['db-client'].clearHistory()">${esc(t('history.clear'))}</button>` : ''}<button class="btn btn-primary" onclick="UI.closeModal()">${esc(t('core.action.close'))}</button>`);
     }
 
-    let running = false;
     // opts: { sql, token } per rimandare un'istruzione confermata; { sql, params, paramInfo }
-    // con i valori dei parametri (query con ? o :nome)
+    // con i valori dei parametri (query con ? o :nome). Una query per tab alla volta; il
+    // risultato va nella tab da cui è partita anche se nel frattempo se ne è aperta un'altra
     async function run(opts) {
       const c = active();
+      const tab = current;
       const sql = opts?.sql || statement();
-      if (!c || !sql || running) return;
+      if (!c || !sql || !tab || tab.running) return;
       const body = {
-        sql, database: activeDb.get(c.id) || null, limit: Number($(ctx.root, 'limit').value),
+        sql, database: tab.db || null, limit: Number($(ctx.root, 'limit').value),
         ...(opts?.token ? { confirm: opts.token } : {}),
         ...(opts?.params ? { params: opts.params } : {}),
       };
-      running = true;
+      tab.running = true;
+      renderTabs();
       grid = null;
       designer = null;
       $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('run.running'))}</div>`;
@@ -1492,12 +1732,14 @@ export default {
         });
         const data = await res.json().catch(() => ({}));
         const record = (ok, summary) => addHistory({ sql, connId: c.id, db: body.database, at: Date.now(), ok, summary });
+        // parametri e conferme aprono una modale: si torna sulla tab della query
+        if ((res.status === 422 && data.needsParams) || (res.status === 428 && data.needsConfirmation)) switchTab(tab);
         if (res.status === 422 && data.needsParams) await needParams(c, sql, data.params);
         else if (res.status === 428 && data.needsConfirmation) askConfirmation(data, token => run({ sql: data.sql, token, paramInfo: opts?.paramInfo }));
-        else if (!res.ok) { renderError(ctx.ui.errorText(data, `HTTP ${res.status}`), sql); showParamsUsed(opts?.paramInfo); record(false); }
+        else if (!res.ok) { inTab(tab, () => { renderError(ctx.ui.errorText(data, `HTTP ${res.status}`), sql); showParamsUsed(opts?.paramInfo); }); record(false); }
         else {
           data.paramInfo = opts?.paramInfo || null;
-          renderResult(data);
+          inTab(tab, () => renderResult(data));
           record(true, data.kind === 'rows' ? { rows: data.rowCount } : { affected: data.affectedRows });
           // istruzione di schema eseguita dall'editor: l'albero si aggiorna da solo
           if (/^\s*(CREATE|ALTER|DROP|RENAME|TRUNCATE)\b/i.test(sql.replace(/^(\s*(--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/))*/, ''))) {
@@ -1505,9 +1747,10 @@ export default {
           }
         }
       } catch (e) {
-        renderError(e.message, sql);
+        inTab(tab, () => renderError(e.message, sql));
       } finally {
-        running = false;
+        tab.running = false;
+        renderTabs();
       }
     }
 
@@ -1564,11 +1807,56 @@ export default {
           </select>
         </div>`;
       }).join('');
-      openModal(t('params.title', { count: list.length }), `<p class="db-muted">${esc(t('params.hint'))}</p><div class="db-params">${rows}</div>`,
+      const paste = `<div class="db-params-paste">
+        <label for="f_param_paste">${esc(t('params.pasteLabel'))}</label>
+        <textarea class="form-input db-mono" id="f_param_paste" rows="3" spellcheck="false" placeholder="{ site_id: 15, level: 'site', energy_vector_id: null }"
+                  oninput="Ext['db-client'].fillParams()"></textarea>
+        <div class="db-param-hint" id="f_param_paste_msg" aria-live="polite"></div></div>`;
+      openModal(t('params.title', { count: list.length }), `<p class="db-muted">${esc(t('params.hint'))}</p>${paste}<div class="db-params">${rows}</div>`,
         `<button class="btn btn-ghost" onclick="UI.closeModal();Ext['db-client'].cancelParams()">${esc(t('core.action.cancel'))}</button>
          <button class="btn btn-primary" onclick="Ext['db-client'].runWithParams()">${esc(t('params.run'))}</button>`);
       setTimeout(() => { const f = document.getElementById('f_param_0'); f?.focus(); f?.select(); }, 0);
     }
+    // Campi riempiti da un oggetto incollato ({ nome: valore, … }): per nome del parametro
+    // (anche senza distinguere maiuscole e minuscole); null → NULL, numeri, testi, true/false → 1/0
+    function fillParams() {
+      if (!pendingParams) return;
+      const box = document.getElementById('f_param_paste'), msg = document.getElementById('f_param_paste_msg');
+      const text = box.value.trim();
+      if (!text) { msg.textContent = ''; return; }
+      const parsed = parseObjectText(text);
+      if (!parsed.ok) {
+        const before = text.slice(0, parsed.at).split('\n');
+        msg.textContent = t('params.pasteInvalid', { line: before.length, column: before.at(-1).length + 1 });
+        msg.classList.add('db-param-err');
+        return;
+      }
+      msg.classList.remove('db-param-err');
+      const keys = Object.keys(parsed.values);
+      const used = new Set();
+      let filled = 0;
+      for (const [i, p] of pendingParams.list.entries()) {
+        const key = keys.find(k => k === p.name) ?? keys.find(k => k.toLowerCase() === String(p.name).toLowerCase());
+        if (key === undefined) continue;
+        used.add(key);
+        filled++;
+        const v = parsed.values[key];
+        const input = document.getElementById(`f_param_${i}`), type = document.getElementById(`f_param_type_${i}`);
+        if (v === null) { input.value = ''; type.value = 'null'; }
+        else if (typeof v === 'boolean') { input.value = v ? '1' : '0'; type.value = 'number'; }
+        else if (typeof v === 'number') { input.value = String(v); type.value = 'number'; }
+        else { input.value = v; type.value = 'text'; }
+        input.disabled = type.value === 'null';
+      }
+      const unused = keys.filter(k => !used.has(k));
+      const missing = pendingParams.list.filter(p => !keys.some(k => k.toLowerCase() === String(p.name).toLowerCase()));
+      msg.textContent = [
+        t('params.pasteFilled', { count: filled, total: pendingParams.list.length }),
+        ...(unused.length ? [t('params.pasteUnused', { list: fmt.list(unused) })] : []),
+        ...(missing.length ? [t('params.pasteMissing', { list: fmt.list(missing.map(p => p.name)) })] : []),
+      ].join(' · ');
+    }
+
     // Valore da inviare: auto → numero se ha la forma di un numero (senza zeri iniziali), altrimenti testo
     function paramValue(raw, type) {
       if (type === 'null') return { value: null };
@@ -1849,9 +2137,7 @@ export default {
         const h = readHistory()[i];
         if (!h) return;
         closeModal();
-        if (h.connId !== activeId && connections.some(c => c.id === h.connId)) actions.select(h.connId);
-        if (h.db) activeDb.set(h.connId, h.db);
-        renderActiveDb();
+        if (connections.some(c => c.id === h.connId)) setTarget(h.connId, h.db || null);
         sqlInput.value = h.sql;
         sqlInput.dispatchEvent(new Event('input'));
         sqlInput.focus();
@@ -1925,6 +2211,7 @@ export default {
         if (!p.keepResults) $(ctx.root, 'results').innerHTML = '';
       },
       runWithParams: () => runWithParams(),
+      fillParams: () => fillParams(),
       cancelParams() {
         pendingParams = null;
         $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('run.cancelled'))}</div>`;
@@ -1935,7 +2222,7 @@ export default {
         if (p && !p.keepResults) $(ctx.root, 'results').innerHTML = `<div class="db-muted db-pad">${esc(t('run.cancelled'))}</div>`;
         else toast(t('run.nothingDone'));
       },
-      select(id) { activeId = id; renderConnections(); renderWorkspace(); },
+      select(id) { setTarget(id); },
       addFolder: () => folderDialog(null),
       async saveFolder(id) {
         const label = (document.getElementById('f_dbfolder_label')?.value || '').trim();
@@ -1969,9 +2256,10 @@ export default {
             : await ctx.api.post('/connections', body);
           closeModal();
           toast(t('connections.saved'), 'success');
-          activeId = r.connection.id;
-          if (existingId) activeDb.delete(existingId); // riparte dal database predefinito (forse cambiato)
+          // tab della connessione modificata: ripartono dal database predefinito (forse cambiato)
+          if (existingId) for (const tb of tabs) if (tb.connId === existingId) { tb.connId = r.connection.id; tb.db = r.connection.database || null; }
           await loadConnections();
+          if (!existingId || !current?.connId) setTarget(r.connection.id);
           // errori e dati vecchi della connessione non valgono più
           forgetConnection(r.connection.id);
           if (existingId && existingId === activeId && $(ctx.root, 'results').querySelector('.db-error')) $(ctx.root, 'results').innerHTML = '';
@@ -1982,7 +2270,6 @@ export default {
         if (!c || !confirm(t('connections.confirmDelete', { name: c.label }))) return;
         try {
           await ctx.api.del(`/connections/${encodeURIComponent(id)}`);
-          if (activeId === id) activeId = null;
           toast(t('connections.deleted'), 'success');
           await loadConnections();
           forgetConnection(id);
@@ -2005,7 +2292,12 @@ export default {
       else if (a === 'change-params') changeParams();
       else if (a === 'export-query') exportQuery(e.target.closest('[data-action]'));
       else if (a === 'history') showHistory();
-      else if (a === 'new-table') { const c = active(); if (c) openDesigner(c, activeDb.get(c.id)); }
+      else if (a === 'new-table') { const c = active(); if (c) openDesigner(c, tabDb()); }
+      else if (a === 'new-tab') addTab({ connId: current?.connId ?? connections[0]?.id ?? null, db: current?.db ?? null });
+      const tabEl = e.target.closest('[data-tab]');
+      const closing = e.target.closest('[data-tab-close]');
+      if (closing) { const tb = tabs.find(x => String(x.id) === closing.dataset.tabClose); if (tb) closeTab(tb); }
+      else if (tabEl) switchTab(tabs.find(x => String(x.id) === tabEl.dataset.tab));
     });
     // Albero: freccia apre/chiude; clic sulla connessione la seleziona, sul database lo rende
     // attivo, sulla tabella apre il menu contestuale (anche con il tasto destro)
@@ -2032,11 +2324,14 @@ export default {
         setActiveDb(c, db);
       } else if (row.dataset.tree === 'table') {
         if (toggling) return toggle(nodeKey('t', c.id, db, table), () => loadColumns(c, db, table));
-        if (activeId !== c.id || activeDb.get(c.id) !== db) setActiveDb(c, db);
         tableMenu(e, c, db, table);
       }
     }
     ctx.sidebar.addEventListener('click', e => onTree(e, false));
+    $(ctx.root, 'target').addEventListener('change', e => {
+      const [connId, db] = e.target.value.split(TARGET_SEP);
+      if (connId) setTarget(connId, db || null);
+    });
     $(ctx.sidebar, 'tree-filter').addEventListener('input', e => { treeFilter = e.target.value; renderConnections(); });
     ctx.sidebar.addEventListener('contextmenu', e => {
       if (e.target.closest('[data-tree="table"], [data-tree="folder"]')) return onTree(e, true);
@@ -2079,6 +2374,7 @@ export default {
     this.languageChanged = () => {
       renderLimitOptions();
       if (vault.state !== 'unlocked') { render(); return; }
+      renderTabs();
       renderConnections();
       renderWorkspace();
       renderMigDialog();

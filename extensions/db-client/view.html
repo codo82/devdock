@@ -16,9 +16,10 @@
 <div class="db-main" data-role="main" hidden>
   <div class="empty-state" data-role="no-connection"><div class="icon">🗄️</div><p data-i18n="main.noConnection"></p></div>
   <div class="db-workspace" data-role="workspace" hidden>
+    <div class="db-tabs" role="tablist" data-role="tabs"></div>
     <div class="db-conn-header" data-role="conn-header"></div>
     <div class="db-toolbar">
-      <span class="db-active" data-role="active-db" data-i18n-title="toolbar.activeDbTitle"></span>
+      <select class="form-input db-select db-target" data-role="target" data-i18n-title="toolbar.targetTitle" data-i18n-aria-label="toolbar.targetTitle"></select>
       <select class="form-input db-select db-limit" data-role="limit" data-i18n-title="toolbar.limitTitle">
         <option value="100"></option>
         <option value="1000" selected></option>
