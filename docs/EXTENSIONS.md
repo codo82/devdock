@@ -1,6 +1,6 @@
 # Kelbo extensions
 
-This document is the **public API** of Kelbo for extensions: manifest, backend and frontend `ctx`, configuration sections, routes and the core API they may use. It follows the core version (SemVer): additions come with a minor version, and any change that can break an existing extension comes with a new major version and is marked **Breaking** in the [CHANGELOG](../CHANGELOG.md). Every extension declares in its manifest the core versions it works with (`devdock`).
+This document is the **public API** of Kelbo for extensions: manifest, backend and frontend `ctx`, configuration sections, routes and the core API they may use. It follows the core version (SemVer): additions come with a minor version, and any change that can break an existing extension comes with a new major version and is marked **Breaking** in the [CHANGELOG](../CHANGELOG.md). Every extension declares in its manifest the core versions it works with (`kelbo`).
 
 Every feature that can be added or removed is an **extension**: a folder under `extensions/` that describes itself in `setting.json` and brings its own backend routes, HTML, JavaScript and CSS. The core only provides security, configuration storage by section, the extension loader, the projects shared by the extensions, a few shared services and the UI shell (navigation, header, dialogs).
 
@@ -48,7 +48,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`, 
   "name": "Git",
   "code": "git",
   "version": "1.0.0",
-  "devdock": "^2.0",
+  "kelbo": "^2.0",
   "description": "Status, commit, grafo dei commit e operazioni remote per i repository dei progetti",
   "color": "#3fb950",
   "icon": "🌿",
@@ -79,7 +79,7 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`, 
 | `name` | yes | Label shown in the UI: a string or a map by language tag (`{ "it": "Database", "en": "Database" }`) |
 | `code` | yes | Unique id, `[a-z0-9-]`, equal to the folder name (`core` is reserved); used in URLs (`/api/ext/<code>`, `/ext/<code>`), in `dependencies` and as `window.Ext.<code>` |
 | `version` | yes | Extension version (SemVer, `1.2.0`) |
-| `devdock` | yes | Kelbo versions the extension works with, as an npm range (`^2.0`, `>=2.1 <3`, `^2.0 \|\| ^3.0`). The loader refuses an extension whose range does not include the running core version: it is listed as disabled with the reason (`richiede Kelbo ^3.0, questa è la 2.0.0`) |
+| `kelbo` | yes | Kelbo versions the extension works with, as an npm range (`^2.0`, `>=2.1 <3`, `^2.0 \|\| ^3.0`). Before 2.13 the field was called `devdock`, which is still accepted (if both are there they must be equal); an extension that must also load on Kelbo before 2.13 keeps `devdock` too, with the same range. The loader refuses an extension whose range does not include the running core version: it is listed as disabled with the reason (`richiede Kelbo ^3.0, questa è la 2.0.0`) |
 | `description` | no | One line; a string or a map by language tag |
 | `color` | yes | Accent colour (`#rrggbb`) for tab, badges, pills and `--ext-color` |
 | `icon` | no | Emoji or short text for the tab / header button |
@@ -97,14 +97,14 @@ Only `setting.json` is mandatory: an extension can be frontend-only (`swagger`, 
 
 ### Loading and states
 
-Extensions come from two folders: the **built-in** ones in `extensions/` of the Kelbo repository (updated with Kelbo itself) and the **installed** ones in `~/.devdock/extensions` (the Kelbo home: `DEVDOCK_HOME` changes it), outside the repository, where the Extensions panel installs them. Folders whose name starts with `.` are ignored (staging and backups). Two extensions with the same `code` are an error, never a silent choice: the built-in one is used and the other is listed as disabled with the folder of the one already loaded.
+Extensions come from two folders: the **built-in** ones in `extensions/` of the Kelbo repository (updated with Kelbo itself) and the **installed** ones in `~/.kelbo/extensions` (the Kelbo home: `KELBO_HOME` changes it; before 2.13 it was `~/.devdock`, moved at the first start), outside the repository, where the Extensions panel installs them. Folders whose name starts with `.` are ignored (staging and backups). Two extensions with the same `code` are an error, never a silent choice: the built-in one is used and the other is listed as disabled with the folder of the one already loaded.
 
 At startup the loader reads every `setting.json` of both folders and gives each extension a state, shown by `GET /api/core/extensions` (with `source`: `builtin` or `installed`):
 
 - `ok` — loaded
 - `warning` — loaded, but an optional dependency is missing (`warnings` lists it)
 - `off` — switched off by the user from the Extensions panel (`extensions.disabled` in `config.json`)
-- `disabled` — not loaded; `error` says why: invalid manifest, core version outside the `devdock` range, missing required dependency, dependency cycle, config key already owned by another extension, backend that throws or lacks a handler named in the manifest
+- `disabled` — not loaded; `error` says why: invalid manifest, core version outside the `kelbo` range, missing required dependency, dependency cycle, config key already owned by another extension, backend that throws or lacks a handler named in the manifest
 
 Backends are created in dependency order (topological sort) and shut down in reverse order when the server stops. A disabled extension never takes the others down; those that require it are disabled too.
 
@@ -208,7 +208,7 @@ Steps to enable MCP for an extension:
 1. Add the `mcp.tools` block to `setting.json` (the extension needs a `backend`).
 2. Implement each `handler` in `instance.mcp` of `server.js`, reusing the same services and validation as the HTTP routes; errors are thrown with `ctx.error`, so their messages go in `i18n/<lang>.json` under `errors.<name>`.
 3. Restart Kelbo: the tools appear in the 🤖 *MCP server* dialog of the header and in `GET /api/core/mcp`. There is no switch per extension: every active extension with `mcp.tools` is exposed.
-4. Try them from a client: copy the setup from the panel (for Claude Code `claude mcp add --transport http devdock http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"`), or in a test with the SDK client as in `tests/mcp.test.js`.
+4. Try them from a client: copy the setup from the panel (for Claude Code `claude mcp add --transport http kelbo http://127.0.0.1:3500/mcp --header "Authorization: Bearer <token>"`), or in a test with the SDK client as in `tests/mcp.test.js`.
 
 The built-in extensions expose: `tunnels_list`; `env_check`; `git_repos`, `git_status`, `git_log`; `npm_projects`, `npm_processes`, `npm_output`, `npm_run`, `npm_stop`; `db_client_connections`, `db_client_databases`, `db_client_tables`, `db_client_describe`, `db_client_query` (database tools only while the vault is unlocked from the UI); `mock_server_list`, `mock_server_requests` (credential headers redacted). The official installable ones add `pm2_list`, `pm2_logs` and `ports_list`.
 
@@ -446,10 +446,10 @@ Catalogs are flat JSON files with dotted keys. The core's are in `public/core/i1
 
 ## Publishing an extension
 
-An extension can live in its own git repository, or in a folder of a repository that holds several (like the official `kelbo-extensions`). Users install it from the Extensions panel (catalog or URL) or with `devdock ext install`:
+An extension can live in its own git repository, or in a folder of a repository that holds several (like the official `kelbo-extensions`). Users install it from the Extensions panel (catalog or URL) or with `kelbo ext install`:
 
 - **Versions are git tags** in SemVer: `v1.2.0` (or `1.2.0`) for an extension at the root of its repository, `<code>@1.2.0` for an extension in a folder, so every extension of a shared repository has its own versions. The `version` in `setting.json` should match the tag. Without tags the default branch is installed and updates follow its commits.
-- **Compatibility**: `devdock` in the manifest; the panel proposes the latest tag whose range includes the running core.
+- **Compatibility**: `kelbo` in the manifest; the panel proposes the latest tag whose range includes the running core.
 - **What's new**: a `CHANGELOG.md` in the extension folder with `## [x.y.z]` sections; the preview of an update shows the sections newer than the installed version.
 - **Dependencies**: npm packages in the extension's own `package.json` (`dependencies` only; they are installed with `--omit=dev --ignore-scripts`); other extensions in `dependencies` of the manifest (missing required ones are offered for install when a catalog lists them).
 - **Config sections** survive updates and removal: reinstalling an extension finds its data again.
@@ -459,11 +459,11 @@ A **catalog** is a JSON file served over http(s):
 ```json
 { "extensions": [
   { "code": "pm2", "name": { "it": "PM2", "en": "PM2" }, "description": "Processi PM2", "repo": "https://github.com/kelbodev/kelbo-extensions.git", "path": "pm2" },
-  { "code": "hello", "name": "Hello", "repo": "git@github.com:someone/devdock-hello.git" }
+  { "code": "hello", "name": "Hello", "repo": "git@github.com:someone/kelbo-hello.git" }
 ] }
 ```
 
-`path` is the folder of the extension in the repository (the root when omitted), so a catalog can point to any repository. Installed extensions are recorded in `~/.devdock/extensions.lock.json` (repository, folder, tag, version, commit, previous version) and, without the code, in the `extensions.installed` section of `config.json` for the export.
+`path` is the folder of the extension in the repository (the root when omitted), so a catalog can point to any repository. Installed extensions are recorded in `~/.kelbo/extensions.lock.json` (repository, folder, tag, version, commit, previous version) and, without the code, in the `extensions.installed` section of `config.json` for the export.
 
 ## Dependencies and npm workspaces
 
@@ -471,7 +471,7 @@ The root `package.json` declares `"workspaces": ["extensions/*"]`. An extension 
 
 ```json
 {
-  "name": "devdock-ext-db-client",
+  "name": "kelbo-ext-db-client",
   "private": true,
   "dependencies": { "mysql2": "^3.11.0" }
 }
@@ -492,11 +492,11 @@ A single `npm install` at the root installs everything into the shared `node_mod
 
 ## Testing an extension
 
-Each extension keeps its tests in its own `tests/` folder (`*.test.js`, `node:test`), so it can be removed, moved or published on its own: the core suite (`tests/`) only uses fixture extensions and stays green without any of the built-in ones. The core exports a test kit: built-in extensions require `../../../lib/testkit`, external ones `require('devdock/testkit')` with Kelbo as a dev dependency.
+Each extension keeps its tests in its own `tests/` folder (`*.test.js`, `node:test`), so it can be removed, moved or published on its own: the core suite (`tests/`) only uses fixture extensions and stays green without any of the built-in ones. The core exports a test kit: built-in extensions require `../../../lib/testkit`, external ones `require('kelbo/testkit')` with Kelbo as a dev dependency (`"kelbo": "github:kelbodev/kelbo#main"`).
 
 | Member | Purpose |
 |---|---|
-| `startServer(config, opts)` | Starts Kelbo as a separate process on a free port with a temporary `config.json` and a temporary home (`DEVDOCK_HOME`: installed extensions, lock file); resolves `{ port, configPath, home, request(method, path, { body, headers, raw }), readConfig(), stop(), output() }`. `opts.extensions`: folder of the built-in extensions (default the repository's, `null` for none); `opts.install`: extension folders to add to the installed ones (e.g. `[path.join(__dirname, '..')]` for the extension under test); `opts.env`: more environment variables |
+| `startServer(config, opts)` | Starts Kelbo as a separate process on a free port with a temporary `config.json` and a temporary home (`KELBO_HOME`: installed extensions, lock file); resolves `{ port, configPath, home, request(method, path, { body, headers, raw }), readConfig(), stop(), output() }`. `opts.extensions`: folder of the built-in extensions (default the repository's, `null` for none); `opts.install`: extension folders to add to the installed ones (e.g. `[path.join(__dirname, '..')]` for the extension under test); `opts.env`: more environment variables (`DEVDOCK_*` names count as `KELBO_*`; `null` removes a variable) |
 | `mcpClient(srv)` | MCP client (official SDK) connected to the instance with its token |
 | `tmpDir()`, `freePort()` | Temporary folder, free TCP port |
 | `git(cwd, ...args)`, `makeRepo(dir, { scripts })`, `commitFile(dir, name)` | Disposable git repositories with a `package.json` |
@@ -510,7 +510,7 @@ Each extension keeps its tests in its own `tests/` folder (`*.test.js`, `node:te
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-const { startServer, i18nProblems } = require('devdock/testkit'); // built-in: '../../../lib/testkit'
+const { startServer, i18nProblems } = require('kelbo/testkit'); // built-in: '../../../lib/testkit'
 
 let srv;
 before(async () => { srv = await startServer({ projects: [] }, { install: [path.join(__dirname, '..')] }); });

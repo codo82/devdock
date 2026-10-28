@@ -18,7 +18,7 @@ const call = async (name, args = {}) => client.callTool({ name, arguments: args 
 
 test('token: generato, fuori da config.json, obbligatorio; niente richieste da browser', async () => {
   assert.match(token, /^[a-f0-9]{64}$/);
-  const file = path.join(path.dirname(srv.configPath), '.devdock-mcp-token');
+  const file = path.join(path.dirname(srv.configPath), '.kelbo-mcp-token');
   assert.equal(fs.readFileSync(file, 'utf8').trim(), token);
   assert.equal(fs.statSync(file).mode & 0o077, 0, 'leggibile solo dal proprietario');
   assert.doesNotMatch(fs.readFileSync(srv.configPath, 'utf8'), new RegExp(token));

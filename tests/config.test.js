@@ -93,7 +93,7 @@ test('sezioni: quelle dichiarate appartengono all\'estensione, projects, project
 test('export per tipo', async () => {
   const projects = await srv.request('GET', '/api/core/config/export?name=progetti&sections=projects');
   assert.deepEqual(Object.keys(projects.json), ['projects']);
-  assert.match(projects.headers['content-disposition'], /devdock-config-progetti-/);
+  assert.match(projects.headers['content-disposition'], /kelbo-config-progetti-/);
   const sample = await srv.request('GET', '/api/core/config/export?name=sample&sections=items,links');
   assert.deepEqual(Object.keys(sample.json).sort(), ['items', 'links']);
 });

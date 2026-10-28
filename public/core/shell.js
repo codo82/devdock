@@ -544,9 +544,9 @@ window.Shell = (() => {
     return {
       url: mcpData.url,
       token: mcpData.token,
-      claudeCode: `claude mcp add --transport http devdock ${mcpData.url} --header "Authorization: ${auth}"`,
+      claudeCode: `claude mcp add --transport http kelbo ${mcpData.url} --header "Authorization: ${auth}"`,
       // ponte stdio di Kelbo: nessun token nella configurazione del client
-      desktop: JSON.stringify({ mcpServers: { devdock: { command: mcpData.bridge.command, args: mcpData.bridge.args, ...(Object.keys(mcpData.bridge.env).length ? { env: mcpData.bridge.env } : {}) } } }, null, 2),
+      desktop: JSON.stringify({ mcpServers: { kelbo: { command: mcpData.bridge.command, args: mcpData.bridge.args, ...(Object.keys(mcpData.bridge.env).length ? { env: mcpData.bridge.env } : {}) } } }, null, 2),
     };
   }
 

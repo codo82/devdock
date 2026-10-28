@@ -45,10 +45,10 @@ module.exports = function coreRoutes(extensions) {
       // solo quando non è quello predefinito
       bridge: {
         command: process.execPath,
-        args: [path.join(root, 'bin', 'devdock-mcp.js')],
+        args: [path.join(root, 'bin', 'kelbo-mcp.js')],
         env: {
-          ...(PORT !== 3500 ? { DEVDOCK_PORT: String(PORT) } : {}),
-          ...(CONFIG_PATH !== path.join(root, 'config.json') ? { DEVDOCK_CONFIG: CONFIG_PATH } : {}),
+          ...(PORT !== 3500 ? { KELBO_PORT: String(PORT) } : {}),
+          ...(CONFIG_PATH !== path.join(root, 'config.json') ? { KELBO_CONFIG: CONFIG_PATH } : {}),
         },
       },
       tools: extensions.mcpTools().map(t => ({ name: t.name, extension: t.extension, description: t.description, readOnly: t.readOnly })),
@@ -110,6 +110,18 @@ module.exports = function coreRoutes(extensions) {
     cfg.extensions = { ...(cfg.extensions || {}), installed: Object.entries(lock.extensions).map(([code, e]) => ({ code, repo: e.repo, ...(e.path ? { path: e.path } : {}), ...(e.tag ? { tag: e.tag } : {}) })) };
     saveConfig(cfg);
   }
+  // Indirizzi del repository ufficiale di prima (codo82/devdock-extensions) riscritti una volta
+  // all'avvio, nel lock file e nell'elenco delle installate di config.json
+  try {
+    installer.migrateLegacyRepos();
+    const cfg = loadConfig();
+    const list = cfg.extensions?.installed;
+    if (Array.isArray(list) && list.some(x => installer.renamedRepo(x?.repo) !== x?.repo)) {
+      cfg.extensions = { ...cfg.extensions, installed: list.map(x => ({ ...x, repo: installer.renamedRepo(x.repo) })) };
+      saveConfig(cfg);
+    }
+  } catch (e) { console.error('[estensioni] indirizzi dei repository:', e.message); }
+
   let updates = { checkedAt: null, extensions: {} };
   async function checkUpdates() {
     try { updates = await installer.checkUpdates(); } catch (e) { console.error('[estensioni] controllo aggiornamenti:', e.message); }
@@ -255,7 +267,7 @@ module.exports = function coreRoutes(extensions) {
   router.get('/config/export', (req, res) => {
     const keys = req.query.sections ? String(req.query.sections).split(',').filter(Boolean) : null;
     const name = NAME_RE.test(req.query.name || '') ? req.query.name : 'all';
-    res.setHeader('Content-Disposition', `attachment; filename="devdock-config-${name}-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.setHeader('Content-Disposition', `attachment; filename="kelbo-config-${name}-${new Date().toISOString().slice(0, 10)}.json"`);
     res.setHeader('Content-Type', 'application/json');
     res.send(JSON.stringify(exportConfig(keys), null, 2));
   });
