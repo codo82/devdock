@@ -78,3 +78,16 @@ test('query parametriche: valori escapati al posto dei segnaposto', () => {
   assert.equal(bindParams(sql, { nome: "o'k", '#1': null }, escape).sql, "SELECT * FROM t WHERE a = 'o\\'k' AND b = NULL AND c = 'o\\'k' AND d = '?'");
   assert.equal(bindParams('SELECT * FROM t LIMIT ?', { '#1': 10 }, escape).sql, 'SELECT * FROM t LIMIT 10');
 });
+
+test('conteggio delle righe totali: COUNT(*) della SELECT senza il suo LIMIT finale', () => {
+  const { countQuery } = require('../sql');
+  const wrap = body => `SELECT COUNT(*) FROM (\n${body}\n) AS kelbo_count`;
+  assert.deepEqual(countQuery('SELECT * FROM t LIMIT 100;'), { sql: wrap('SELECT * FROM t'), limit: { count: 100, offset: 0 } });
+  assert.deepEqual(countQuery("select a from t where x = 'LIMIT 5' limit 10, 20"), { sql: wrap("select a from t where x = 'LIMIT 5'"), limit: { count: 20, offset: 10 } });
+  assert.deepEqual(countQuery('SELECT * FROM t LIMIT 5 OFFSET 10 -- fine'), { sql: wrap('SELECT * FROM t'), limit: { count: 5, offset: 10 } });
+  // LIMIT di una sottoquery o di una CTE: resta (è parte della query)
+  assert.deepEqual(countQuery('SELECT * FROM (SELECT * FROM t LIMIT 3) x'), { sql: wrap('SELECT * FROM (SELECT * FROM t LIMIT 3) x'), limit: null });
+  assert.equal(countQuery('WITH c AS (SELECT 1) SELECT * FROM c').limit, null);
+  // non SELECT: niente conteggio
+  for (const q of ['SHOW TABLES', 'DESCRIBE t', 'EXPLAIN SELECT 1', '']) assert.equal(countQuery(q), null);
+});

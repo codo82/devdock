@@ -259,4 +259,31 @@ function bindParams(sql, values, escape) {
   return { sql: out };
 }
 
-module.exports = { classify, mask, schemaChange, placeholders, describeParams, bindParams };
+// ---- righe totali di una lettura ----
+
+// Conteggio di una SELECT (o WITH … SELECT): COUNT(*) sulla query senza il suo eventuale
+// LIMIT finale (fuori da parentesi, stringhe e commenti), per sapere quante righe darebbe
+// senza limiti. → { sql, limit: { count, offset } | null }, o null se non è una SELECT
+function countQuery(sql) {
+  if (typeof sql !== 'string') return null;
+  let body = sql.trim();
+  let text = blank(body);
+  const semi = /;\s*$/.exec(text);
+  if (semi) { body = body.slice(0, semi.index); text = text.slice(0, semi.index); }
+  const first = /^\s*(\w+)/.exec(text)?.[1]?.toUpperCase();
+  if (first !== 'SELECT' && first !== 'WITH') return null;
+  let limit = null;
+  const m = /\bLIMIT\s+(\d+)(?:\s*,\s*(\d+)|\s+OFFSET\s+(\d+))?\s*$/i.exec(text);
+  if (m) {
+    const before = text.slice(0, m.index);
+    const depth = (before.match(/\(/g) || []).length - (before.match(/\)/g) || []).length;
+    if (depth === 0) {
+      // LIMIT a, b → salta a, ne prende b · LIMIT n OFFSET o
+      limit = m[2] !== undefined ? { count: Number(m[2]), offset: Number(m[1]) } : { count: Number(m[1]), offset: Number(m[3] || 0) };
+      body = body.slice(0, m.index).trimEnd();
+    }
+  }
+  return { sql: `SELECT COUNT(*) FROM (\n${body}\n) AS kelbo_count`, limit };
+}
+
+module.exports = { classify, mask, schemaChange, placeholders, describeParams, bindParams, countQuery };

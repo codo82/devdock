@@ -514,5 +514,13 @@
   },
   "params.pasteUnused": "non usati: {list}",
   "params.pasteMissing": "senza valore: {list}",
-  "menu.distinct": "Valori distinti (DISTINCT)"
+  "menu.distinct": "Valori distinti (DISTINCT)",
+  "result.total": {
+    "one": "{count} in totale senza limiti",
+    "other": "{count} in totale senza limiti"
+  },
+  "result.totalTitle": "Righe che la query restituirebbe senza il limite di righe di Kelbo né il LIMIT scritto nella query (contate con un COUNT(*) della stessa query)",
+  "tabs.closeOthers": "Chiudi le altre",
+  "tabs.closeRight": "Chiudi quelle a destra",
+  "tabs.closeLeft": "Chiudi quelle a sinistra"
 }

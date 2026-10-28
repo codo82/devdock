@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const mysqlCb = require('mysql2');
 const mysql = require('mysql2/promise');
-const { classify, schemaChange, describeParams, bindParams } = require('./sql');
+const { classify, schemaChange, describeParams, bindParams, countQuery } = require('./sql');
 const ddl = require('./ddl');
 const mig = require('./migrations');
 const schemaOps = require('./ops');
@@ -909,8 +909,22 @@ module.exports = function createDbClient(ctx) {
           }
         }
         try {
-          const result = await execute(await poolFor(conn, database), sql, limit);
-          res.json({ ...result, statement: c.kind, database, limit, ...(wanted.length ? { sql } : {}) });
+          const pool = await poolFor(conn, database);
+          const result = await execute(pool, sql, limit);
+          // righe totali senza il limite di Kelbo né il LIMIT della query: quelle restituite se
+          // non c'erano limiti, altrimenti un COUNT(*) della stessa SELECT (null se non riesce,
+          // es. colonne con lo stesso nome in una JOIN)
+          let total = null, queryLimit = null;
+          const counting = result.kind === 'rows' && c.kind === 'read' ? countQuery(sql) : null;
+          if (counting) {
+            queryLimit = counting.limit;
+            if (!result.truncated && !counting.limit) total = result.rowCount;
+            else {
+              try { total = Number((await execute(pool, counting.sql, 1)).rows[0]?.[0]); } catch { total = null; }
+              if (!Number.isFinite(total)) total = null;
+            }
+          }
+          res.json({ ...result, total, queryLimit, statement: c.kind, database, limit, ...(wanted.length ? { sql } : {}) });
         } catch (e) {
           sendFailure(res, e);
         }

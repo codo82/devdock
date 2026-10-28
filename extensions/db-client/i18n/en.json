@@ -514,5 +514,13 @@
   },
   "params.pasteUnused": "not used: {list}",
   "params.pasteMissing": "without a value: {list}",
-  "menu.distinct": "Distinct values (DISTINCT)"
+  "menu.distinct": "Distinct values (DISTINCT)",
+  "result.total": {
+    "one": "{count} in total without limits",
+    "other": "{count} in total without limits"
+  },
+  "result.totalTitle": "Rows the query would return without Kelbo's row limit or the LIMIT written in the query (counted with a COUNT(*) of the same query)",
+  "tabs.closeOthers": "Close the others",
+  "tabs.closeRight": "Close those to the right",
+  "tabs.closeLeft": "Close those to the left"
 }

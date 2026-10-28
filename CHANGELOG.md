@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-10-28
+
+### Added
+- **Database — total rows of a query**: when a SELECT is cut by Kelbo's row limit or by a `LIMIT` written at its end, the summary above the results also shows how many rows it gives without limits (*100 rows (limited to 100) · 300 in total without limits*, *20 rows · 300 in total without limits (LIMIT 20)*), counted with a `COUNT(*)` of the same query without its final `LIMIT` (a `LIMIT` inside a subquery or CTE stays). Without limits the rows returned are the total and nothing more runs; when the count fails (e.g. a JOIN with two columns of the same name) it is just not shown. The API answer of a query has `total` and `queryLimit`.
+- **Database — tab menu**: right click on a tab for *Close*, *Close the others*, *Close those to the right*, *Close those to the left* (one question for all the unsaved edits of the tabs being closed); middle click closes a tab.
+
 ## [2.11.1] - 2026-10-28
 
 ### Changed

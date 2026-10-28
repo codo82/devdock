@@ -311,17 +311,33 @@ export default {
       switchTab(tab);
       return tab;
     }
-    function closeTab(tab) {
-      const st = tab === current ? { grid, lastResult, edits } : tab.st;
-      const pending = st.edits ? st.edits.cells.size : 0;
+    const closeTab = tab => closeTabs([tab]);
+    // Chiude più tab insieme (una sola domanda se hanno modifiche non salvate); se tra queste
+    // c'è la visibile, si passa alla più vicina rimasta (o a una nuova, se non ne resta nessuna)
+    function closeTabs(list) {
+      list = list.filter(tb => tabs.includes(tb));
+      if (!list.length) return;
+      const pending = list.reduce((n, tb) => n + ((tb === current ? edits : tb.st.edits)?.cells.size || 0), 0);
       if (pending && !confirm(t('tabs.confirmClose', { count: pending }))) return;
-      const i = tabs.indexOf(tab);
-      tabs.splice(i, 1);
-      if (tab !== current) { renderTabs(); saveTabs(); return; }
+      const i = tabs.indexOf(current);
+      const closingCurrent = list.includes(current);
+      const last = list.at(-1);
+      tabs = tabs.filter(tb => !list.includes(tb));
+      if (!closingCurrent) { renderTabs(); saveTabs(); return; }
       current = null;
       $(ctx.root, 'results').replaceChildren();
-      if (!tabs.length) { addTab({ connId: tab.connId, db: tab.db }); return; }
-      switchTab(tabs[Math.min(i, tabs.length - 1)]);
+      if (!tabs.length) { addTab({ connId: last.connId, db: last.db }); return; }
+      switchTab(tabs[Math.min(Math.max(i, 0), tabs.length - 1)]);
+    }
+    // Tasto destro su una tab: chiudi, chiudi le altre, a destra, a sinistra
+    function tabMenu(ev, tab) {
+      const i = tabs.indexOf(tab);
+      ctx.ui.contextMenu(ev.clientX, ev.clientY, [
+        { icon: '✕', label: t('tabs.close'), action: () => closeTabs([tab]) },
+        { icon: '⊟', label: t('tabs.closeOthers'), disabled: tabs.length < 2, action: () => { switchTab(tab); closeTabs(tabs.filter(x => x !== tab)); } },
+        { icon: '⇥', label: t('tabs.closeRight'), disabled: i === tabs.length - 1, action: () => closeTabs(tabs.slice(i + 1)) },
+        { icon: '⇤', label: t('tabs.closeLeft'), disabled: i === 0, action: () => closeTabs(tabs.slice(0, i)) },
+      ]);
     }
     // Tab già aperta con la stessa connessione, database e contenuto (query o tabella), o null
     function findTab(connId, db, match) {
@@ -2010,6 +2026,13 @@ export default {
       });
     }
 
+    // Righe totali della query senza limiti (il limite di Kelbo e il LIMIT scritto nella query)
+    function totalText(data) {
+      if (data.total == null || (!data.truncated && !data.queryLimit)) return '';
+      const limit = data.queryLimit ? ` (${data.queryLimit.offset ? `LIMIT ${data.queryLimit.offset}, ${data.queryLimit.count}` : `LIMIT ${data.queryLimit.count}`})` : '';
+      return ` · <strong title="${esc(t('result.totalTitle'))}">${esc(t('result.total', { count: data.total }))}</strong>${esc(limit)}`;
+    }
+
     function renderResult(data, keepSort) {
       const el = $(ctx.root, 'results');
       if (!keepSort) resultSort = null;
@@ -2023,7 +2046,7 @@ export default {
       const editable = i => !!target?.colOf[i];
       ctx.ui.patch(el, `
         ${paramsUsed(data.paramInfo)}
-        <div class="db-result-meta">${esc(t('result.rows', { count: data.rowCount }))}${data.truncated ? ` ${esc(t('result.truncated', { limit: data.limit }))}` : ''} · ${esc(t('result.ms', { ms: data.ms }))}
+        <div class="db-result-meta">${esc(t('result.rows', { count: data.rowCount }))}${data.truncated ? ` ${esc(t('result.truncated', { limit: data.limit }))}` : ''}${totalText(data)} · ${esc(t('result.ms', { ms: data.ms }))}
           ${target ? `<span class="db-badge" title="${esc(t('result.editableHint'))}">✎ ${esc(t('result.editable', { table: target.table }))}</span>` : ''}
           ${target ? editsBar(data) : ''}</div>
         <div class="db-table-wrap"><table class="data-table db-table db-result-table">
@@ -2354,6 +2377,19 @@ export default {
       if (c) openTableData(c, row.dataset.db, row.dataset.table);
     });
     ctx.sidebar.addEventListener('click', e => onTree(e, false));
+    $(ctx.root, 'tabs').addEventListener('contextmenu', e => {
+      const el = e.target.closest('[data-tab]');
+      if (!el) return;
+      e.preventDefault();
+      const tab = tabs.find(x => String(x.id) === el.dataset.tab);
+      if (tab) tabMenu(e, tab);
+    });
+    // clic centrale su una tab: chiusa, come nei browser
+    $(ctx.root, 'tabs').addEventListener('auxclick', e => {
+      const el = e.button === 1 && e.target.closest('[data-tab]');
+      const tab = el && tabs.find(x => String(x.id) === el.dataset.tab);
+      if (tab) { e.preventDefault(); closeTab(tab); }
+    });
     $(ctx.root, 'target').addEventListener('change', e => {
       const [connId, db] = e.target.value.split(TARGET_SEP);
       if (connId) setTarget(connId, db || null);
