@@ -124,7 +124,7 @@
   "filterDialog.condition": "Condition",
   "filterDialog.value": "Value",
   "filterDialog.apply": "Apply",
-  "menu.openData": "Open data",
+  "menu.openData": "Open data (double click)",
   "menu.first100": "First 100 rows in the editor",
   "menu.count": "Count rows",
   "menu.countAlias": "rows",

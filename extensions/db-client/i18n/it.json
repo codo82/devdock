@@ -124,7 +124,7 @@
   "filterDialog.condition": "Condizione",
   "filterDialog.value": "Valore",
   "filterDialog.apply": "Applica",
-  "menu.openData": "Apri dati",
+  "menu.openData": "Apri dati (doppio clic)",
   "menu.first100": "Prime 100 righe nell'editor",
   "menu.count": "Conta righe",
   "menu.countAlias": "righe",

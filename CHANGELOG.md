@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-10-28
+
+### Added
+- **Database — double click on a table** in the sidebar opens its data (*Open data*: in a new tab, or in the one already showing it). A single click still opens the table menu, a moment later so that a double click doesn't open it too.
+
 ## [2.10.0] - 2026-10-28
 
 ### Added

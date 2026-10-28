@@ -1363,7 +1363,7 @@ export default {
       const ro = c.readOnly;
       const sqlTab = sql => runSql(sql, { c, db, title: name });
       ctx.ui.contextMenu(ev.clientX, ev.clientY, [
-        { icon: '▤', label: t('menu.openData'), action: () => openInTab(c, db, `grid:${name}`, `▤ ${name}`, () => openGrid(c, db, name)) },
+        { icon: '▤', label: t('menu.openData'), action: () => openTableData(c, db, name) },
         { icon: '▶', label: t('menu.first100'), action: () => sqlTab(`SELECT * FROM ${full} LIMIT 100;`) },
         { icon: '#', label: t('menu.count'), action: () => sqlTab(`SELECT COUNT(*) AS ${quoteId(t('menu.countAlias'))} FROM ${full};`) },
         { icon: '▦', label: t('menu.structure'), action: () => openInTab(c, db, `structure:${name}`, `▦ ${name}`, () => showStructure(c, db, name)) },
@@ -1392,6 +1392,8 @@ export default {
           { c, db, title: `${table}.${column}` }) },
       ]);
     }
+
+    const openTableData = (c, db, name) => openInTab(c, db, `grid:${name}`, `▤ ${name}`, () => openGrid(c, db, name));
 
     async function showStructure(c, db, name) {
       grid = null;
@@ -2334,9 +2336,23 @@ export default {
         setActiveDb(c, db);
       } else if (row.dataset.tree === 'table') {
         if (toggling) return toggle(nodeKey('t', c.id, db, table), () => loadColumns(c, db, table));
-        tableMenu(e, c, db, table);
+        if (contextual) return tableMenu(e, c, db, table);
+        // clic: menu dopo un attimo, così un doppio clic (dati della tabella) non lo apre
+        clearTimeout(tableClick);
+        if (e.detail > 1) return;
+        tableClick = setTimeout(() => tableMenu(e, c, db, table), DBLCLICK_MS);
       }
     }
+    let tableClick = null;
+    const DBLCLICK_MS = 250;
+    // Doppio clic su una tabella: "Apri dati" (in una tab nuova o in quella che li mostra già)
+    ctx.sidebar.addEventListener('dblclick', e => {
+      const row = e.target.closest('[data-tree="table"]');
+      if (!row || e.target.closest('[data-act="toggle"]')) return;
+      clearTimeout(tableClick);
+      const c = connections.find(x => x.id === row.dataset.conn);
+      if (c) openTableData(c, row.dataset.db, row.dataset.table);
+    });
     ctx.sidebar.addEventListener('click', e => onTree(e, false));
     $(ctx.root, 'target').addEventListener('change', e => {
       const [connId, db] = e.target.value.split(TARGET_SEP);
