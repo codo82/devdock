@@ -513,5 +513,6 @@
     "other": "{count} of {total} parameters filled"
   },
   "params.pasteUnused": "not used: {list}",
-  "params.pasteMissing": "without a value: {list}"
+  "params.pasteMissing": "without a value: {list}",
+  "menu.distinct": "Distinct values (DISTINCT)"
 }

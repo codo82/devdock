@@ -543,7 +543,7 @@ export default {
           ${caret(k)}<span class="db-row-icon">${tb.view ? '👁' : '▦'}</span><span class="db-row-label">${esc(tb.name)}</span>
         </div>
         ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.columns.map(col => `
-          <div class="db-row db-row-col" title="${esc(col.comment || '')}">
+          <div class="db-row db-row-col" ${attrs('col', c, db, tb.name)} data-col="${esc(col.name)}" title="${esc(col.comment || '')}">
             <span class="db-caret"></span><span class="db-row-icon">${col.key === 'PRI' ? '🔑' : col.key ? '◆' : '·'}</span>
             <span class="db-row-label">${esc(col.name)}</span><span class="db-col-type">${esc(col.type)}${col.nullable ? '' : ' NN'}</span>
           </div>`).join('')}</div>` : ''}
@@ -1380,6 +1380,16 @@ export default {
         'separator',
         ...(tb?.view ? [] : [{ icon: '⌫', label: t('menu.truncate'), danger: true, disabled: ro, action: () => sqlTab(`TRUNCATE TABLE ${full};`) }]),
         { icon: '✕', label: t(tb?.view ? 'menu.dropView' : 'menu.dropTable'), danger: true, disabled: ro, action: () => sqlTab(`DROP ${tb?.view ? 'VIEW' : 'TABLE'} ${full};`) },
+      ]);
+    }
+
+    // Menu di una colonna (tasto destro nell'albero): nome negli appunti, valori distinti in una tab
+    function columnMenu(ev, c, db, table, column) {
+      ctx.ui.contextMenu(ev.clientX, ev.clientY, [
+        { icon: '⧉', label: t('menu.copyName'), action: () => navigator.clipboard?.writeText(column).then(() => toast(t('menu.copied'))) },
+        { icon: '≡', label: t('menu.distinct'), action: () => runSql(
+          `SELECT DISTINCT ${quoteId(column)} FROM ${quoteId(db)}.${quoteId(table)} ORDER BY ${quoteId(column)};`,
+          { c, db, title: `${table}.${column}` }) },
       ]);
     }
 
@@ -2335,6 +2345,13 @@ export default {
     $(ctx.sidebar, 'tree-filter').addEventListener('input', e => { treeFilter = e.target.value; renderConnections(); });
     ctx.sidebar.addEventListener('contextmenu', e => {
       if (e.target.closest('[data-tree="table"], [data-tree="folder"]')) return onTree(e, true);
+      const colRow = e.target.closest('[data-tree="col"]');
+      if (colRow) {
+        e.preventDefault();
+        const c = connections.find(x => x.id === colRow.dataset.conn);
+        if (c) columnMenu(e, c, colRow.dataset.db, colRow.dataset.table, colRow.dataset.col);
+        return;
+      }
       const dbRow = e.target.closest('[data-tree="db"]');
       if (!dbRow) return;
       e.preventDefault();

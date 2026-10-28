@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-10-28
+
+### Added
+- **Database — column menu**: right click on a column in the sidebar tree opens a menu with **Copy the name** and **Distinct values (DISTINCT)**, which runs `SELECT DISTINCT` of that column (ordered) in a new tab, or in the tab that already shows it.
+
 ## [2.9.0] - 2026-10-28
 
 ### Added

@@ -513,5 +513,6 @@
     "other": "{count} di {total} parametri compilati"
   },
   "params.pasteUnused": "non usati: {list}",
-  "params.pasteMissing": "senza valore: {list}"
+  "params.pasteMissing": "senza valore: {list}",
+  "menu.distinct": "Valori distinti (DISTINCT)"
 }
