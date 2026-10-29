@@ -314,5 +314,7 @@
   "oauthPage.doneTitle": "Login completed",
   "oauthPage.failedTitle": "Login failed",
   "oauthPage.waitTitle": "Signing in",
-  "oauthPage.closeHint": "You can close this tab and go back to Kelbo."
+  "oauthPage.closeHint": "You can close this tab and go back to Kelbo.",
+  "editor.variableForms": "written {{{name}}} or :{name}",
+  "errors.param_unknown": "The path has :{name} but the section has no variable “{name}”: add it (✎) or write the value in the URL"
 }

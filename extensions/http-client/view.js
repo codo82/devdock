@@ -249,7 +249,7 @@ export default {
       const s = activeSection();
       const names = ['baseUrl', ...s.variables.map(v => v.name)];
       $(ctx.root, 'vars').innerHTML = `<span class="hc-muted">${esc(t('editor.variables'))}</span> ` +
-        names.map(n => `<code class="hc-var" title="${esc(n === 'baseUrl' ? s.baseUrl || t('editor.baseUrlMissing') : s.variables.find(v => v.name === n)?.value ?? '')}">{{${esc(n)}}}</code>`).join(' ') +
+        names.map(n => `<code class="hc-var" title="${esc(n === 'baseUrl' ? s.baseUrl || t('editor.baseUrlMissing') : s.variables.find(v => v.name === n)?.value ?? '')} · ${esc(t('editor.variableForms', { name: n }))}">{{${esc(n)}}}</code>`).join(' ') +
         ` <button class="btn btn-ghost btn-sm" onclick="Ext['http-client'].editSection(${js(s.id)})">✎</button>`;
     }
 

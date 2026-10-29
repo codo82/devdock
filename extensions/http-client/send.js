@@ -1,4 +1,4 @@
-// Invio delle richieste HTTP dal backend (niente limiti CORS): variabili {{nome}},
+// Invio delle richieste HTTP dal backend (niente limiti CORS): variabili {{nome}} e :nome,
 // timeout, limite sulla dimensione della risposta, nessun redirect seguito.
 const http = require('http');
 const https = require('https');
@@ -8,18 +8,27 @@ const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;   // testo mostrato
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;  // risposta binaria salvata come file
 const DEFAULT_TIMEOUT_MS = 30000;
 const VAR_RE = /\{\{\s*([A-Za-z_][\w.-]{0,63})\s*\}\}/g;
+// :nome (come nelle rotte Express) solo dopo un carattere che non sia lettera, cifra o ":":
+// http://, localhost:3000, user:pass, "chiave":valore, 10:30 e :: restano come sono
+const COLON_VAR_RE = /(^|[^\w:]):([A-Za-z_]\w{0,63})/g;
+const JSON_WORDS = new Set(['true', 'false', 'null']); // "ok":true nel JSON compatto non è una variabile
 const TEXT_TYPE_RE = /^(text\/|application\/([\w.+-]*\+)?(json|xml|javascript|x-www-form-urlencoded|graphql|yaml|x-ndjson))|^$/i;
 
 class SendError extends Error {
   constructor(key, params = {}, status = 400) { super(key); this.key = key; this.params = params; this.status = status; }
 }
 
-// {{nome}} → valore; encode: trasformazione del valore (JSON, form…); nome sconosciuto → errore
+const known = (vars, name) => Object.prototype.hasOwnProperty.call(vars, name);
+
+// {{nome}} e :nome → valore; encode: trasformazione del valore (JSON, form…). {{nome}}
+// sconosciuto → errore; :nome sconosciuto resta com'è (può essere testo qualsiasi)
 function fill(text, vars, encode = v => v) {
-  return String(text ?? '').replace(VAR_RE, (m, name) => {
-    if (!Object.prototype.hasOwnProperty.call(vars, name)) throw new SendError('variable_unknown', { name });
-    return encode(String(vars[name]));
-  });
+  return String(text ?? '')
+    .replace(VAR_RE, (m, name) => {
+      if (!known(vars, name)) throw new SendError('variable_unknown', { name });
+      return encode(String(vars[name]));
+    })
+    .replace(COLON_VAR_RE, (m, before, name) => (known(vars, name) && !JSON_WORDS.has(name) ? before + encode(String(vars[name])) : m));
 }
 
 const jsonInner = v => JSON.stringify(v).slice(1, -1);
@@ -30,6 +39,9 @@ function buildUrl(url, query, vars) {
   let u;
   try { u = new URL(filled); } catch { throw new SendError('url_invalid', { url: filled }); }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new SendError('url_protocol', { url: filled });
+  // segmento del percorso ancora :nome (parametro di una rotta Express senza variabile)
+  const param = /(?:^|\/):([A-Za-z_]\w*)(?=\/|$)/.exec(u.pathname);
+  if (param) throw new SendError('param_unknown', { name: param[1] });
   for (const q of query || []) {
     if (q.enabled === false || !q.name) continue;
     u.searchParams.append(fill(q.name, vars), fill(q.value, vars));

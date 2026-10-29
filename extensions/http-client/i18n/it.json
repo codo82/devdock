@@ -314,5 +314,7 @@
   "oauthPage.doneTitle": "Login completato",
   "oauthPage.failedTitle": "Login non riuscito",
   "oauthPage.waitTitle": "Login in corso",
-  "oauthPage.closeHint": "Puoi chiudere questa scheda e tornare a Kelbo."
+  "oauthPage.closeHint": "Puoi chiudere questa scheda e tornare a Kelbo.",
+  "editor.variableForms": "si scrive {{{name}}} o :{name}",
+  "errors.param_unknown": "Il percorso contiene :{name} ma la sezione non ha una variabile «{name}»: aggiungila (✎) o scrivi il valore nell'URL"
 }
