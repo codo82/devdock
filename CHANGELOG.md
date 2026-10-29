@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-10-29
+
+### Added
+- **Database — table in the sidebar**: an open table shows three folders, **Fields** (open by default), **Indexes** and **Foreign keys** (closed until opened), each with its count and opened or closed with a click. Indexes show their columns and UQ for unique ones (PRIMARY first), foreign keys their columns → referenced table and columns (database too when it's another one); full text in the tooltip. Read with the columns, so nothing more is requested.
+
+### Changed
+- In the tree, the name of a field, index or key always stays visible: the type or detail on the right is the one cut with "…" when the sidebar is narrow.
+
+
 ## [2.14.0] - 2026-10-29
 
 ### Added

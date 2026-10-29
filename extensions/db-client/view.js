@@ -558,11 +558,44 @@ export default {
         <div class="db-row db-row-table" ${attrs('table', c, db, tb.name)} title="${esc(tb.comment || tb.name)}${tb.rowsEstimate != null ? ` · ${esc(t('tree.rowsEstimate', { count: tb.rowsEstimate }))}` : ''}">
           ${caret(k)}<span class="db-row-icon">${tb.view ? '👁' : '▦'}</span><span class="db-row-label">${esc(tb.name)}</span>
         </div>
-        ${open.has(k) ? `<div class="db-children">${loading(entry) || entry.columns.map(col => `
-          <div class="db-row db-row-col" ${attrs('col', c, db, tb.name)} data-col="${esc(col.name)}" title="${esc(col.comment || '')}">
-            <span class="db-caret"></span><span class="db-row-icon">${col.key === 'PRI' ? '🔑' : col.key ? '◆' : '·'}</span>
-            <span class="db-row-label">${esc(col.name)}</span><span class="db-col-type">${esc(col.type)}${col.nullable ? '' : ' NN'}</span>
-          </div>`).join('')}</div>` : ''}
+        ${open.has(k) ? `<div class="db-children">${loading(entry) || [
+          group(c, db, tb.name, 'fields', entry.columns, col => `
+            <div class="db-row db-row-col" ${attrs('col', c, db, tb.name)} data-col="${esc(col.name)}" title="${esc(col.comment || '')}">
+              <span class="db-caret"></span><span class="db-row-icon">${col.key === 'PRI' ? '🔑' : col.key ? '◆' : '·'}</span>
+              <span class="db-row-label">${esc(col.name)}</span><span class="db-col-type">${esc(col.type)}${col.nullable ? '' : ' NN'}</span>
+            </div>`),
+          group(c, db, tb.name, 'indexes', [...(entry.indexes || [])].sort((x, y) => (y.name === 'PRIMARY') - (x.name === 'PRIMARY')), ix => `
+            <div class="db-row db-row-col" title="${esc(ix.columns.join(', '))}">
+              <span class="db-caret"></span><span class="db-row-icon">${ix.name === 'PRIMARY' ? '🔑' : ix.unique ? '◆' : '·'}</span>
+              <span class="db-row-label">${esc(ix.name)}</span><span class="db-col-type">${esc(ix.columns.join(', '))}${ix.unique && ix.name !== 'PRIMARY' ? ' UQ' : ''}</span>
+            </div>`),
+          group(c, db, tb.name, 'fks', entry.foreignKeys || [], fk => {
+            const ref = `${fk.refDatabase && fk.refDatabase !== db ? `${fk.refDatabase}.` : ''}${fk.refTable}(${fk.refColumns.join(', ')})`;
+            return `
+            <div class="db-row db-row-col" title="${esc(`${fk.name}: ${fk.columns.join(', ')} → ${ref}`)}">
+              <span class="db-caret"></span><span class="db-row-icon">↗</span>
+              <span class="db-row-label">${esc(fk.columns.join(', '))}</span><span class="db-col-type">→ ${esc(ref)}</span>
+            </div>`;
+          }),
+        ].join('')}</div>` : ''}
+      </div>`;
+    }
+
+    // Cartelle di una tabella aperta: campi (aperta finché non la si chiude), indici e foreign key
+    // (chiuse finché non le si apre); lo stato resta per la sessione della pagina
+    const GROUP_ICONS = { fields: '▤', indexes: '⚡', fks: '↗' };
+    const groupOpen = new Map(); // "g|conn|db|tabella|tipo" → aperta?
+    const isGroupOpen = (key, kind) => groupOpen.get(key) ?? kind === 'fields';
+    function group(c, db, table, kind, list, item) {
+      const key = nodeKey('g', c.id, db, table, kind);
+      const opened = isGroupOpen(key, kind);
+      return `<div class="db-node">
+        <div class="db-row db-row-group" data-tree="group" data-group="${esc(key)}" data-kind="${kind}" data-conn="${esc(c.id)}" title="${esc(t(opened ? 'tree.collapse' : 'tree.expand'))}">
+          <span class="db-caret"><svg class="db-chevron ${opened ? 'open' : ''}" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1.5 7 5 3.5 8.5" /></svg></span>
+          <span class="db-row-icon">${GROUP_ICONS[kind]}</span><span class="db-row-label">${esc(t(`tree.${kind}`))}</span>
+          <span class="db-folder-count">${esc(fmt.number(list.length))}</span>
+        </div>
+        ${opened ? `<div class="db-children">${list.map(item).join('') || `<div class="db-tree-msg">${esc(t(`tree.${kind}None`))}</div>`}</div>` : ''}
       </div>`;
     }
 
@@ -2343,6 +2376,11 @@ export default {
       if (row.dataset.tree === 'folder') {
         if (contextual || e.target.closest('[data-act="folder-menu"]')) { e.preventDefault(); return folderMenu(e, row.dataset.folder); }
         return toggleFolder(row.dataset.folder);
+      }
+      if (row.dataset.tree === 'group') {
+        const key = row.dataset.group;
+        groupOpen.set(key, !isGroupOpen(key, row.dataset.kind));
+        return renderConnections();
       }
       const c = connections.find(x => x.id === row.dataset.conn);
       if (!c) return;
