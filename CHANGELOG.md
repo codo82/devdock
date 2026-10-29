@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-10-29
+
+### Added
+- **HTTP client — `:name` variables**: besides `{{name}}`, a variable can be written `:name`, as in Express routes (`{{baseUrl}}/users/:id`; imported routes work as they are), in URL, query, headers, body, file paths and login requests. `:name` is replaced only when the variable exists and is not right after a letter, a digit or `:` (`http://`, `localhost:3000`, `user:pass`, `"key":value`, `10:30`, `::` stay as they are; `true`, `false` and `null` never count as names). An unknown `:name` stays as text, except in the URL path, where it stops the request with a clear error (*the path has :id but the section has no variable "id"*). The variable chips in the editor show both forms.
+
+
 ## [2.13.0] - 2026-10-28
 
 Milestone M7 (new name: Kelbo), except the website.
