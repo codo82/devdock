@@ -316,5 +316,7 @@
   "oauthPage.waitTitle": "Login in corso",
   "oauthPage.closeHint": "Puoi chiudere questa scheda e tornare a Kelbo.",
   "editor.variableForms": "si scrive {{{name}}} o :{name}",
-  "errors.param_unknown": "Il percorso contiene :{name} ma la sezione non ha una variabile «{name}»: aggiungila (✎) o scrivi il valore nell'URL"
+  "errors.param_unknown": "Il percorso contiene :{name} ma la sezione non ha una variabile «{name}»: aggiungila (✎) o scrivi il valore nell'URL",
+  "body.jsonValid": "JSON valido",
+  "body.jsonErrorAt": "JSON non valido alla riga {line}, colonna {column}"
 }

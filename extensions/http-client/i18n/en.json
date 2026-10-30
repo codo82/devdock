@@ -316,5 +316,7 @@
   "oauthPage.waitTitle": "Signing in",
   "oauthPage.closeHint": "You can close this tab and go back to Kelbo.",
   "editor.variableForms": "written {{{name}}} or :{name}",
-  "errors.param_unknown": "The path has :{name} but the section has no variable “{name}”: add it (✎) or write the value in the URL"
+  "errors.param_unknown": "The path has :{name} but the section has no variable “{name}”: add it (✎) or write the value in the URL",
+  "body.jsonValid": "Valid JSON",
+  "body.jsonErrorAt": "Invalid JSON at line {line}, column {column}"
 }

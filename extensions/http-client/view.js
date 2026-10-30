@@ -7,6 +7,189 @@ const COLLAPSED_KEY = 'devdock.httpSections.collapsed';
 const NPM_OUTPUT_KEY = 'devdock.httpSections.npmOutput'; // { <sezione>: script seguito, '' = nessuno }
 const AUTH_TYPES = ['none', 'basic', 'manual', 'login', 'oauth'];
 
+// ---- editor del corpo (JSON e testo): textarea trasparente sopra il testo colorato, come
+// l'editor SQL del DB client; Tab/Maiusc+Tab rientrano, Invio mantiene il rientro ----
+
+const INDENT = '  ';
+
+// Variabili fuori dalle stringhe JSON ({{nome}}, :nome come valore) → fn(testo, indice):
+// per controllare o formattare un corpo che contiene "id": {{id}} senza che sia JSON valido
+function replaceBareVars(text, fn) {
+  let out = '', i = 0, n = 0, inString = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (inString) {
+      out += c;
+      if (c === '\\') { out += text[i + 1] ?? ''; i += 2; continue; }
+      if (c === '"') inString = false;
+      i++;
+      continue;
+    }
+    if (c === '"') { inString = true; out += c; i++; continue; }
+    const m = /^\{\{\s*[A-Za-z_][\w.-]*\s*\}\}/.exec(text.slice(i)) || (/[\w:]/.test(text[i - 1] || '') ? null : /^:[A-Za-z_]\w*/.exec(text.slice(i)));
+    if (m && !(m[0][0] === ':' && /^:(true|false|null)$/.test(m[0]))) { out += fn(m[0], n++); i += m[0].length; continue; }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+// Posizione del primo errore di sintassi JSON (indice nel testo), o -1 se è valido: i
+// messaggi di JSON.parse non sempre dicono dove (V8 spesso no)
+function jsonErrorAt(text) {
+  let i = 0;
+  const ws = () => { while (/[ \t\n\r]/.test(text[i] || '')) i++; };
+  const fail = () => { throw i; };
+  const lit = word => { if (text.startsWith(word, i)) i += word.length; else fail(); };
+  const string = () => {
+    i++;
+    for (;;) {
+      const c = text[i];
+      if (c === undefined || c === '\n' || c < ' ') fail();
+      if (c === '"') { i++; return; }
+      if (c === '\\') {
+        const n = text[i + 1];
+        if (n === 'u') { if (!/^[0-9a-fA-F]{4}$/.test(text.slice(i + 2, i + 6))) { i++; fail(); } i += 6; continue; }
+        if (!'"\\/bfnrt'.includes(n ?? 'x')) { i++; fail(); }
+        i += 2;
+        continue;
+      }
+      i++;
+    }
+  };
+  const number = () => {
+    const m = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/.exec(text.slice(i));
+    if (!m) fail();
+    i += m[0].length;
+  };
+  const value = () => {
+    ws();
+    const c = text[i];
+    if (c === '{') {
+      i++; ws();
+      if (text[i] === '}') { i++; return; }
+      for (;;) {
+        ws();
+        if (text[i] !== '"') fail();
+        string(); ws();
+        if (text[i] !== ':') fail();
+        i++; value(); ws();
+        if (text[i] === ',') { i++; continue; }
+        if (text[i] === '}') { i++; return; }
+        fail();
+      }
+    }
+    if (c === '[') {
+      i++; ws();
+      if (text[i] === ']') { i++; return; }
+      for (;;) {
+        value(); ws();
+        if (text[i] === ',') { i++; continue; }
+        if (text[i] === ']') { i++; return; }
+        fail();
+      }
+    }
+    if (c === '"') return string();
+    if (c === 't') return lit('true');
+    if (c === 'f') return lit('false');
+    if (c === 'n') return lit('null');
+    return number();
+  };
+  try { value(); ws(); if (i < text.length) fail(); return -1; } catch (at) { if (typeof at !== 'number') throw at; return at; }
+}
+
+// Errore di sintassi del JSON (variabili a parte): null se valido o vuoto, altrimenti { line, column }
+function jsonProblem(text) {
+  if (!text.trim()) return null;
+  const masked = replaceBareVars(text, v => '0'.padEnd(v.length)); // stessa lunghezza: posizioni invariate
+  const at = jsonErrorAt(masked);
+  if (at < 0) return null;
+  const before = masked.slice(0, at).split('\n');
+  return { line: before.length, column: before.at(-1).length + 1 };
+}
+
+// JSON formattato con 2 spazi, variabili lasciate come sono; lancia l'errore del JSON
+function formatJson(text) {
+  const vars = [];
+  const masked = replaceBareVars(text, (v, i) => { vars.push(v); return `"__kelbo_var_${i}__"`; });
+  return JSON.stringify(JSON.parse(masked), null, 2).replace(/"__kelbo_var_(\d+)__"/g, (m, i) => vars[Number(i)]);
+}
+
+// Colori: chiavi, stringhe, numeri, true/false/null e variabili ({{nome}}, :nome)
+function highlightBody(text, esc, json) {
+  const re = json
+    ? /("(?:[^"\\\n]|\\.)*"?)(\s*:)?|(\{\{\s*[A-Za-z_][\w.-]*\s*\}\})|((?:^|(?<=[^\w:])):[A-Za-z_]\w*)|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g
+    : /()()(\{\{\s*[A-Za-z_][\w.-]*\s*\}\})|((?:^|(?<=[^\w:])):[A-Za-z_]\w*)()()/g;
+  let out = '', last = 0, m;
+  while ((m = re.exec(text))) {
+    if (!m[0]) { re.lastIndex++; continue; }
+    out += esc(text.slice(last, m.index));
+    const [tok, str, colon, braces, colonVar, lit, num] = m;
+    if (str) {
+      // variabili dentro una stringa: colorate anche lì
+      const inner = esc(str).replace(/\{\{\s*[A-Za-z_][\w.-]*\s*\}\}|(?<=[^\w:]):[A-Za-z_]\w*/g, v => `<span class="hc-j-var">${v}</span>`);
+      out += `<span class="${colon ? 'hc-j-key' : 'hc-j-str'}">${inner}</span>${colon || ''}`;
+    } else if (braces || colonVar) out += `<span class="hc-j-var">${esc(tok)}</span>`;
+    else if (lit) out += `<span class="hc-j-lit">${lit}</span>`;
+    else if (num) out += `<span class="hc-j-num">${num}</span>`;
+    else out += esc(tok);
+    last = m.index + tok.length;
+  }
+  return out + esc(text.slice(last)) + '\n'; // la riga finale vuota tiene allineata la textarea
+}
+
+// Inserisce testo come se lo si scrivesse: resta nell'annulla (Ctrl+Z) del browser
+function typeText(ta, text) {
+  if (!document.execCommand('insertText', false, text)) {
+    ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+// Tasti dell'editor: Tab / Maiusc+Tab (anche su più righe), Invio con rientro, } e ] che
+// tornano al livello giusto. → true se il tasto è stato gestito
+function editorKey(ta, e) {
+  const v = ta.value, start = ta.selectionStart, end = ta.selectionEnd;
+  const lineStart = v.lastIndexOf('\n', start - 1) + 1;
+  if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    const multi = v.slice(start, end).includes('\n');
+    if (!multi && !e.shiftKey) { typeText(ta, INDENT); return true; }
+    // righe intere della selezione: rientro aggiunto o tolto a ognuna
+    const blockEnd = end > start && v[end - 1] === '\n' ? end - 1 : end;
+    const lineEnd = v.indexOf('\n', blockEnd) === -1 ? v.length : v.indexOf('\n', blockEnd);
+    const lines = v.slice(lineStart, lineEnd).split('\n');
+    const next = lines.map(l => (e.shiftKey ? l.replace(/^ {1,2}|^\t/, '') : INDENT + l));
+    ta.setSelectionRange(lineStart, lineEnd);
+    typeText(ta, next.join('\n'));
+    const firstDelta = next[0].length - lines[0].length;
+    ta.setSelectionRange(multi ? lineStart : Math.max(lineStart, start + firstDelta), multi ? lineStart + next.join('\n').length : Math.max(lineStart, start + firstDelta));
+    return true;
+  }
+  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    const indent = /^[ \t]*/.exec(v.slice(lineStart, start))[0];
+    const prev = v.slice(lineStart, start).trimEnd().at(-1);
+    const nextCh = v.slice(end).trimStart()[0];
+    if ((prev === '{' && nextCh === '}') || (prev === '[' && nextCh === ']')) {
+      // tra due parentesi: riga rientrata in mezzo, parentesi di chiusura sotto
+      typeText(ta, `\n${indent}${INDENT}\n${indent}`);
+      const caret = ta.selectionStart - indent.length - 1;
+      ta.setSelectionRange(caret, caret);
+    } else typeText(ta, `\n${indent}${prev === '{' || prev === '[' ? INDENT : ''}`);
+    return true;
+  }
+  if ((e.key === '}' || e.key === ']') && start === end && /^[ \t]+$/.test(v.slice(lineStart, start))) {
+    // parentesi di chiusura all'inizio di una riga rientrata: un livello in meno
+    e.preventDefault();
+    const indent = v.slice(lineStart, start);
+    ta.setSelectionRange(lineStart, start);
+    typeText(ta, indent.slice(0, Math.max(0, indent.length - INDENT.length)) + e.key);
+    return true;
+  }
+  return false;
+}
+
 export default {
   async mount(ctx) {
     const { esc, js, toast, openModal, closeModal, fmt } = ctx.ui;
@@ -271,7 +454,11 @@ export default {
             : draft.bodyType === 'file' ? `<input class="form-input hc-code" data-role="file" value="${esc(draft.file || '')}" spellcheck="false" placeholder="${esc(t('body.filePlaceholder'))}">
                 <p class="hc-muted">${esc(t('body.fileHint'))}</p>`
             : draft.bodyType === 'form' ? formTable(draft.form || [])
-            : `<textarea class="form-input hc-code" data-role="body" spellcheck="false" rows="10">${esc(draft.body)}</textarea>`}`;
+            : `<div class="hc-editor">
+                <pre class="hc-editor-hl" aria-hidden="true"><code data-role="body-hl">${highlightBody(draft.body || '', esc, draft.bodyType === 'json')}</code></pre>
+                <textarea class="hc-editor-input" data-role="body" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="${esc(t('tabs.body'))}">${esc(draft.body)}</textarea>
+              </div>
+              ${draft.bodyType === 'json' ? `<div class="hc-json-status" data-role="json-status" aria-live="polite">${jsonStatus(draft.body || '')}</div>` : ''}`}`;
       } else {
         pane.innerHTML = pairsTable(tab, draft[tab] || []);
       }
@@ -366,6 +553,27 @@ export default {
     }
 
     // JSON già formattato → HTML colorato (chiavi, stringhe, numeri, letterali)
+    // Stato del JSON sotto l'editor: valido, o errore con riga e colonna
+    function jsonStatus(text) {
+      const p = jsonProblem(text);
+      if (!text.trim()) return '';
+      if (!p) return `<span class="hc-json-ok">✓ ${esc(t('body.jsonValid'))}</span>`;
+      return `<span class="hc-json-err">✖ ${esc(p.line ? t('body.jsonErrorAt', { line: p.line, column: p.column }) : t('body.invalidJson', { error: p.message }))}</span>`;
+    }
+    let jsonTimer = null;
+    function syncBody(ta) {
+      const hl = $(ctx.root, 'body-hl');
+      if (!hl) return;
+      hl.innerHTML = highlightBody(ta.value, esc, draft.bodyType === 'json');
+      syncBodyScroll(ta);
+      clearTimeout(jsonTimer);
+      jsonTimer = setTimeout(() => { const st = $(ctx.root, 'json-status'); if (st) st.innerHTML = jsonStatus(ta.value); }, 250);
+    }
+    function syncBodyScroll(ta) {
+      const pre = $(ctx.root, 'body-hl')?.parentElement;
+      if (pre) { pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft; }
+    }
+
     function highlightJson(text) {
       return esc(text).replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g,
         (m, str, colon, lit, num) => str ? `<span class="${colon ? 'hc-j-key' : 'hc-j-str'}">${str}</span>${colon || ''}`
@@ -909,7 +1117,13 @@ export default {
       else if (a === 'remove-pair') { draft[el.dataset.list].splice(Number(el.dataset.index), 1); markDirty(); renderTabs(); }
       else if (a === 'format-json') {
         const ta = $(ctx.root, 'body');
-        try { ta.value = JSON.stringify(JSON.parse(ta.value), null, 2); draft.body = ta.value; markDirty(); } catch (err) { toast(t('body.invalidJson', { error: err.message }), 'error'); }
+        try {
+          const next = formatJson(ta.value);
+          ta.focus();
+          ta.setSelectionRange(0, ta.value.length);
+          typeText(ta, next); // annullabile con Ctrl+Z
+          draft.body = ta.value; markDirty(); syncBody(ta);
+        } catch (err) { toast(t('body.invalidJson', { error: err.message }), 'error'); }
       } else if (a === 'download-body') {
         downloadResponse();
       } else if (a === 'copy-body') {
@@ -930,7 +1144,10 @@ export default {
       }
       if (el.name === 'hc_body_type') { readEditor(); draft.bodyType = el.value; markDirty(); renderTabs(); return; }
       if (['label', 'url', 'body', 'file'].includes(el.dataset.role)) markDirty();
+      if (el.dataset.role === 'body') syncBody(el);
     });
+    // scroll della textarea → testo colorato (l'evento scroll non risale: in cattura)
+    ctx.root.addEventListener('scroll', e => { if (e.target.dataset?.role === 'body') syncBodyScroll(e.target); }, true);
 
     ctx.root.addEventListener('change', e => {
       const role = e.target.dataset.role;
@@ -950,6 +1167,7 @@ export default {
     ctx.root.addEventListener('focusin', e => { if (e.target.dataset.role === 'npm-output') refreshNpmOutput(); });
 
     ctx.root.addEventListener('keydown', e => {
+      if (e.target.dataset.role === 'body' && editorKey(e.target, e)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveRequest(); }
       else if (e.key === 'Enter' && e.target.dataset.role === 'url') { e.preventDefault(); send(); }

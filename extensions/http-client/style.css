@@ -97,3 +97,15 @@
 .hc-user-head:hover .sb-item-act{opacity:1}
 .hc-req-nested{padding-inline-start:44px}
 .hc-form-type{width:110px}
+/* editor del corpo: testo colorato sotto la textarea trasparente (come l'editor SQL del DB client) */
+.hc-editor{position:relative;height:240px;min-height:90px;resize:vertical;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg)}
+.hc-editor:focus-within{border-color:var(--ext-color)}
+.hc-editor-hl,.hc-editor-input{position:absolute;inset:0;margin:0;padding:8px 10px;font-family:var(--font);font-size:12px;font-weight:400;line-height:1.5;letter-spacing:normal;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:2;font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0;border:none;scrollbar-gutter:stable}
+.hc-editor-hl{overflow:hidden;pointer-events:none;color:var(--text)}
+.hc-editor-hl code{font:inherit;white-space:inherit}
+.hc-editor-input{resize:none;background:transparent;color:transparent;caret-color:var(--text);outline:none;overflow:auto;width:100%}
+.hc-editor-input::selection{background:color-mix(in srgb,var(--ext-color) 30%,transparent);color:transparent}
+.hc-j-var{color:#d2a8ff;font-weight:600}
+.hc-json-status{font-size:11px;font-family:var(--font);min-height:16px;margin-top:4px}
+.hc-json-ok{color:var(--muted)}
+.hc-json-err{color:var(--danger)}

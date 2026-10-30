@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-10-30
+
+### Added
+- **HTTP client — body editor**: the JSON and text bodies are written in an editor like the SQL one of the Database section (transparent text area over the highlighted text, no external library): keys, strings, numbers, `true`/`false`/`null` and the `{{name}}`/`:name` variables (also inside strings) in colour. **Tab** inserts two spaces or indents all the selected lines, **Shift+Tab** outdents them, **Enter** keeps the indentation (one level more after `{` or `[`; between `{}` or `[]` the closing bracket goes on its own line), `}` or `]` typed at the start of an indented line goes back one level; every change stays in the browser's undo (Ctrl+Z).
+- JSON body: under the editor *Valid JSON* or *Invalid JSON at line N, column M* while typing (own checker, since the browser's messages don't always say where); unquoted variables (`"id": {{id}}`, `"id": :id`) count as values. **Format** now works with them too, and stays undoable.
+
+
 ## [2.15.0] - 2026-10-29
 
 ### Added
