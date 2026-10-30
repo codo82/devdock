@@ -361,7 +361,7 @@ window.Shell = (() => {
     const output = {
       open(title) {
         delete sse.title.dataset.i18n; // titolo scelto dall'estensione: il cambio di lingua non lo sovrascrive
-        sse.title.textContent = title; sse.body.innerHTML = ''; sse.box.classList.add('open');
+        sse.title.textContent = title; sse.body.innerHTML = ''; sse.box.classList.add('open'); panel.classList.add('output-open');
         ansi = { out: ansiState(), err: ansiState() };
       },
       append(text, cls = 'out') {
@@ -372,11 +372,14 @@ window.Shell = (() => {
         sse.body.scrollTop = sse.body.scrollHeight;
       },
       clear() { sse.body.innerHTML = ''; ansi = { out: ansiState(), err: ansiState() }; },
-      close() { sse.box.classList.remove('open'); },
+      close() { sse.box.classList.remove('open'); panel.classList.remove('output-open'); },
     };
     panel.querySelector('[data-sse="clear"]').addEventListener('click', output.clear);
     panel.querySelector('[data-sse="close"]').addEventListener('click', output.close);
     initOutputResize(meta.code, sse.box);
+    // con il pannello aperto la sezione si accorcia della sua altezza (anche quando lo si
+    // ridimensiona), così non copre la parte bassa: risposte, risultati, editor
+    new ResizeObserver(() => panel.style.setProperty('--output-h', `${sse.box.offsetHeight}px`)).observe(sse.box);
 
     return {
       code: meta.code,

@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.16.1] - 2026-10-30
+
+### Fixed
+- **Output panel covering the section**: with the bottom output panel open (e.g. the npm output in the HTTP client, a git action, an npm script) the lower part of the section — HTTP response, query results, editors — stayed underneath it. The section now gets shorter by the panel's height while it is open, also when the panel is resized, so everything above it stays visible and scrollable.
+
+
 ## [2.16.0] - 2026-10-30
 
 ### Added

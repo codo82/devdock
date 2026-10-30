@@ -318,6 +318,7 @@
   .ext-header-btn.active-ext{color:var(--tab-color);border-color:var(--tab-color)}
   .ext-warning{color:var(--warning);font-size:11px;cursor:help}
   .ext-root{flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column;position:relative}
+  .ext-panel.output-open .ext-root{margin-bottom:var(--output-h,260px)}
   .ext-sidebar{display:flex;flex-direction:column;min-height:0;flex:1}
   .ext-sidebar .sidebar-head-title{color:var(--ext-color)}
   .ext-sidebar .sb-item.active{border-inline-start-color:var(--ext-color);color:var(--ext-color)}
